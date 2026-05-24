@@ -1,0 +1,64 @@
+{
+  "name": "Get Company Customers (Paginated)",
+  "nodes": [
+    {
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300],
+      "parameters": {
+        "path": "get-company-customers",
+        "httpMethod": "GET",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "name": "Extract Query Params",
+      "type": "n8n-nodes-base.code",
+      "position": [450, 300],
+      "parameters": {
+        "jsCode": "// Extract pagination and filter parameters from query string\nconst query = $input.first().json.query || {};\n\nconst page = parseInt(query.page) || 1;\nconst pageSize = parseInt(query.pageSize) || 10;\nconst search = query.search || '';\nconst status = query.status || '';\nconst billing = query.billing || '';\nconst daysBack = parseInt(query.daysBack) || 0;\nconst sortBy = query.sortBy || 'created_at';\nconst sortOrder = query.sortOrder || 'desc';\n\nconst offset = (page - 1) * pageSize;\n\nreturn {\n  page,\n  pageSize,\n  offset,\n  search,\n  status,\n  billing,\n  daysBack,\n  sortBy,\n  sortOrder\n};"
+      }
+    },
+    {
+      "name": "Get Auth Token",
+      "type": "n8n-nodes-base.code",
+      "position": [650, 300],
+      "parameters": {
+        "jsCode": "// Extract authorization token from headers\nconst headers = $input.first().json.headers || {};\nconst authHeader = headers.authorization || '';\nconst token = authHeader.replace('Bearer ', '');\n\nif (!token) {\n  throw new Error('No authorization token provided');\n}\n\nreturn {\n  token\n};"
+      }
+    },
+    {
+      "name": "Get Company ID",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [850, 300],
+      "parameters": {
+        "url": "http://medusa-backend:9000/admin/customers",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "bearerToken",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$('Get Auth Token').item.json.token}}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "name": "Query Customers",
+      "type": "n8n-nodes-base.postgres",
+      "position": [1050, 300],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{$json.customersQuery}}"
+      }
+    }
+  ]
+}
