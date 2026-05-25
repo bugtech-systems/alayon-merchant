@@ -32,7 +32,7 @@ authLogout()
 }
 
 
-
+console.log(activeUser, 'SDSDSDS')
 if(!activeUser){
 return  (
    <LocalizedClientLink className="hover:text-ui-fg-base" href="/login">
@@ -50,7 +50,7 @@ return  (
 let avatar = "https://robohash.org/" +
             activeUser.id +
             "?size=200x200&set=set1&bgset=bg1"
-
+let redirection = activeUser?.metadata?.role == 'company' ? '/account/company' : '/account/driver';
 return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -77,7 +77,7 @@ return (
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem
-            onClick={() => redirect('/account')}
+            onClick={() => redirect(redirection)}
           >
             <BadgeCheck />
             Account

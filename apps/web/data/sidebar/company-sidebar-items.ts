@@ -55,6 +55,12 @@ export const companySidebarItems: NavGroup[] = [
         icon: LayoutDashboard,
       },
       {
+        title: "Analytics",
+        url: "/analytics",
+        icon: Users,
+        // comingSoon: true
+      },
+      {
         title: "Team",
         url: "/team",
         icon: Users,
@@ -127,10 +133,11 @@ export const riderSidebarItems: NavGroup[] = [
       },
       {
         title: "Customers",
-        url: "/company/customers",
+        url: "/rider/customers",
         icon: Users,
         // comingSoon: true
       },
+ 
        {
         title: "Map",
         url: "/map",

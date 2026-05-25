@@ -19,7 +19,6 @@ import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
 import { NavMain } from "./nav-main";
 import { companySidebarItems, riderSidebarItems } from "@/data/sidebar/company-sidebar-items";
-import { AccountSwitcher } from "./account-switcher";
 import { NavUser } from "./nav-user";
 
 
@@ -46,7 +45,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar> | 
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <Link prefetch={false} href="/">
+              <Link prefetch={false} href="/leo">
                 <Command />
                 <span className="font-semibold text-base">{APP_CONFIG.name}</span>
               </Link>

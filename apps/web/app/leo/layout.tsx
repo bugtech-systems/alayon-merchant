@@ -20,14 +20,13 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
 
-    const user = await retrieveUser() as any;
+    const userData = await retrieveUser() as any;
   const [variant, collapsible] = await Promise.all([
     getPreference("sidebar_variant", SIDEBAR_VARIANT_VALUES, "inset"),
     getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
   ]);
 
-
-  console.log(user, 'USSS')
+console.log(userData, 'USSSA')
   return (
     <SidebarProvider
       defaultOpen={defaultOpen}
@@ -65,7 +64,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
             <div className="flex items-center gap-2">
               <LayoutControls />
               <ThemeSwitcher />
-              <AccountSwitcher users={users} />
+              <AccountSwitcher users={[userData?.user ?? userData]} />
             </div>
           </div>
         </header>
