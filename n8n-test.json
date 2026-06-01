@@ -1,64 +1,73 @@
 {
-  "name": "Get Company Customers (Paginated)",
+  "name": "Company Deliveries with Driver Info",
   "nodes": [
     {
-      "name": "Webhook",
-      "type": "n8n-nodes-base.webhook",
-      "position": [250, 300],
       "parameters": {
-        "path": "get-company-customers",
         "httpMethod": "GET",
-        "responseMode": "responseNode",
-        "options": {}
-      }
+        "path": "company-deliveries-with-drivers",
+        "responseMode": "responseNode"
+      },
+      "id": "delivery-webhook",
+      "name": "Delivery Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300]
     },
     {
-      "name": "Extract Query Params",
+      "parameters": {
+        "jsCode": "// Parse query parameters\nconst query = $input.first().json.query || {};\n\nconst params = {\n  company_id: query.company_id || null,\n  status: query.status || null,\n  date_from: query.date_from || null,\n  date_to: query.date_to || null,\n  page: parseInt(query.page) || 1,\n  limit: Math.min(parseInt(query.limit) || 50, 200),\n  include_driver_details: query.include_driver_details === 'true'\n};\n\nif (!params.company_id) {\n  throw new Error('company_id is required');\n}\n\nparams.offset = (params.page - 1) * params.limit;\n\nreturn { params };"
+      },
+      "id": "format-delivery-params",
+      "name": "Format Delivery Params",
       "type": "n8n-nodes-base.code",
-      "position": [450, 300],
-      "parameters": {
-        "jsCode": "// Extract pagination and filter parameters from query string\nconst query = $input.first().json.query || {};\n\nconst page = parseInt(query.page) || 1;\nconst pageSize = parseInt(query.pageSize) || 10;\nconst search = query.search || '';\nconst status = query.status || '';\nconst billing = query.billing || '';\nconst daysBack = parseInt(query.daysBack) || 0;\nconst sortBy = query.sortBy || 'created_at';\nconst sortOrder = query.sortOrder || 'desc';\n\nconst offset = (page - 1) * pageSize;\n\nreturn {\n  page,\n  pageSize,\n  offset,\n  search,\n  status,\n  billing,\n  daysBack,\n  sortBy,\n  sortOrder\n};"
-      }
+      "position": [450, 300]
     },
     {
-      "name": "Get Auth Token",
-      "type": "n8n-nodes-base.code",
-      "position": [650, 300],
-      "parameters": {
-        "jsCode": "// Extract authorization token from headers\nconst headers = $input.first().json.headers || {};\nconst authHeader = headers.authorization || '';\nconst token = authHeader.replace('Bearer ', '');\n\nif (!token) {\n  throw new Error('No authorization token provided');\n}\n\nreturn {\n  token\n};"
-      }
-    },
-    {
-      "name": "Get Company ID",
-      "type": "n8n-nodes-base.httpRequest",
-      "position": [850, 300],
-      "parameters": {
-        "url": "http://medusa-backend:9000/admin/customers",
-        "method": "GET",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "bearerToken",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{$('Get Auth Token').item.json.token}}"
-            }
-          ]
-        },
-        "options": {
-          "timeout": 10000
-        }
-      }
-    },
-    {
-      "name": "Query Customers",
-      "type": "n8n-nodes-base.postgres",
-      "position": [1050, 300],
       "parameters": {
         "operation": "executeQuery",
-        "query": "={{$json.customersQuery}}"
+        "query": "WITH company_orders AS (\n  SELECT \n    d.id,\n    d.order_number,\n    d.customer_name,\n    d.customer_phone,\n    d.delivery_address,\n    d.total_amount,\n    d.quantity,\n    d.status,\n    d.created_at,\n    d.driver_id,\n    -- Get driver info\n    jsonb_build_object(\n      'id', dr.id,\n      'name', dr.name,\n      'phone', dr.phone,\n      'vehicle_type', dr.vehicle_type,\n      'license_plate', dr.license_plate,\n      'rating', dr.rating,\n      'current_location', \n        CASE \n          WHEN dr.current_latitude IS NOT NULL THEN \n            jsonb_build_object('lat', dr.current_latitude, 'lng', dr.current_longitude)\n          ELSE NULL\n        END\n    ) as driver_info,\n    -- Get cart info\n    (\n      SELECT jsonb_agg(\n        jsonb_build_object(\n          'id', c.id,\n          'cart_number', c.cart_number,\n          'total', c.total,\n          'items_count', c.total_items\n        )\n      )\n      FROM deliverymodule_delivery_cart_cart dcdc\n      JOIN cart c ON dcdc.cart_id = c.id\n      WHERE dcdc.delivery_id = d.id\n    ) as carts\n  FROM deliverymodule_delivery d\n  LEFT JOIN deliverymodule_driver dr ON d.driver_id = dr.id\n  WHERE d.company_id = $1::uuid\n    AND d.deleted_at IS NULL\n    AND ($2::text IS NULL OR d.status = $2)\n    AND ($3::date IS NULL OR DATE(d.created_at) >= $3)\n    AND ($4::date IS NULL OR DATE(d.created_at) <= $4)\n  ORDER BY d.created_at DESC\n  LIMIT $5 OFFSET $6\n)\nSELECT \n  co.*,\n  COUNT(*) OVER() as total_count\nFROM company_orders co",
+        "options": {
+          "parameterPrefix": "$"
+        }
+      },
+      "id": "query-deliveries",
+      "name": "Query Deliveries",
+      "type": "n8n-nodes-base.postgres",
+      "position": [650, 300],
+      "credentials": {
+        "postgres": "Postgres Credentials"
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "const deliveries = $input.first().json;\nconst { params } = $('Format Delivery Params').first().json;\n\n// Format the response\nconst formattedDeliveries = deliveries.map(delivery => ({\n  id: delivery.id,\n  order_number: delivery.order_number,\n  customer: {\n    name: delivery.customer_name,\n    phone: delivery.customer_phone,\n    address: delivery.delivery_address\n  },\n  order_details: {\n    total_amount: parseFloat(delivery.total_amount),\n    quantity: parseInt(delivery.quantity),\n    status: delivery.status,\n    created_at: delivery.created_at\n  },\n  driver: delivery.driver_info,\n  carts: delivery.carts || []\n}));\n\nconst totalCount = deliveries[0]?.total_count || 0;\nconst totalPages = Math.ceil(totalCount / params.limit);\n\nreturn {\n  success: true,\n  data: {\n    deliveries: formattedDeliveries,\n    pagination: {\n      current_page: params.page,\n      per_page: params.limit,\n      total: totalCount,\n      total_pages: totalPages\n    }\n  },\n  metadata: {\n    timestamp: new Date().toISOString(),\n    company_id: params.company_id\n  }\n};"
+      },
+      "id": "format-delivery-output",
+      "name": "Format Delivery Output",
+      "type": "n8n-nodes-base.code",
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "respond-delivery",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1050, 300]
     }
-  ]
+  ],
+  "connections": {
+    "Delivery Webhook": {
+      "main": [[{"node": "Format Delivery Params", "type": "main", "index": 0}]]
+    },
+    "Format Delivery Params": {
+      "main": [[{"node": "Query Deliveries", "type": "main", "index": 0}]]
+    },
+    "Query Deliveries": {
+      "main": [[{"node": "Format Delivery Output", "type": "main", "index": 0}]]
+    },
+    "Format Delivery Output": {
+      "main": [[{"node": "Respond to Webhook", "type": "main", "index": 0}]]
+    }
+  }
 }
