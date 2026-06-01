@@ -332,7 +332,7 @@ export async function login(_currentState: unknown, formData: FormData) {
   const password = formData.get("password") as string
 
   try {
-    await sdk.auth
+    return await sdk.auth
       .login("customer", "emailpass", { email, password })
       .then(async (token) => {
         track("customer_logged_in")
@@ -361,11 +361,13 @@ export async function login(_currentState: unknown, formData: FormData) {
 
         revalidateTag(productsCacheTag, "max")
         revalidateTag(cartsCacheTag, "max")
+            await transferCart()
+            return {success: true, token}
       })
   } catch (error: any) {
             console.log(error, 'errr ccssese')
     return error.toString()
-  }
+  } 
 
   try {
     await transferCart()

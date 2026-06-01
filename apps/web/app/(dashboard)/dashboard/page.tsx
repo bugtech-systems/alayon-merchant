@@ -37,9 +37,9 @@ async function handleContactRider(riderPhone: string) {
 }
 
 export default async function Page() {
-  const user = await retrieveCustomer() || {};
+  const user = await retrieveCustomer() || {} as any;
   console.log(user, 'cusstom')
-  if (!user) {
+  if (!user?.id) {
     redirect("/login");
   }
   
