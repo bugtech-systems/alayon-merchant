@@ -17,7 +17,6 @@ export default async function DeliveryCard({
   if (!delivery || delivery === null) return null;
 
   const items = delivery.order?.items || delivery.cart?.items;
-console.log(delivery, 'ITEMSS')
   return (
     <Container className="flex flex-col gap-6 p-4 shadow-elevation-card-rest hover:shadow-elevation-card-hover w-full">
       <div className="flex justify-between gap-2 flex-wrap">

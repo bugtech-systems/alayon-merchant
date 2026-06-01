@@ -26,7 +26,6 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
     getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
   ]);
 
-console.log(userData, 'USSSA')
   return (
     <SidebarProvider
       defaultOpen={defaultOpen}

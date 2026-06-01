@@ -122,3 +122,38 @@ export function useN8nQuery<T = any>(options: QueryOptions) {
     staleTime: 60 * 1000
   })
 }
+
+
+export async function n8nWebhook({
+  endpoint,
+  method = "GET",
+  params,
+  body = {},
+  headers,
+}: QueryOptions) {
+  if (!endpoint) throw new Error("Missing endpoint")
+  const url =
+    method === "GET"
+      ? buildURL(endpoint, params)
+      : new URL(endpoint, BASE_URL).toString()
+
+
+      console.log(url, 'URRRLLL')
+  const res = await fetch(url, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      "x-publishable-api-key": PUB_KEY,
+      ...(await getAuthHeaders())
+    },
+    body: (method === "POST" || method === "PUT") ? JSON.stringify(body) : undefined,
+  })
+
+
+  if (!res.ok) {
+    throw new Error(`n8n error: ${res.status}`)
+  }
+  const json = await res.json();
+
+  return json
+}

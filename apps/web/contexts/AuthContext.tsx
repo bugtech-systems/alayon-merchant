@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { getAuthHeaders, setAuthToken } from '@/lib/data/cookies';
 import { n8nFetcher } from '@/hooks/useN8nQuery';
 import { sdk } from '@/lib/config';
+import { retrieveCustomer } from '@/lib/actions';
 
 interface AuthContextType {
   user: User | null;
@@ -23,7 +24,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'false';
 
 
 
@@ -119,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Production - try to restore session from Medusa
         try {
-          const { customer } = await sdk.store.customer.retrieve().catch(() => ({ customer: null }));
+          const customer  = await retrieveCustomer();
           
           if (customer) {
             const actorType = customer.metadata?.actor_type as ActorType;

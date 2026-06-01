@@ -38,7 +38,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar> | 
   const user = props.user;
   const isCompany = user?.metadata?.role == 'company' ? true : false
 
-  console.log(user, 'ussssaa')
   return (
     <Sidebar variant={variant} collapsible={collapsible}>
       <SidebarHeader>

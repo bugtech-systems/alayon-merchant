@@ -1,8 +1,7 @@
 // components/dashboard/signup-form.tsx
 "use client";
 
-import { useState, useEffect } from "react";
-import { useFormStatus } from "react-dom";
+import { useState, useEffect, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -27,15 +26,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
-import { Loader2, User, Building2, Mail, Phone, Lock, CheckCircle, AlertCircle } from "lucide-react";
+import {
+  User,
+  Building2,
+  Mail,
+  Phone,
+  Lock,
+  CheckCircle,
+  AlertCircle,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 
 // Import your signup action
-import { signup } from "@/lib/actions";
+import { signup } from "@/lib/actions/users";
 
-// Updated validation schema
+// Simplified validation schema
 const signupSchema = z.object({
   user_type: z.enum(["driver", "company"], {
     required_error: "Please select user type",
@@ -43,11 +51,14 @@ const signupSchema = z.object({
   company_id: z.string().optional(),
   first_name: z.string().min(1, "First name is required"),
   last_name: z.string().min(1, "Last name is required"),
-  email: z.string().optional(), // Email is optional
-  phone: z.string().min(10, "Phone number must be at least 10 characters"),
+  email: z.string().optional(),
+  phone: z.string().min(10, "Phone number must be at least 10 digits"),
   password: z.string().min(6, "Password must be at least 6 characters"),
+  confirm_password: z.string(),
+}).refine((data) => data.password === data.confirm_password, {
+  message: "Passwords do not match",
+  path: ["confirm_password"],
 }).refine((data) => {
-  // If user is company, company_id is required
   if (data.user_type === "company" && !data.company_id) {
     return false;
   }
@@ -59,47 +70,30 @@ const signupSchema = z.object({
 
 type SignupFormValues = z.infer<typeof signupSchema>;
 
-// Submit button component with loading state
-function SubmitButton() {
-  const { pending } = useFormStatus();
-
-  return (
-    <Button type="submit" size="lg" disabled={pending} className="w-full sm:w-auto">
-      {pending ? (
-        <>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Creating account...
-        </>
-      ) : (
-        "Create account"
-      )}
-    </Button>
-  );
-}
-
 interface SignupFormProps {
   companies?: Array<{
     id: string;
     name: string;
-    description?: string;
   }>;
 }
 
 export function SignupForm({ companies = [] }: SignupFormProps) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string>("");
   const [successMessage, setSuccessMessage] = useState<string>("");
-  const [userType, setUserType] = useState<"driver" | "company">("driver");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // React Hook Form setup
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, touchedFields },
     setValue,
     watch,
     trigger,
-    setError: setFormError,
+    setError,
+    clearErrors,
   } = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
@@ -109,74 +103,66 @@ export function SignupForm({ companies = [] }: SignupFormProps) {
       email: "",
       phone: "",
       password: "",
+      confirm_password: "",
+      company_id: undefined,
     },
-    mode: "onChange", // Validate on change for better UX
+    mode: "onBlur",
   });
 
   const watchedUserType = watch("user_type");
-  const watchedCompanyId = watch("company_id");
 
-  // Load saved user type from localStorage
-  useEffect(() => {
-    const savedUserType = localStorage.getItem("signup_user_type");
-    if (savedUserType === "driver" || savedUserType === "company") {
-      setUserType(savedUserType);
-      setValue("user_type", savedUserType);
-    }
-  }, [setValue]);
-
-  // Save user type to localStorage when changed
-  const handleUserTypeChange = (value: "driver" | "company") => {
-    setUserType(value);
-    setValue("user_type", value);
-    localStorage.setItem("signup_user_type", value);
-    
-    // Clear company_id if switching to driver
-    if (value === "driver") {
-      setValue("company_id", undefined);
-    }
-  };
-
-  // Form submission handler
   const onSubmit = async (data: SignupFormValues) => {
     setServerError("");
     setSuccessMessage("");
+    clearErrors();
     
-    try {
-      const formData = new FormData();
-      Object.entries(data).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
-          formData.append(key, value.toString());
-        }
-      });
-      
-      // Call your signup action
-      const result = await signup(null, formData);
-      
-      if (result?.error) {
-        setServerError(result.error);
-        // Scroll to top to show error
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      } else if (result?.success) {
-        setSuccessMessage("Account created successfully! Redirecting to dashboard...");
+    startTransition(async () => {
+      try {
+        const formData = new FormData();
+        Object.entries(data).forEach(([key, value]) => {
+          if (value !== undefined && value !== null && value !== "") {
+            formData.append(key, value.toString());
+          }
+        });
         
-        // Redirect to dashboard after 2 seconds
-        setTimeout(() => {
-          router.push("/dashboard");
-        }, 2000);
+        const result = await signup(data, formData);
+        
+        if (result?.error) {
+          setServerError(result.error);
+          
+          if (result.fieldErrors) {
+            Object.entries(result.fieldErrors).forEach(([field, messages]) => {
+              setError(field as any, {
+                type: "manual",
+                message: messages[0],
+              });
+            });
+          }
+          
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } else if (result?.success) {
+          setSuccessMessage("Account created successfully! Redirecting...");
+          
+          setTimeout(() => {
+            router.push("/dashboard");
+            router.refresh();
+          }, 2000);
+        }
+      } catch (error) {
+        console.error("Form submission error:", error);
+        setServerError("An unexpected error occurred. Please try again.");
       }
-    } catch (error) {
-      console.error("Signup error:", error);
-      setServerError("An unexpected error occurred. Please try again.");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
+    });
   };
 
-  // Helper to get error message
-  const getErrorMessage = (field: keyof SignupFormValues) => {
+  const getErrorMessage = (field: keyof SignupFormValues): string | null => {
     const error = errors[field];
     if (!error) return null;
     return typeof error.message === "string" ? error.message : "Invalid input";
+  };
+
+  const hasError = (field: keyof SignupFormValues): boolean => {
+    return !!errors[field] && touchedFields[field];
   };
 
   return (
@@ -191,7 +177,6 @@ export function SignupForm({ companies = [] }: SignupFormProps) {
       </CardHeader>
       
       <CardContent>
-        {/* Success Message */}
         {successMessage && (
           <Alert className="mb-6 bg-green-50 border-green-200">
             <CheckCircle className="h-4 w-4 text-green-600" />
@@ -201,7 +186,6 @@ export function SignupForm({ companies = [] }: SignupFormProps) {
           </Alert>
         )}
         
-        {/* Error Message */}
         {serverError && (
           <Alert className="mb-6 bg-red-50 border-red-200">
             <AlertCircle className="h-4 w-4 text-red-600" />
@@ -211,206 +195,206 @@ export function SignupForm({ companies = [] }: SignupFormProps) {
           </Alert>
         )}
         
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* User Type Selection */}
           <div className="space-y-2">
-            <Label htmlFor="user_type" className="text-sm font-medium">
-              I am a... <span className="text-red-500">*</span>
+            <Label className="text-sm font-medium">
+              Account Type <span className="text-red-500">*</span>
             </Label>
-            <Select
-              onValueChange={handleUserTypeChange}
-              value={watchedUserType || userType}
-            >
-              <SelectTrigger className={errors.user_type ? "border-red-500 w-full" : "w-full"}>
-                <SelectValue placeholder="Select user type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="driver">
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    <span>Driver</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="company">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4" />
-                    <span>Company</span>
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <input type="hidden" {...register("user_type")} value={watchedUserType || userType} />
-            {errors.user_type && (
-              <p className="text-sm text-red-600 flex items-center gap-1">
-                <AlertCircle className="h-3 w-3" />
-                {errors.user_type.message}
-              </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setValue("user_type", "driver");
+                  setValue("company_id", undefined);
+                  trigger("user_type");
+                }}
+                className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all ${
+                  watchedUserType === "driver"
+                    ? "border-primary bg-primary/5"
+                    : "border-gray-200 hover:border-gray-300"
+                }`}
+              >
+                <User className="h-4 w-4" />
+                <span>Driver</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setValue("user_type", "company");
+                  trigger("user_type");
+                }}
+                className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all ${
+                  watchedUserType === "company"
+                    ? "border-primary bg-primary/5"
+                    : "border-gray-200 hover:border-gray-300"
+                }`}
+              >
+                <Building2 className="h-4 w-4" />
+                <span>Company</span>
+              </button>
+            </div>
+            <input type="hidden" {...register("user_type")} />
+            {hasError("user_type") && (
+              <p className="text-sm text-red-600">{getErrorMessage("user_type")}</p>
             )}
           </div>
 
-          {/* Company Selection (conditional) */}
-          {(watchedUserType === "company" || userType === "company") && (
+          {/* Company Selection */}
+          {watchedUserType === "company" && (
             <div className="space-y-2">
-              <Label htmlFor="company_id" className="text-sm font-medium">
-                Company <span className="text-red-500">*</span>
-              </Label>
+              <Label>Company <span className="text-red-500">*</span></Label>
               <Select 
                 onValueChange={(value) => {
                   setValue("company_id", value);
                   trigger("company_id");
                 }}
               >
-                <SelectTrigger className={errors.company_id ? "border-red-500 w-full" : "w-full"}>
-                  <SelectValue placeholder="Select your company" />
+                <SelectTrigger className={hasError("company_id") ? "border-red-500" : ""}>
+                  <SelectValue placeholder="Select company" />
                 </SelectTrigger>
                 <SelectContent>
-                  {companies.length === 0 ? (
-                    <SelectItem value="no-companies" disabled>
-                      No companies available
+                  {companies.map((company) => (
+                    <SelectItem key={company.id} value={company.id}>
+                      {company.name}
                     </SelectItem>
-                  ) : (
-                    companies.map((company) => (
-                      <SelectItem key={company.id} value={company.id}>
-                        {company.name}
-                      </SelectItem>
-                    ))
-                  )}
+                  ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                Select the company you work with
-              </p>
-              {errors.company_id && (
-                <p className="text-sm text-red-600 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  {errors.company_id.message}
-                </p>
+              {hasError("company_id") && (
+                <p className="text-sm text-red-600">{getErrorMessage("company_id")}</p>
               )}
             </div>
           )}
 
           {/* Name Fields */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="first_name" className="text-sm font-medium">
-                First Name <span className="text-red-500">*</span>
-              </Label>
+              <Label>First Name <span className="text-red-500">*</span></Label>
               <Input 
-                id="first_name"
                 placeholder="John" 
-                className={errors.first_name ? "border-red-500" : ""}
+                className={hasError("first_name") ? "border-red-500" : ""}
                 {...register("first_name")}
               />
-              {getErrorMessage("first_name") && (
-                <p className="text-sm text-red-600 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  {getErrorMessage("first_name")}
-                </p>
+              {hasError("first_name") && (
+                <p className="text-sm text-red-600">{getErrorMessage("first_name")}</p>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="last_name" className="text-sm font-medium">
-                Last Name <span className="text-red-500">*</span>
-              </Label>
+              <Label>Last Name <span className="text-red-500">*</span></Label>
               <Input 
-                id="last_name"
                 placeholder="Doe" 
-                className={errors.last_name ? "border-red-500" : ""}
+                className={hasError("last_name") ? "border-red-500" : ""}
                 {...register("last_name")}
               />
-              {getErrorMessage("last_name") && (
-                <p className="text-sm text-red-600 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  {getErrorMessage("last_name")}
-                </p>
+              {hasError("last_name") && (
+                <p className="text-sm text-red-600">{getErrorMessage("last_name")}</p>
               )}
             </div>
           </div>
 
-          {/* Email Field (Optional) */}
+          {/* Email */}
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm font-medium">
-              Email <span className="text-gray-400 text-xs font-normal">(Optional)</span>
-            </Label>
+            <Label>Email <span className="text-gray-400 text-xs">(Optional)</span></Label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input 
-                id="email"
-                className="pl-10" 
+                className="pl-10"
                 placeholder="you@example.com" 
                 type="email"
                 {...register("email")}
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Optional - We'll use this for communication
-            </p>
-            {errors.email && (
-              <p className="text-sm text-red-600 flex items-center gap-1">
-                <AlertCircle className="h-3 w-3" />
-                {errors.email.message}
-              </p>
+            {hasError("email") && (
+              <p className="text-sm text-red-600">{getErrorMessage("email")}</p>
             )}
           </div>
 
-          {/* Phone Field (Required) */}
+          {/* Phone */}
           <div className="space-y-2">
-            <Label htmlFor="phone" className="text-sm font-medium">
-              Phone Number <span className="text-red-500">*</span>
-            </Label>
+            <Label>Phone Number <span className="text-red-500">*</span></Label>
             <div className="relative">
               <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input 
-                id="phone"
-                className={`pl-10 ${errors.phone ? "border-red-500" : ""}`}
-                placeholder="+1 234 567 8900" 
+                className="pl-10"
+                placeholder="+63 912 345 6789" 
                 type="tel"
                 {...register("phone")}
               />
             </div>
-            {getErrorMessage("phone") && (
-              <p className="text-sm text-red-600 flex items-center gap-1">
-                <AlertCircle className="h-3 w-3" />
-                {getErrorMessage("phone")}
-              </p>
+            {hasError("phone") && (
+              <p className="text-sm text-red-600">{getErrorMessage("phone")}</p>
             )}
           </div>
 
-          {/* Password Field */}
+          {/* Password */}
           <div className="space-y-2">
-            <Label htmlFor="password" className="text-sm font-medium">
-              Password <span className="text-red-500">*</span>
-            </Label>
+            <Label>Password <span className="text-red-500">*</span></Label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input 
-                id="password"
-                className={`pl-10 ${errors.password ? "border-red-500" : ""}`}
-                placeholder="Create a strong password" 
-                type="password"
+                className={`pl-10 pr-10 ${hasError("password") ? "border-red-500" : ""}`}
+                placeholder="Minimum 6 characters" 
+                type={showPassword ? "text" : "password"}
                 {...register("password")}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Password must be at least 6 characters
-            </p>
-            {getErrorMessage("password") && (
-              <p className="text-sm text-red-600 flex items-center gap-1">
-                <AlertCircle className="h-3 w-3" />
-                {getErrorMessage("password")}
-              </p>
+            {hasError("password") && (
+              <p className="text-sm text-red-600">{getErrorMessage("password")}</p>
             )}
           </div>
 
-          {/* Form Actions */}
+          {/* Confirm Password */}
+          <div className="space-y-2">
+            <Label>Confirm Password <span className="text-red-500">*</span></Label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input 
+                className={`pl-10 pr-10 ${hasError("confirm_password") ? "border-red-500" : ""}`}
+                placeholder="Confirm your password" 
+                type={showConfirmPassword ? "text" : "password"}
+                {...register("confirm_password")}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            {hasError("confirm_password") && (
+              <p className="text-sm text-red-600">{getErrorMessage("confirm_password")}</p>
+            )}
+          </div>
+
+          {/* Submit Button */}
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
-            <Button variant="outline" asChild className="w-full sm:w-auto">
-              <Link href="/login">
-                Already have an account? Log in
-              </Link>
+            <Button variant="outline" asChild className="w-full sm:w-auto" type="button">
+              <Link href="/login">Already have an account? Log in</Link>
             </Button>
-            <SubmitButton />
+            <Button 
+              type="submit" 
+              disabled={isSubmitting || isPending}
+              className="w-full sm:w-auto"
+            >
+              {(isSubmitting || isPending) ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                  Creating account...
+                </>
+              ) : (
+                "Create account"
+              )}
+            </Button>
           </div>
         </form>
       </CardContent>

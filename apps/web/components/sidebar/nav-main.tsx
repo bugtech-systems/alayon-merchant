@@ -1,9 +1,9 @@
+// components/nav-main.tsx
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-import { ChevronRight, MailIcon, PlusCircleIcon } from "lucide-react";
+import { ChevronRight, MailIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -26,6 +26,8 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items";
+import { QuickCreateButton } from "../quick-create-button";
+import { quickCreateActions } from "@/config/quick-create-actions";
 
 interface NavMainProps {
   readonly items: readonly NavGroup[];
@@ -141,7 +143,6 @@ const NavItemCollapsed = ({
   );
 };
 
-// New component for collapsed view items without subitems
 const NavItemCollapsedSimple = ({
   item,
   isActive,
@@ -188,13 +189,12 @@ export function NavMain({ items }: NavMainProps) {
         <SidebarGroupContent className="flex flex-col gap-2">
           <SidebarMenu>
             <SidebarMenuItem className="flex items-center gap-2">
-              <SidebarMenuButton
-                tooltip="Quick Create"
-                className="min-w-8 bg-primary text-primary-foreground duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
-              >
-                <PlusCircleIcon />
-                <span>Quick Create</span>
-              </SidebarMenuButton>
+              <QuickCreateButton 
+                actions={quickCreateActions}
+                buttonText="Quick Create"
+                align="end"
+                side="bottom"
+              />
               <Button
                 size="icon"
                 className="h-9 w-9 shrink-0 group-data-[collapsible=icon]:opacity-0"
@@ -214,14 +214,11 @@ export function NavMain({ items }: NavMainProps) {
             <SidebarMenu>
               {group.items.map((item) => {
                 if (state === "collapsed" && !isMobile) {
-                  // If no subItems, use the simple collapsed component
                   if (!item.subItems) {
                     return <NavItemCollapsedSimple key={item.title} item={item} isActive={isItemActive} />;
                   }
-                  // Otherwise, render the dropdown for items with subItems
                   return <NavItemCollapsed key={item.title} item={item} isActive={isItemActive} />;
                 }
-                // Expanded view
                 return (
                   <NavItemExpanded key={item.title} item={item} isActive={isItemActive} isSubmenuOpen={isSubmenuOpen} />
                 );

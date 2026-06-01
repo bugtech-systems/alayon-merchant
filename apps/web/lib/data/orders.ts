@@ -41,15 +41,13 @@ export const listOrders = async (
     ...(await getCacheOptions("orders")),
   }
 
-  return sdk.client
-    .fetch<HttpTypes.StoreOrderListResponse>(`/store/orders`, {
+  let response = await sdk.client
+    .fetch<HttpTypes.StoreOrderListResponse>(`/dashboard/orders`, {
       method: "GET",
       query: {
         limit,
         offset,
-        order: "-created_at",
-        fields:
-          "*items,+items.metadata,*items.variant,*items.product,*customer",
+        fields: "+customer_id,*items,+items.metadata,*items.variant,*items.variant.product,*items.product",
         ...filters,
       },
       headers,
@@ -57,6 +55,49 @@ export const listOrders = async (
     })
     .then(({ orders }) => orders)
     .catch((err) => medusaError(err))
+    console.log(response, "RESSS")
+   // Transform the response
+    const transformedOrders: DashboardOrder[] = response.map((order) => {
+      // Calculate item statistics
+      const items = order.items || [];
+      const uniqueProducts = new Set(items.map((item) => item.product_id || item.variant?.product_id));
+      
+      // Calculate item totals
+      const itemsWithTotals = items.map((item) => ({
+        ...item,
+        calculated_unit_price: item.unit_price / (item.quantity || 1),
+        total_price: item.unit_price,
+        // Ensure metadata is always an object
+        metadata: item.metadata || {},
+      }));
+
+      return {
+        ...order,
+        items: itemsWithTotals,
+        summary: order.summary || {
+          total: order.total || 0,
+          subtotal: order.subtotal || 0,
+          shipping_total: order.shipping_total || 0,
+          discount_total: order.discount_total || 0,
+          tax_total: order.tax_total || 0,
+        },
+        formatted_total: new Intl.NumberFormat('en-PH', {
+          style: 'currency',
+          currency: order.currency_code?.toUpperCase() || 'PHP',
+          minimumFractionDigits: 2,
+        }).format(order.summary?.total || order.total || 0),
+        item_count: items.length,
+        unique_product_count: uniqueProducts.size,
+      };
+    });
+
+ return {
+      orders: transformedOrders,
+      count: response.count,
+      limit,
+      offset,
+    };
+
 }
 
 

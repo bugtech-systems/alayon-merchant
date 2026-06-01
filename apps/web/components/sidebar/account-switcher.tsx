@@ -32,7 +32,6 @@ authLogout()
 }
 
 
-console.log(activeUser, 'SDSDSDS')
 if(!activeUser){
 return  (
    <LocalizedClientLink className="hover:text-ui-fg-base" href="/login">

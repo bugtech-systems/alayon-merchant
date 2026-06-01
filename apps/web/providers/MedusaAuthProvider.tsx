@@ -83,7 +83,7 @@ export function MedusaAuthProvider({ children }: { children: React.ReactNode }) 
   // ----------------------------
   const login = async (email: string, password: string, actorType: string) => {
    let res = await apiFetch(
-      `/auth/${actorType}/emailpass`, { 
+      `/auth/customer/emailpass`, { 
       method: "POST",
       body: { email, password, actorType },
     })
@@ -93,7 +93,6 @@ export function MedusaAuthProvider({ children }: { children: React.ReactNode }) 
     setAuthToken(res?.token)
     // Re-fetch session (sets user state)
     let user = await fetchAuthSession()
-      console.log(user, 'USSSERR')
     if(user){
        router.push("/")
     }

@@ -6,13 +6,17 @@ import {
 } from "@tanstack/react-query"
 
 const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60, // 1 min cache
-      retry: 2,
-      refetchOnWindowFocus: false,
-    },
-  },
+       defaultOptions: {
+          queries: {
+            staleTime: 60 * 1000, // 1 minute
+            gcTime: 5 * 60 * 1000, // 5 minutes (formerly cacheTime)
+            retry: 1,
+            refetchOnWindowFocus: false,
+          },
+          mutations: {
+            retry: 1,
+          },
+        },
 })
 
 export function Providers({ children }: { children: React.ReactNode }) {

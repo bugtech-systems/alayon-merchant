@@ -1,152 +1,143 @@
 // app/customers/page.tsx
 "use client";
 
-import { Suspense, useState } from "react";
-import { SubscriberOverview } from "@/components/subscriber-overview";
-import { useCustomersStats, useCustomers } from "@/lib/hooks/useN8nQuery";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { CustomerTable } from "@/components/customers-table/table";
+import { CustomerRow } from "@/components/customers-table/schema";
+import { retrieveUser } from "@/lib/data";
+import { retrieveCustomer } from "@/lib/actions";
+import { toast } from "sonner";
+import { CustomerCreateForm } from "@/components/forms/customer-create-form";
 
-// Types
-interface Customer {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone: string;
-  metadata: any;
-  has_account: boolean;
-  created_at: string;
-}
 
-interface Stats {
-  total: number;
-  active: number;
-  inactive: number;
-  subscribed: number;
-  newThisMonth: number;
-}
+export default function CustomersPage() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [companyId, setCompanyId] = useState<string | null>(null);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-// Client component that uses hooks
-function CustomersContent() {
-  const [currentPage] = useState(1);
-  const [pageSize] = useState(10);
+  useEffect(() => {
+    const fetchUserAndCompany = async () => {
+      try {
+        // Try customer (storefront) session
+        const customer = await retrieveCustomer() as any;
+        if (customer?.metadata?.company_id) {
+          setCompanyId(customer.metadata.company_id);
+          return;
+        }
+        
+        // Fallback to admin session
+        const { user } = await retrieveUser();
+        if (user?.metadata?.company_id) {
+          setCompanyId(user.metadata.company_id);
+          return;
+        }
+        
+        setError("No company assigned to your account");
+      } catch (err) {
+        console.error("Medusa auth error", err);
+        setError("Failed to authenticate. Please log in.");
+      } finally {
+        setIsLoadingUser(false);
+      }
+    };
+    
+    fetchUserAndCompany();
+  }, []);
 
-  // Fetch customers data using hook
-  const {
-    data: customersData,
-    isLoading: isLoadingCustomers,
-    error: customersError,
-    refetch: refetchCustomers,
-  } = useCustomers({
-    page: currentPage,
-    pageSize: pageSize,
-  });
+  // Handlers for customer actions
+  const handleEditCustomer = useCallback((customerId: string) => {
+    // Navigate to edit page or open modal
+    console.log("Edit customer:", customerId);
+    toast.info(`Editing customer ${customerId}`);
+  }, []);
 
-  // Fetch stats using hook
-  const {
-    data: statsData,
-    isLoading: isLoadingStats,
-    error: statsError,
-    refetch: refetchStats,
-  } = useCustomersStats();
+  const handleAddCustomer = useCallback(() => {
+    // Open add customer modal or navigate to add page
+    console.log("Add new customer");
+    toast.info("Add new customer form");
+    setIsOpen(true)
+  }, []);
 
-  const customers = customersData?.data || [];
-  const total = customersData?.total || 0;
-  const stats = statsData || null;
+  const handleSendEmail = useCallback((customerId: string, email: string) => {
+    // Open email composition modal or navigate to email page
+    console.log(`Send email to ${email} (ID: ${customerId})`);
+    toast.info(`Preparing email to ${email}`);
+  }, []);
 
-  const isLoading = isLoadingCustomers || isLoadingStats;
-  const error = customersError || statsError;
+  const handleViewOrders = useCallback((customerId: string) => {
+    // Navigate to customer orders page
+    console.log("View orders for customer:", customerId);
+    // router.push(`/customers/${customerId}/orders`);
+    toast.info(`Viewing orders for customer ${customerId}`);
+  }, []);
 
-  if (error) {
+  const handleError = useCallback((error: Error) => {
+    console.error("Customer table error:", error);
+    toast.error(error.message || "An error occurred");
+  }, []);
+
+  const handleSuccess = useCallback((message: string) => {
+    console.log("Customer table success:", message);
+    toast.success(message);
+  }, []);
+
+  if (isLoadingUser) {
     return (
-      <div className="container mx-auto p-4 md:p-6">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>
-            Failed to load customer data. Please try again later.
-          </AlertDescription>
-        </Alert>
-        <div className="mt-4 flex justify-center">
-          <button
-            onClick={() => {
-              refetchCustomers();
-              refetchStats();
-            }}
-            className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-          >
-            Retry
-          </button>
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <div className="animate-pulse text-muted-foreground">
+          Loading your company information...
         </div>
       </div>
     );
   }
 
-  return (
-    <SubscriberOverview 
-      initialData={customers}
-      initialTotal={total}
-      initialStats={stats}
-      isLoading={isLoading}
-      onRefresh={() => {
-        refetchCustomers();
-        refetchStats();
-      }}
-    />
-  );
-}
+  if (error || !companyId) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <div className="text-destructive text-center max-w-md">
+          <p className="font-semibold mb-2">Authentication Error</p>
+          <p className="text-sm text-muted-foreground">{error || "Unable to determine company"}</p>
+        </div>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
-// Loading skeleton component
-function CustomersPageSkeleton() {
   return (
-    <div className="container mx-auto p-4 md:p-6">
-      <div className="space-y-6">
-        {/* Stats Cards Skeleton */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-          {[...Array(5)].map((_, i) => (
-            <Skeleton key={i} className="h-32" />
-          ))}
-        </div>
-        
-        {/* Filters Skeleton */}
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <Skeleton className="h-7 w-80" />
-            <Skeleton className="h-7 w-20" />
-            <Skeleton className="h-7 w-28" />
-          </div>
-          <div className="flex gap-2">
-            <Skeleton className="h-7 w-24" />
-            <Skeleton className="h-7 w-20" />
-            <Skeleton className="h-7 w-20" />
-          </div>
-        </div>
-        
-        {/* Table Skeleton */}
-        <Skeleton className="h-[600px]" />
-        
-        {/* Pagination Skeleton */}
-        <div className="flex items-center justify-between px-1">
-          <Skeleton className="h-4 w-48" />
-          <div className="flex gap-2">
-            <Skeleton className="h-8 w-8" />
-            <Skeleton className="h-8 w-8" />
-            <Skeleton className="h-8 w-8" />
-            <Skeleton className="h-8 w-8" />
-          </div>
+    <div className="container mx-auto py-6 space-y-6">
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Customers</h1>
+          <p className="text-muted-foreground mt-1">
+            Manage your customer base, view order history, and track engagement
+          </p>
         </div>
       </div>
-    </div>
-  );
-}
 
-// Main page component with Suspense
-export default function CustomersPage() {
-  return (
-    <Suspense fallback={<CustomersPageSkeleton />}>
-      <CustomersContent />
-    </Suspense>
+      {/* Customer Table */}
+      <CustomerTable
+        apiBaseUrl={process.env.NEXT_PUBLIC_N8N_WEBHOOK_BASE || "http://localhost:3000/api"}
+        companyId={companyId}
+        onEditCustomer={handleEditCustomer}
+        onAddCustomer={handleAddCustomer}
+        onSendEmail={handleSendEmail}
+        onViewOrders={handleViewOrders}
+        onError={handleError}
+        onSuccess={handleSuccess}
+        refreshInterval={30000} // Auto-refresh every 30 seconds
+        defaultPageSize={10}
+      />
+      <CustomerCreateForm
+         isOpen={isOpen}
+         onClose={() => setIsOpen(false)}
+      />
+    </div>
   );
 }

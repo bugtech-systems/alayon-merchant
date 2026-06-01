@@ -68,7 +68,6 @@ function AccountBadgeWrapper({ data, type }: { data: any; type: string }) {
 // Main content component that fetches data
 async function DashboardContent() {
   const userData = (await retrieveUser()) as RestaurantAdminDTO | any;
-  console.log(userData, 'usssss')
   if (!userData || !userData?.user?.id.includes("emp_")) {
     redirect("/login");
   }

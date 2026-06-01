@@ -27,7 +27,6 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   ]);
 
 
-  console.log(userData, 'USSS')
   return (
     <SidebarProvider
       defaultOpen={defaultOpen}

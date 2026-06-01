@@ -78,13 +78,12 @@ export const companySidebarItems: NavGroup[] = [
         icon: Forklift,
         comingSoon: false,
       },
-      
-      // {
-      //   title: "Finance",
-      //   url: "/dashboard/finance",
-      //   icon: Banknote,
-      //   // comingSoon: true
-      // },
+      {
+        title: "Test page",
+        url: "/test",
+        icon: Banknote,
+        // comingSoon: true
+      },
       // {
       //   title: "Analytics",
       //   url: "/dashboard/analytics",
@@ -144,7 +143,12 @@ export const riderSidebarItems: NavGroup[] = [
         icon: Forklift,
         comingSoon: false,
       },
-      
+      {
+        title: "Test page",
+        url: "/test",
+        icon: Banknote,
+        // comingSoon: true
+      },
       // {
       //   title: "Finance",
       //   url: "/dashboard/finance",
