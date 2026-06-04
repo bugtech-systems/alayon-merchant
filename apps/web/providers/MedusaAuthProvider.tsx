@@ -10,6 +10,8 @@ import { useRouter } from "next/navigation"
 import { apiFetch } from "@/lib/apiClient"
 import { n8nFetcher } from "@/hooks/useN8nQuery"
 import { getAuthHeaders, removeAuthToken, setAuthToken } from "@/lib/medusa/data/cookies"
+import { loginUser, retrieveUser } from "@/lib/data"
+import { removeCartId, removeSession } from "@/lib/data/cookies"
 
 type User = {
   id: string
@@ -51,9 +53,8 @@ export function MedusaAuthProvider({ children }: { children: React.ReactNode }) 
 
     // console.log(res, 'rewee')
 
-      const res = await n8nFetcher({"endpoint": "/webhook/auth/session", 
-        method: "GET"
-      })
+      const res = await retrieveUser();
+      console.log(res, "RESSSsss")
       //   const userData = await resUser.json() as any;
         if(res.user || res.customer || res.company || res.driver){
         setUser({...(res.user || res.customer || res.company || res.driver), actor_type: res.actor_type})
@@ -81,11 +82,7 @@ export function MedusaAuthProvider({ children }: { children: React.ReactNode }) 
   // LOGIN
   // ----------------------------
   const login = async (email: string, password: string, actorType: string) => {
-   let res = await apiFetch(
-      `/auth/customer/emailpass`, { 
-      method: "POST",
-      body: { email, password, actorType },
-    })
+   let res = await loginUser
 
     console.log(res, 'rewee')
     if(res.token){
@@ -111,6 +108,8 @@ export function MedusaAuthProvider({ children }: { children: React.ReactNode }) 
     localStorage.removeItem('session_id')
     localStorage.removeItem('token')
     removeAuthToken();
+    removeSession()
+    removeCartId()
     router.push("/login")
   }
 

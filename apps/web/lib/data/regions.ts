@@ -1,6 +1,6 @@
 "use server"
 
-import { sdk } from "../medusa/config"
+import { sdk } from "../config"
 import medusaError from "../medusa/util/medusa-error"
 import { HttpTypes } from "@medusajs/types"
 
@@ -62,4 +62,18 @@ export const getRegion = async (
   } catch (e: any) {
     return null
   }
+}
+
+
+export const listMunicipalities = async (): Promise<HttpTypes.StoreRegion[]> => {
+  const next = {
+  }
+
+  return sdk.client
+    .fetch<{ municipalities: HttpTypes.StoreRegion[] }>(`/dashboard/locations/municipalities`, {
+      method: "GET",
+      next,
+    })
+    .then(({ municipalities }: { municipalities: HttpTypes.StoreRegion[] }) => municipalities)
+    .catch(medusaError)
 }

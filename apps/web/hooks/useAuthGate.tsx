@@ -9,7 +9,6 @@ export function useAuthGate() {
   useEffect(() => {
     const check = async () => {
         const res = await apiFetch("/auth/session", { method: "POST"})
-      console.log(res, "RESSS")
       if (!res.ok) {
         router.replace("/login")
       } else {

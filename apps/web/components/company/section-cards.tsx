@@ -1,9 +1,13 @@
+// components/dashboard/DeliverySectionCards.tsx
 "use client";
 
-import { CalendarIcon, TrendingDown, TrendingUp, Users, Loader2 } from "lucide-react";
+import { CalendarIcon, TrendingDown, TrendingUp, Users, Loader2, RefreshCw, Truck, Package, Clock } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
+// UI Components
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -28,10 +32,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
-import { format } from "date-fns";
 
-// Delivery metrics interface
+// Metrics service
+import { getDeliveryMetrics, getAvailableDrivers } from "@/lib/data/deliveries";
+
+// Types
 interface DeliveryMetrics {
   totalDeliveries: number;
   completedDeliveries: number;
@@ -40,6 +45,7 @@ interface DeliveryMetrics {
   totalRevenue: number;
   pendingDeliveries: number;
   cancelledDeliveries: number;
+  inTransitDeliveries: number;
   trends?: {
     totalDeliveries: number;
     completedDeliveries: number;
@@ -48,59 +54,30 @@ interface DeliveryMetrics {
   };
 }
 
-// Rider interface
-interface Rider {
+interface Driver {
   id: string;
   name: string;
   email?: string;
   phone?: string;
-  avatar?: string;
 }
 
-// n8n webhook response interface for metrics
-interface MetricsN8nResponse {
-  success: boolean;
-  data: DeliveryMetrics;
-  error?: string;
-}
-
-// n8n webhook response interface for riders
-interface RidersN8nResponse {
-  success: boolean;
-  data: Rider[];
-  error?: string;
-}
-
-// Props for the component
-interface DeliverySectionCardsProps {
-  metricsWebhookUrl: string;  // Webhook for fetching delivery metrics
-  ridersWebhookUrl: string;   // Webhook for fetching riders list
-}
-
-// Helper function to get date at UTC midnight (start of day)
+// Helper functions
 function getUTCMidnight(date: Date): Date {
   return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
 }
 
-// Helper function to parse date from URL param without timezone issues
 function parseDateFromParam(dateString: string): Date | null {
   if (!dateString) return null;
-  // Parse YYYY-MM-DD format as UTC date
   const [year, month, day] = dateString.split('-').map(Number);
   if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
-  // Create date at UTC midnight
   return new Date(Date.UTC(year, month - 1, day));
 }
 
-// Helper function to format date for URL param (YYYY-MM-DD in UTC)
 function formatDateForParam(date: Date): string {
   return format(date, 'yyyy-MM-dd');
 }
 
-export function DeliverySectionCards({ 
-  metricsWebhookUrl,
-  ridersWebhookUrl,
-}: DeliverySectionCardsProps) {
+export function DeliverySectionCards() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -115,188 +92,134 @@ export function DeliverySectionCards({
       const toDate = parseDateFromParam(toParam);
       
       if (fromDate && toDate && !isNaN(fromDate.getTime()) && !isNaN(toDate.getTime())) {
-        return {
-          from: fromDate,
-          to: toDate,
-        };
+        return { from: fromDate, to: toDate };
       }
     }
     
     // Default: last 30 days
-    const to = new Date();
-    const from = new Date();
+    const to = getUTCMidnight(new Date());
+    const from = getUTCMidnight(new Date());
     from.setDate(from.getDate() - 30);
     
-    // Set to UTC midnight to avoid timezone issues
-    return {
-      from: getUTCMidnight(from),
-      to: getUTCMidnight(to),
-    };
+    return { from, to };
   });
   
-  const [riders, setRiders] = useState<Rider[]>([]);
-  const [selectedRider, setSelectedRider] = useState(() => {
-    return searchParams.get("rider") || "all";
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [selectedDriver, setSelectedDriver] = useState(() => {
+    return searchParams.get("driver") || "all";
   });
   
   const [metrics, setMetrics] = useState<DeliveryMetrics | null>(null);
   const [loading, setLoading] = useState(false);
-  const [loadingRiders, setLoadingRiders] = useState(true);
+  const [loadingDrivers, setLoadingDrivers] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [ridersError, setRidersError] = useState<string | null>(null);
 
-  // Fetch riders from n8n webhook
-  const fetchRiders = useCallback(async () => {
-    setLoadingRiders(true);
-    setRidersError(null);
+  // Fetch drivers from Medusa SDK
+  const fetchDrivers = useCallback(async () => {
+    setLoadingDrivers(true);
     
     try {
-      const response = await fetch(ridersWebhookUrl, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache",
-        },
-      });
-        console.log(response, 'RSSSPSSDR')
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const result: RidersN8nResponse = await response.json();
-              console.log(result, 'RSSSPwwwaaaSSDR')
-
-      // if (!result.success) {
-      //   throw new Error(result.error || "Failed to fetch riders");
-      // }
-      
-      // Ensure we have an "all" option
-      const ridersList = (result.data || result || []);
-      const allOption: Rider = { id: "all", name: "All Riders" };
-      setRiders([allOption, ...ridersList]);
-      
+      const driversList = await getAvailableDrivers();
+      const allOption: Driver = { id: "all", name: "All Drivers" };
+      setDrivers([allOption, ...driversList]);
     } catch (err) {
-      console.error("Error fetching riders from n8n:", err);
-      setRidersError(err instanceof Error ? err.message : "Failed to load riders");
-      
-      // Fallback to default riders in development
-      if (process.env.NODE_ENV === "development") {
-        console.warn("Using default riders due to API error");
-        setRiders(defaultRiders);
-      } else {
-        // In production, at least show "All Riders" option
-        setRiders([{ id: "all", name: "All Riders" }]);
-      }
+      console.error("Error fetching drivers:", err);
+      setDrivers([{ id: "all", name: "All Drivers" }]);
     } finally {
-      setLoadingRiders(false);
+      setLoadingDrivers(false);
     }
-  }, [ridersWebhookUrl]);
+  }, []);
 
-  // Fetch metrics from n8n webhook
-  const fetchMetricsFromN8n = useCallback(async (
-    from: Date, 
-    to: Date, 
-    riderId: string
-  ): Promise<DeliveryMetrics | null> => {
-    setLoading(true);
-    setError(null);
+  // Fetch metrics using Medusa SDK
+// components/dashboard/DeliverySectionCards.tsx (partial - fetch function update)
+const fetchMetrics = useCallback(async (from: Date, to: Date, driverId: string) => {
+  setLoading(true);
+  setError(null);
+  
+  try {
+    // Set dates to start and end of day
+    const startDate = new Date(from);
+    startDate.setHours(0, 0, 0, 0);
     
-    try {
-      // Send dates as UTC strings to avoid timezone ambiguity
-      const requestBody = {
-        dateRange: {
-          from: from.toISOString(),
-          to: to.toISOString(),
-        },
-        riderId: riderId,
-        timestamp: new Date().toISOString(),
-      };
-      
-      console.log("Fetching metrics with:", requestBody);
-      
-      const response = await fetch(metricsWebhookUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const result: MetricsN8nResponse = await response.json();
-      
-      if (!result.success) {
-        throw new Error(result.error || "Failed to fetch metrics");
-      }
-      
-      return result.data;
-    } catch (err) {
-      console.error("Error fetching from n8n:", err);
-      setError(err instanceof Error ? err.message : "Failed to load delivery metrics");
-      
-      // Fallback to mock data for development
-      if (process.env.NODE_ENV === "development") {
-        console.warn("Using mock data due to API error");
-        return getMockMetrics(from, riderId);
-      }
-      
-      return null;
-    } finally {
-      setLoading(false);
+    const endDate = new Date(to);
+    endDate.setHours(23, 59, 59, 999);
+    
+    const result = await getDeliveryMetrics({
+      dateFrom: startDate,
+      dateTo: endDate,
+      driverId: driverId === "all" ? undefined : driverId,
+    });
+    
+    if (result.success && result.data) {
+      setMetrics(result.data);
+    } else {
+      throw new Error(result.error || "Failed to fetch metrics");
     }
-  }, [metricsWebhookUrl]);
+  } catch (err) {
+    console.error("Error fetching metrics:", err);
+    setError(err instanceof Error ? err.message : "Failed to load delivery metrics");
+    
+    // Set empty metrics to avoid UI breakage
+    setMetrics({
+      totalDeliveries: 0,
+      completedDeliveries: 0,
+      onTimeRate: 0,
+      avgDeliveryTime: 0,
+      totalRevenue: 0,
+      pendingDeliveries: 0,
+      cancelledDeliveries: 0,
+      inTransitDeliveries: 0,
+    });
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
-  // Fetch riders on component mount
+  // Fetch drivers on component mount
   useEffect(() => {
-    fetchRiders();
-  }, [fetchRiders]);
+    fetchDrivers();
+  }, [fetchDrivers]);
 
   // Update URL params when filters change
-  const updateUrlParams = useCallback((from: Date, to: Date, rider: string) => {
+  const updateUrlParams = useCallback((from: Date, to: Date, driver: string) => {
     const params = new URLSearchParams(searchParams);
     
-    // Use UTC date strings to avoid timezone shifts
     params.set("dateFrom", formatDateForParam(from));
     params.set("dateTo", formatDateForParam(to));
-    params.set("rider", rider);
+    params.set("driver", driver);
     
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }, [pathname, router, searchParams]);
 
-  // Handle filter changes and trigger n8n call
+  // Handle filter changes
   const handleDateRangeChange = (range: { from: Date; to: Date } | undefined) => {
     if (range?.from && range?.to) {
-      // Ensure dates are normalized to UTC midnight
       const normalizedFrom = getUTCMidnight(range.from);
       const normalizedTo = getUTCMidnight(range.to);
       
       setDateRange({ from: normalizedFrom, to: normalizedTo });
-      updateUrlParams(normalizedFrom, normalizedTo, selectedRider);
+      updateUrlParams(normalizedFrom, normalizedTo, selectedDriver);
     }
   };
   
-  const handleRiderChange = (riderId: string) => {
-    setSelectedRider(riderId);
-    updateUrlParams(dateRange.from, dateRange.to, riderId);
+  const handleDriverChange = (driverId: string) => {
+    setSelectedDriver(driverId);
+    updateUrlParams(dateRange.from, dateRange.to, driverId);
   };
   
-  // Manual refresh button handler
   const handleRefresh = () => {
-    updateUrlParams(dateRange.from, dateRange.to, selectedRider);
+    fetchMetrics(dateRange.from, dateRange.to, selectedDriver);
   };
 
   // Effect to fetch data when URL params change
   useEffect(() => {
     const fromParam = searchParams.get("dateFrom");
     const toParam = searchParams.get("dateTo");
-    const riderParam = searchParams.get("rider");
+    const driverParam = searchParams.get("driver");
     
     let from = dateRange.from;
     let to = dateRange.to;
-    let rider = selectedRider;
+    let driver = selectedDriver;
     let needsUpdate = false;
     
     if (fromParam && toParam) {
@@ -304,7 +227,6 @@ export function DeliverySectionCards({
       const newTo = parseDateFromParam(toParam);
       
       if (newFrom && newTo && !isNaN(newFrom.getTime()) && !isNaN(newTo.getTime())) {
-        // Check if dates actually changed (comparing timestamps)
         if (from.getTime() !== newFrom.getTime() || to.getTime() !== newTo.getTime()) {
           from = newFrom;
           to = newTo;
@@ -313,8 +235,8 @@ export function DeliverySectionCards({
       }
     }
     
-    if (riderParam && riderParam !== selectedRider) {
-      rider = riderParam;
+    if (driverParam && driverParam !== selectedDriver) {
+      driver = driverParam;
       needsUpdate = true;
     }
     
@@ -322,23 +244,16 @@ export function DeliverySectionCards({
       if (from !== dateRange.from || to !== dateRange.to) {
         setDateRange({ from, to });
       }
-      if (rider !== selectedRider) {
-        setSelectedRider(rider);
+      if (driver !== selectedDriver) {
+        setSelectedDriver(driver);
       }
     }
     
-    // Fetch data from n8n
-    const loadData = async () => {
-      const data = await fetchMetricsFromN8n(from, to, rider);
-      if (data) {
-        setMetrics(data);
-      }
-    };
-    
-    loadData();
-  }, [searchParams]); // Re-run when URL params change
+    // Fetch metrics
+    fetchMetrics(from, to, driver);
+  }, [searchParams, fetchMetrics]);
 
-  // Calculate trend indicators based on actual data
+  // Helper functions for UI
   const getTrend = (current: number, previous?: number) => {
     if (!previous || previous === 0) {
       return { value: "0", isUp: false };
@@ -350,55 +265,34 @@ export function DeliverySectionCards({
     };
   };
 
-  // Format date for display (using local timezone for readability)
   const formatDateForDisplay = (date: Date) => {
     return format(date, "LLL dd, yyyy");
   };
 
-  // Get selected rider name for display
-  const selectedRiderName = riders.find(r => r.id === selectedRider)?.name || "Filter by rider";
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-PH", {
+      style: "currency",
+      currency: "PHP",
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
 
-  // Show loading state for riders
-  if (loadingRiders) {
+  const selectedDriverName = drivers.find(d => d.id === selectedDriver)?.name || "Filter by driver";
+
+  // Loading state
+  if (loadingDrivers) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <Loader2 className="size-8 animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading riders list...</p>
+          <p className="text-muted-foreground">Loading delivery data...</p>
         </div>
       </div>
     );
   }
 
-  // Show riders error state
-  if (ridersError && riders.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <p className="text-red-600 mb-2">Failed to load riders</p>
-          <p className="text-sm text-muted-foreground">{ridersError}</p>
-          <Button onClick={fetchRiders} variant="outline" className="mt-4">
-            Try Again
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // Show loading state for metrics
-  if (loading && !metrics) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <Loader2 className="size-8 animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading delivery metrics...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Show error state for metrics
-  if (error && !metrics) {
+  // Error state
+  if (error && !metrics?.totalDeliveries) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
@@ -421,6 +315,14 @@ export function DeliverySectionCards({
   const revenueTrend = getTrend(
     metrics.totalRevenue, 
     metrics.trends?.totalRevenue
+  );
+  const totalTrend = getTrend(
+    metrics.totalDeliveries,
+    metrics.trends?.totalDeliveries
+  );
+  const onTimeTrend = getTrend(
+    metrics.onTimeRate,
+    metrics.trends?.onTimeRate
   );
 
   return (
@@ -467,30 +369,23 @@ export function DeliverySectionCards({
           </PopoverContent>
         </Popover>
 
-        {/* Rider Filter - Dynamically populated from n8n webhook */}
-        <Select value={selectedRider} onValueChange={handleRiderChange} disabled={loading}>
+        {/* Driver Filter */}
+        <Select value={selectedDriver} onValueChange={handleDriverChange} disabled={loading}>
           <SelectTrigger className="h-9 min-w-[160px]">
             <Users className="mr-2 size-4" />
-            <SelectValue placeholder="Filter by rider">
-              {selectedRiderName}
+            <SelectValue placeholder="Filter by driver">
+              {selectedDriverName}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
-              {riders.map((rider: any) => (
-                <SelectItem key={rider.id} value={rider.id}>
+              {drivers.map((driver) => (
+                <SelectItem key={driver.id} value={driver.id}>
                   <div className="flex items-center gap-2">
-                    {rider.avatar && (
-                      <img 
-                        src={rider.avatar_url} 
-                        alt={rider.full_name} 
-                        className="size-5 rounded-full object-cover"
-                      />
-                    )}
-                    <span>{rider.full_name}</span>
-                    {rider.phone && (
+                    <span>{driver.name}</span>
+                    {driver.phone && (
                       <span className="text-xs text-muted-foreground ml-2">
-                        {rider.phone}
+                        {driver.phone}
                       </span>
                     )}
                   </div>
@@ -508,13 +403,16 @@ export function DeliverySectionCards({
               Loading...
             </>
           ) : (
-            "Refresh"
+            <>
+              <RefreshCw className="mr-2 size-4" />
+              Refresh
+            </>
           )}
         </Button>
       </div>
 
       {/* Metrics Cards Grid */}
-      <div className="grid @5xl/main:grid-cols-4 @xl/main:grid-cols-2 grid-cols-1 gap-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs dark:*:data-[slot=card]:bg-card">
+      <div className="grid @5xl/main:grid-cols-4 @xl/main:grid-cols-2 grid-cols-1 gap-4">
         {/* Total Deliveries Card */}
         <Card className="@container/card">
           <CardHeader>
@@ -523,18 +421,32 @@ export function DeliverySectionCards({
               {metrics.totalDeliveries.toLocaleString()}
             </CardTitle>
             <CardAction>
-              <Badge variant="outline" className="gap-1">
-                <TrendingUp className="size-3" />
-                +{metrics.trends?.totalDeliveries || 8.2}%
+              <Badge 
+                variant="outline" 
+                className={cn(
+                  "gap-1",
+                  totalTrend.isUp ? "text-green-600" : "text-red-600"
+                )}
+              >
+                {totalTrend.isUp ? (
+                  <TrendingUp className="size-3" />
+                ) : (
+                  <TrendingDown className="size-3" />
+                )}
+                {totalTrend.value}%
               </Badge>
             </CardAction>
           </CardHeader>
           <CardFooter className="flex-col items-start gap-1.5 text-sm">
             <div className="line-clamp-1 flex gap-2 font-medium">
-              Delivery volume increased <TrendingUp className="size-4" />
+              {totalTrend.isUp ? "Increase" : "Decrease"} in volume
+              {totalTrend.isUp ? 
+                <TrendingUp className="size-4" /> : 
+                <TrendingDown className="size-4" />
+              }
             </div>
             <div className="text-muted-foreground">
-              Compared to previous period
+              {metrics.inTransitDeliveries} in transit, {metrics.pendingDeliveries} pending
             </div>
           </CardFooter>
         </Card>
@@ -573,8 +485,7 @@ export function DeliverySectionCards({
               )}
             </div>
             <div className="text-muted-foreground">
-              {metrics.pendingDeliveries} pending, {metrics.cancelledDeliveries}{" "}
-              cancelled
+              {((metrics.completedDeliveries / metrics.totalDeliveries) * 100).toFixed(1)}% completion rate
             </div>
           </CardFooter>
         </Card>
@@ -587,19 +498,33 @@ export function DeliverySectionCards({
               {metrics.onTimeRate}%
             </CardTitle>
             <CardAction>
-              <Badge variant="outline" className="gap-1">
-                <TrendingUp className="size-3" />
-                +{metrics.trends?.onTimeRate || 3.2}%
+              <Badge 
+                variant="outline" 
+                className={cn(
+                  "gap-1",
+                  onTimeTrend.isUp ? "text-green-600" : "text-red-600"
+                )}
+              >
+                {onTimeTrend.isUp ? (
+                  <TrendingUp className="size-3" />
+                ) : (
+                  <TrendingDown className="size-3" />
+                )}
+                {onTimeTrend.value}%
               </Badge>
             </CardAction>
           </CardHeader>
           <CardFooter className="flex-col items-start gap-1.5 text-sm">
             <div className="line-clamp-1 flex gap-2 font-medium">
-              Improved delivery punctuality{" "}
-              <TrendingUp className="size-4" />
+              {onTimeTrend.isUp ? "Improved" : "Decreased"} punctuality
+              {onTimeTrend.isUp ? (
+                <TrendingUp className="size-4" />
+              ) : (
+                <TrendingDown className="size-4" />
+              )}
             </div>
             <div className="text-muted-foreground">
-              Avg. {metrics.avgDeliveryTime} days delivery time
+              Avg. {metrics.avgDeliveryTime} day{metrics.avgDeliveryTime !== 1 ? 's' : ''} delivery time
             </div>
           </CardFooter>
         </Card>
@@ -609,7 +534,7 @@ export function DeliverySectionCards({
           <CardHeader>
             <CardDescription>Delivery Revenue</CardDescription>
             <CardTitle className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums">
-              ${metrics.totalRevenue.toLocaleString()}
+              {formatCurrency(metrics.totalRevenue)}
             </CardTitle>
             <CardAction>
               <Badge
@@ -638,51 +563,11 @@ export function DeliverySectionCards({
               )}
             </div>
             <div className="text-muted-foreground">
-              Based on completed deliveries
+              Avg. {(metrics.totalRevenue / metrics.completedDeliveries || 0).toFixed(2)} per delivery
             </div>
           </CardFooter>
         </Card>
       </div>
     </>
   );
-}
-
-// Default riders data (fallback)
-const defaultRiders: Rider[] = [
-  { id: "all", name: "All Riders" },
-  { id: "rider_1", name: "John Doe", phone: "+1234567890" },
-  { id: "rider_2", name: "Jane Smith", phone: "+1234567891" },
-  { id: "rider_3", name: "Mike Johnson", phone: "+1234567892" },
-  { id: "rider_4", name: "Sarah Williams", phone: "+1234567893" },
-];
-
-// Mock data for development fallback
-function getMockMetrics(from: Date, riderId: string): DeliveryMetrics {
-  // Add some variation based on the date range length
-  const daysDiff = Math.ceil(Math.abs(from.getTime() - new Date().getTime()) / (1000 * 3600 * 24));
-  const multiplier = Math.min(1, daysDiff / 30);
-  
-  const baseMetrics = {
-    totalDeliveries: Math.floor(1234 * multiplier),
-    completedDeliveries: Math.floor(1189 * multiplier),
-    onTimeRate: 92.5,
-    avgDeliveryTime: 2.3,
-    totalRevenue: 45678.5 * multiplier,
-    pendingDeliveries: Math.floor(34 * multiplier),
-    cancelledDeliveries: Math.floor(11 * multiplier),
-    trends: {
-      totalDeliveries: 8.2,
-      completedDeliveries: 6.2,
-      onTimeRate: 3.2,
-      totalRevenue: 8.5,
-    },
-  };
-
-  if (riderId !== "all") {
-    baseMetrics.totalDeliveries = Math.floor(baseMetrics.totalDeliveries * 0.25);
-    baseMetrics.completedDeliveries = Math.floor(baseMetrics.completedDeliveries * 0.25);
-    baseMetrics.totalRevenue = baseMetrics.totalRevenue * 0.25;
-  }
-
-  return baseMetrics;
 }

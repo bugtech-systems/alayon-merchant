@@ -59,7 +59,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
                 orientation="vertical"
                 className="mx-2 data-[orientation=vertical]:h-4 data-[orientation=vertical]:self-center"
               />
-              <SearchDialog />
+              {/* <SearchDialog /> */}
             </div>
             <div className="flex items-center gap-2">
               <LayoutControls />

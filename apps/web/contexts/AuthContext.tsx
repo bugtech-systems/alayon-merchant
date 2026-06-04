@@ -5,10 +5,12 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { User, AuthState, LoginCredentials, ActorType } from '@/types';
 import { setSessionActive, clearSession, storeUserData, getStoredUser } from '@/lib/medusa';
 import { useRouter } from 'next/navigation';
-import { getAuthHeaders, setAuthToken } from '@/lib/data/cookies';
+import { getAuthHeaders, removeCartId, removeSession, setAuthToken } from '@/lib/data/cookies';
 import { n8nFetcher } from '@/hooks/useN8nQuery';
 import { sdk } from '@/lib/config';
 import { retrieveCustomer } from '@/lib/actions';
+import { retrieveUser } from '@/lib/data';
+import { setCustomerGroupId } from '@/lib/medusa/data/cookies';
 
 interface AuthContextType {
   user: User | null;
@@ -85,43 +87,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const checkAuth = async () => {
       try {
         // Check session cache first
-        const cachedSession = SessionCache.get();
         
-        if (cachedSession?.user && cachedSession?.token) {
-          setAuthState({
-            user: cachedSession.user,
-            isAuthenticated: true,
-            isLoading: false,
-          });
-          setCurrentActorType(cachedSession.actorType);
-          return;
-        }
+  
 
-        if (DEMO_MODE) {
-          const storedUser = getStoredUser();
-          const sessionActive = localStorage.getItem('medusa_session_active') === 'true';
-          
-          if (sessionActive && storedUser) {
-            setAuthState({
-              user: storedUser as User,
-              isAuthenticated: true,
-              isLoading: false,
-            });
-            setCurrentActorType((storedUser as User).actorType);
-          } else {
-            setAuthState({
-              user: null,
-              isAuthenticated: false,
-              isLoading: false,
-            });
-          }
-          return;
-        }
+      
 
         // Production - try to restore session from Medusa
         try {
+          const userData  = await retrieveUser();
           const customer  = await retrieveCustomer();
-          
+            console.log(userData, customer, 'CISSST')
+
+                if(userData && userData?.metadata?.role){
+                    if(userData?.metadata?.role == 'driver'){
+                        setCustomerGroupId(userData.driver.customer_group_id)
+                    } else if(userData?.metadata?.role == 'company'){
+                        setCustomerGroupId(userData.company.customer_group_id)
+                    }
+                  console.log( userData, 'USSSERR STATE', customer)
+            }
           if (customer) {
             const actorType = customer.metadata?.actor_type as ActorType;
             
@@ -146,6 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               isLoading: false,
             });
             setCurrentActorType(actorType);
+               
             return;
           }
         } catch (error) {
@@ -293,14 +278,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       SessionCache.clear();
       clearSession();
-      
+      removeSession()
+      removeCartId()
       setAuthState({
         user: null,
         isAuthenticated: false,
         isLoading: false,
       });
       setCurrentActorType(null);
-      
       router.push('/login');
     } catch (error) {
       console.error('Logout failed:', error);

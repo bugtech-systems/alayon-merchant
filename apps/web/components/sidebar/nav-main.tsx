@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { redirect, usePathname } from "next/navigation";
 import { ChevronRight, MailIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -25,12 +25,12 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items";
 import { QuickCreateButton } from "../quick-create-button";
 import { quickCreateActions } from "@/config/quick-create-actions";
+import { QuickCreateDropdown } from "../quick-create-dropdown";
 
 interface NavMainProps {
-  readonly items: readonly NavGroup[];
+  readonly items: readonly any[];
 }
 
 const IsComingSoon = () => (
@@ -42,9 +42,9 @@ const NavItemExpanded = ({
   isActive,
   isSubmenuOpen,
 }: {
-  item: NavMainItem;
-  isActive: (url: string, subItems?: NavMainItem["subItems"]) => boolean;
-  isSubmenuOpen: (subItems?: NavMainItem["subItems"]) => boolean;
+  item: any;
+  isActive: (url: string, subItems?: any["subItems"]) => boolean;
+  isSubmenuOpen: (subItems?: any["subItems"]) => boolean;
 }) => {
   return (
     <Collapsible key={item.title} asChild defaultOpen={isSubmenuOpen(item.subItems)} className="group/collapsible">
@@ -102,8 +102,8 @@ const NavItemCollapsed = ({
   item,
   isActive,
 }: {
-  item: NavMainItem;
-  isActive: (url: string, subItems?: NavMainItem["subItems"]) => boolean;
+  item: any;
+  isActive: (url: string, subItems?: any["subItems"]) => boolean;
 }) => {
   return (
     <SidebarMenuItem key={item.title}>
@@ -147,8 +147,8 @@ const NavItemCollapsedSimple = ({
   item,
   isActive,
 }: {
-  item: NavMainItem;
-  isActive: (url: string, subItems?: NavMainItem["subItems"]) => boolean;
+  item: any;
+  isActive: (url: string, subItems?: any["subItems"]) => boolean;
 }) => {
   return (
     <SidebarMenuItem key={item.title}>
@@ -172,14 +172,14 @@ export function NavMain({ items }: NavMainProps) {
   const path = usePathname();
   const { state, isMobile } = useSidebar();
 
-  const isItemActive = (url: string, subItems?: NavMainItem["subItems"]) => {
+  const isItemActive = (url: string, subItems?: any["subItems"]) => {
     if (subItems?.length) {
       return subItems.some((sub) => path.startsWith(sub.url));
     }
     return path === url;
   };
 
-  const isSubmenuOpen = (subItems?: NavMainItem["subItems"]) => {
+  const isSubmenuOpen = (subItems?: any["subItems"]) => {
     return subItems?.some((sub) => path.startsWith(sub.url)) ?? false;
   };
 
@@ -189,16 +189,18 @@ export function NavMain({ items }: NavMainProps) {
         <SidebarGroupContent className="flex flex-col gap-2">
           <SidebarMenu>
             <SidebarMenuItem className="flex items-center gap-2">
-              <QuickCreateButton 
+              <QuickCreateDropdown/>
+              {/* <QuickCreateButton 
                 actions={quickCreateActions}
                 buttonText="Quick Create"
                 align="end"
                 side="bottom"
-              />
+              /> */}
               <Button
                 size="icon"
                 className="h-9 w-9 shrink-0 group-data-[collapsible=icon]:opacity-0"
                 variant="outline"
+                onClick={() => redirect('/chats')}
               >
                 <MailIcon />
                 <span className="sr-only">Inbox</span>

@@ -9,10 +9,12 @@ import { getAuthHeaders, getCacheHeaders, getCacheTag, removeAuthToken } from ".
 import { track } from "@vercel/analytics/server";
 import { n8nFetcher } from "@/hooks/useN8nQuery";
 import { retrieveCustomer, transferCart } from "./customer";
-import { setAuthToken } from "../data/cookies";
+import { setAuthToken, setCustomerGroupId } from "../data/cookies";
 import { z } from "zod";
 import { updateCart } from "../data/cart";
 import { retrieveCart } from "./cart";
+import { retrieveCustomerPhone } from "../data/customer";
+import { retrieveUser } from "../data";
 
 
 type FormState = {
@@ -109,6 +111,11 @@ export async function signup(prevState: FormState, data: FormData): Promise<Form
     // Step 1: Register user with Medusa auth
     let token: string;
     try {
+
+
+
+
+
       token = await sdk.auth.register("customer", "emailpass", {
         email: email || `${phone.replace(/[^0-9]/g, '')}@temp.user`, // Fallback email if not provided
         password: password,
@@ -138,6 +145,10 @@ export async function signup(prevState: FormState, data: FormData): Promise<Form
       };
     }
 
+    let customer = await retrieveCustomerPhone(phone);
+    
+
+
     // Step 2: Create customer profile
     const customerForm = {
       email: email || `${phone.replace(/[^0-9]/g, '')}@temp.user`,
@@ -151,9 +162,16 @@ export async function signup(prevState: FormState, data: FormData): Promise<Form
     let createdCustomer;
 
     try {
+
+
+      if(customer){
+        createdCustomer = customer;
+      } else {
       const response = await sdk.store.customer.create(customerForm, {}, customHeaders);
       createdCustomer = response.customer;
-      
+      }
+
+      console.log(customer, createdCustomer, 'CREATE CUSTOM')
       if (!createdCustomer || !createdCustomer.id) {
         throw new Error("Failed to create customer profile");
       }
@@ -346,10 +364,10 @@ export async function login(_currentState: unknown, formData: FormData) {
           ])
 
         revalidateTag(customerCacheTag, "max")
-
+        const userData = await retrieveUser()
         const customer = await retrieveCustomer()
         const cart = await retrieveCart()
-        console.log(customer, cart, 'ccssese')
+        console.log(customer, cart, userData, 'ccssese')
         // if (customer?.employee?.company_id) {
         //   await updateCart({
         //     metadata: {
@@ -358,7 +376,14 @@ export async function login(_currentState: unknown, formData: FormData) {
         //     },
         //   })
         // }
-
+                if(userData && userData?.metadata?.role){
+                    if(userData?.metadata?.role == 'driver'){
+                        setCustomerGroupId(userData.driver.customer_group_id)
+                    } else if(userData?.metadata?.role == 'company'){
+                        setCustomerGroupId(userData.employee.company.customer_group_id)
+                    }
+                  console.log( userData, 'USSSERR STATE', customer)
+            }
         revalidateTag(productsCacheTag, "max")
         revalidateTag(cartsCacheTag, "max")
             await transferCart()
@@ -508,4 +533,144 @@ export const sanitizePhilippinePhone = async (phone: string) => {
   }
   
   return phone; // Return original if format not recognized
+}
+
+// lib/actions/team-member.ts
+export async function createTeamMember(userData: CreateTeamMemberInput) {
+  try {
+    // Register the user via auth
+    const registerResponse = await sdk.client.fetch(
+      `/auth/user/emailpass/register`,
+      {
+        method: "POST",
+        body: { 
+          entity_id: userData.email, 
+          password: userData.password, 
+          email: userData.email 
+        },
+        headers: {
+          "Content-Type": "application/json",
+          ...(await getAuthHeaders()),
+          ...(await getCacheHeaders("users")),
+        },
+      }
+    );
+
+    if (!registerResponse) {
+      throw new Error('Failed to register team member');
+    }
+
+    // Create the user profile with role
+    const response = await sdk.client.fetch(
+      `/admin/users`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          email: userData.email,
+          first_name: userData.first_name,
+          last_name: userData.last_name,
+          role: userData.role,
+        }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await getAuthHeaders()),
+          ...(await getCacheHeaders("users")),
+        },
+      }
+    );
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to create team member');
+    }
+    
+    const { user } = await response.json();
+    
+    revalidateTag("team-members-list");
+    revalidateTag("users");
+    
+    return user;
+  } catch (error) {
+    console.error('Error creating team member:', error);
+    return null;
+  }
+}
+
+export async function updateTeamMemberRole(userId: string, role: string) {
+  try {
+    const response = await sdk.client.fetch(
+      `/admin/users/${userId}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ role }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await getAuthHeaders()),
+          ...(await getCacheHeaders("users")),
+        },
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error('Failed to update team member role');
+    }
+    
+    revalidateTag("team-members-list");
+    revalidateTag("users");
+    
+    return true;
+  } catch (error) {
+    console.error('Error updating team member:', error);
+    return false;
+  }
+}
+
+export async function deleteTeamMember(userId: string) {
+  try {
+    const response = await sdk.client.fetch(
+      `/admin/users/${userId}`,
+      {
+        method: 'DELETE',
+        headers: {
+          ...(await getAuthHeaders()),
+          ...(await getCacheHeaders("users")),
+        },
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error('Failed to delete team member');
+    }
+    
+    revalidateTag("team-members-list");
+    revalidateTag("users");
+    
+    return true;
+  } catch (error) {
+    console.error('Error deleting team member:', error);
+    return false;
+  }
+}
+
+export async function getTeamMembers() {
+  try {
+    const response = await sdk.client.fetch(`/admin/users`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(await getAuthHeaders()),
+        ...(await getCacheHeaders("team-members-list")),
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch team members');
+    }
+    
+    const { users } = await response.json();
+    return users;
+  } catch (error) {
+    console.error('Error fetching team members:', error);
+    return [];
+  }
 }

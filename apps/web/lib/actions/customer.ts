@@ -12,6 +12,7 @@ import {
   getCacheOptions,
   getCacheTag,
   getCartId,
+  getCustomerGroupId,
   removeAuthToken,
   removeCartId,
   setAuthToken,
@@ -629,7 +630,6 @@ export const retrieveCustomer = async (): Promise<B2BCustomer | null> => {
     ...(await getCacheOptions("customers")),
   }
 
-  console.log(headers, next, authHeaders, 'aUUTH')
   return await sdk.client
     .fetch<{ customer: B2BCustomer }>(`/store/customers/me`, {
       method: "GET",
@@ -821,13 +821,18 @@ export async function createGuestCustomer(customerData: {
 
 export async function createQuickCustomer(customerData: any) {
   try {
-    const response = await fetch(`${BASE_URL}/store/customers/with-group`, {
+    let groupId = await getCustomerGroupId()
+    let newData = {
+      ...customerData,
+      customer_group_id: groupId
+    }
+    const response = await fetch(`${BASE_URL}/dashboard/customers`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(await getAuthHeaders())
       },
-      body: JSON.stringify(customerData),
+      body: JSON.stringify(newData),
     });
     
     if (!response.ok) {
@@ -924,3 +929,4 @@ export async function bulkUpdateCustomerStatus(
     }
   }
 }
+

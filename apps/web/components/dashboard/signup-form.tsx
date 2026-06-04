@@ -250,7 +250,7 @@ export function SignupForm({ companies = [] }: SignupFormProps) {
                   trigger("company_id");
                 }}
               >
-                <SelectTrigger className={hasError("company_id") ? "border-red-500" : ""}>
+                <SelectTrigger className={hasError("company_id") ? "border-red-500 w-full" : "w-full"}>
                   <SelectValue placeholder="Select company" />
                 </SelectTrigger>
                 <SelectContent>

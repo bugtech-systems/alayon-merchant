@@ -119,6 +119,23 @@ export const setCartId = async (cartId: string) => {
   })
 }
 
+export const setCustomerGroupId = async (groupId: string) => {
+  const cookies = await nextCookies()
+
+  cookies.set("customer_group_id", groupId, {
+    maxAge: 60 * 60 * 24 * 7,
+    httpOnly: true,
+    sameSite: "strict",
+    secure: process.env.NODE_ENV === "production",
+  })
+}
+
+export const getCustomerGroupId = async (groupId: string) => {
+  const cookies = await nextCookies()
+
+  return cookies.get("customer_group_id")?.value
+}
+
 export const removeCartId = async () => {
   const cookies = await nextCookies()
 
@@ -131,4 +148,21 @@ export const removeCartId = async () => {
     cookies.set("_medusa_cached_id", "", {
     maxAge: -1,
   })
+  
+}
+
+
+export const removeSession = async () => {
+  const cookies = await nextCookies()
+
+  cookies.set("customer_group_id", "", {
+    maxAge: -1,
+  })
+    cookies.set("user_region", "", {
+    maxAge: -1,
+  })
+    cookies.set("medusa_region_id", "", {
+    maxAge: -1,
+  })
+
 }

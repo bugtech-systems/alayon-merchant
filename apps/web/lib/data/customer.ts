@@ -48,6 +48,36 @@ export const retrieveCustomer = async (): Promise<B2BCustomer | null> => {
     .catch(() => null)
 }
 
+
+export const retrieveCustomerPhone = async (phone: any): Promise<B2BCustomer | null> => {
+  const authHeaders = await getAuthHeaders()
+
+  if (!authHeaders) return null
+
+  const headers = {
+    ...authHeaders,
+  }
+
+  const next = {
+    ...(await getCacheOptions("customers")),
+  }
+
+
+
+  return await sdk.client
+    .fetch<{ customer: B2BCustomer }>(`/store/customers/phone`, {
+      method: "GET",
+      query: {
+          phone
+        // fields: "",
+      },
+      headers,
+      next,
+    })
+    .then(({ customer }) => customer as B2BCustomer)
+    .catch(() => null)
+}
+
 export const updateCustomer = async (body: HttpTypes.StoreUpdateCustomer) => {
   const headers = {
     ...(await getAuthHeaders()),

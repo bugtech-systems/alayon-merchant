@@ -63,9 +63,9 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 // User type configuration
 const userTypes = [
   // { value: "customer", label: "Customer", icon: User, color: "blue", description: "Shop as a customer" },
-  { value: "company", label: "Merchant", icon: Store, color: "green", description: "Manage your store" },
-  { value: "driver", label: "Driver", icon: Truck, color: "orange", description: "Delivery operations" },
-  { value: "user", label: "Admin", icon: Building2, color: "purple", description: "Platform management" },
+  { value: "company", label: "Merchant", icon: Store, color: "green", description: "Manage your store", email: "rufrance@example.com", password: "123123" },
+  { value: "driver", label: "Driver", icon: Truck, color: "orange", description: "Delivery operations", email: "drive@example.com", password: "123123" },
+  { value: "user", label: "Admin", icon: Building2, color: "purple", description: "Platform management", email: "leo@example.com", password: "123123" },
 ];
 
 interface LoginFormProps {
@@ -119,7 +119,6 @@ export function LoginForm({ redirectUrl = "/dashboard", onSuccess }: LoginFormPr
         });
         
         const result = await login(data, formData);
-        console.log(result, 'RESSS')
         if (!result?.success) {
           setServerError(result.error ?? result);
           
@@ -354,8 +353,8 @@ export function LoginForm({ redirectUrl = "/dashboard", onSuccess }: LoginFormPr
                   key={type.value}
                   onClick={() => handleDemoLogin(
                     type.value,
-                    `${type.value}@example.com`,
-                    "password123"
+                    `${type.email}`,
+                    `${type.password}`
                   )}
                   className="w-full text-left p-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors text-xs"
                 >
@@ -365,7 +364,7 @@ export function LoginForm({ redirectUrl = "/dashboard", onSuccess }: LoginFormPr
                       <span className="font-medium">{type.label}:</span>
                     </div>
                     <span className="text-muted-foreground">
-                      {type.value}@example.com / ••••••
+                      {type.email} / ••••••
                     </span>
                   </div>
                 </button>

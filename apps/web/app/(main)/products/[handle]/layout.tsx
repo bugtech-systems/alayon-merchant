@@ -1,6 +1,5 @@
 import { getRegion } from "@/lib/actions/regions"
 import { retrieveCart, retrieveCompanyCart } from "@/lib/data/cart"
-import { setCartId } from "@/lib/data/cookies"
 import { retrieveCustomer } from "@/lib/data/customer"
 import { listCartFreeShippingPrices } from "@/lib/data/fulfillment"
 import { getProductByHandle } from "@/lib/data/products"

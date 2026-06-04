@@ -38,7 +38,6 @@ export function useMedusaOrders(params: UseMedusaOrdersParams) {
 
 
       const response = await listOrders();
-      console.log(response, 'RESSSPp')
       return response;
     },
     staleTime: 30000, // 30 seconds

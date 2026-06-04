@@ -20,7 +20,6 @@ export function useMedusaCustomers(params: UseMedusaCustomersParams) {
     queryKey: ["medusa-customers", params],
     queryFn: async () => {
       const response = await getCustomers(params);
-      console.log(response, "RESSS")
       return response.data;
     },
     staleTime: 30000,

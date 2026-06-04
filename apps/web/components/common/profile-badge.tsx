@@ -15,7 +15,6 @@ export function ProfileBadge() {
   const { user, logout, loading } = useMedusaAuth() as any;
 
 
-console.log(user, 'USSER')
 
   const dashboardPath = user
     ? user.actor_type == 'company'
