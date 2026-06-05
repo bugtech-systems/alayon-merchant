@@ -28,6 +28,7 @@ import {
 import { QuickCreateButton } from "../quick-create-button";
 import { quickCreateActions } from "@/config/quick-create-actions";
 import { QuickCreateDropdown } from "../quick-create-dropdown";
+import { MinimalSMSDialog, SMSDialog } from "./send-sms";
 
 interface NavMainProps {
   readonly items: readonly any[];
@@ -196,15 +197,19 @@ export function NavMain({ items }: NavMainProps) {
                 align="end"
                 side="bottom"
               /> */}
-              <Button
+              <MinimalSMSDialog
+                trigger={
+<Button
                 size="icon"
                 className="h-9 w-9 shrink-0 group-data-[collapsible=icon]:opacity-0"
                 variant="outline"
-                onClick={() => redirect('/chats')}
               >
                 <MailIcon />
                 <span className="sr-only">Inbox</span>
               </Button>
+                }
+              />
+              
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroupContent>

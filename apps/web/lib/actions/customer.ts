@@ -930,3 +930,27 @@ export async function bulkUpdateCustomerStatus(
   }
 }
 
+
+export async function bulkSendSms(data: any): Promise<{ success: boolean; error?: string; updatedCount?: number }> {
+  try {
+    const headers = {
+      ...(await getAuthHeaders()),
+    }
+
+        const response = await fetch(`${BASE_URL}/dashboard/sms`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(await getAuthHeaders())
+      },
+      body: JSON.stringify(data),
+    });
+
+    return { success: true, response }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to bulk update customers",
+    }
+  }
+}
