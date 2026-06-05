@@ -2,9 +2,10 @@
 import { redirect } from "next/navigation";
 import { retrieveCustomer } from "@/lib/actions";
 import { DashboardClient } from "./DashboardClient";
+import { retrieveUser } from "@/lib/data";
 
 export default async function Page() {
-  const user = await retrieveCustomer() || {} as any;
+  const user = await retrieveUser() || {} as any;
 
   
   if (!user?.id) {

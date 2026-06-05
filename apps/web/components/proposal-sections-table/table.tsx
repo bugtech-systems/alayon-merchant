@@ -123,7 +123,7 @@ export interface DynamicOrdersTableConfig {
   columns?: ColumnDef<WaterOrderRow>[];
   views?: TableViewConfig[];
   filters?: TableFilterConfig[];
-  
+  company?: any;
   // Query configuration
   defaultLimit?: number;
   defaultSort?: OrderSortOptions;
@@ -168,10 +168,12 @@ interface DynamicOrdersTableProps extends DynamicOrdersTableConfig {
 function transformToWaterOrderRow(order: DashboardOrder): WaterOrderRow {
   // Calculate remaining stock (mock logic - replace with actual business logic)
   const remainingStock = 1000; // This should come from your inventory system
-  console.log(order, 'ORRDD')
+  let orderId = order?.metadata?.delivery_id || order.id
+
   return {
+    ...order,
     id: order.id,
-    orderNumber: String(order?.metadata?.delivery_id).slice(-4) || String(order.display_id),
+    orderNumber: String(orderId).slice(-4) || String(order.display_id),
     customer: order.customer?.first_name && order.customer?.last_name 
       ? `${order.customer.first_name} ${order.customer.last_name}`
       : order.email || "Guest",
@@ -228,11 +230,11 @@ export function DynamicOrdersTable({
   onExport,
   refreshInterval,
   initialSearchParams,
+  company
 }: DynamicOrdersTableProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const queryClient = useQueryClient();
   
   const [data, setData] = React.useState<WaterOrderRow[]>([]);
   const [totalCount, setTotalCount] = React.useState(0);
@@ -314,7 +316,7 @@ export function DynamicOrdersTable({
     filters: OrderFilters;
     sort: OrderSortOptions;
   } => {
-    let filters: OrderFilters = { ...dynamicFilters };
+    let filters: OrderFilters | any = { ...dynamicFilters };
     const sort: OrderSortOptions = { ...defaultSort };
     
     // Apply view configuration
@@ -357,8 +359,12 @@ export function DynamicOrdersTable({
       filters.q = search;
     }
     
+    if(company){
+      filters.company_id = company?.id
+    }
+
     return { filters, sort };
-  }, [dynamicFilters, activeView, views, sorting, searchParams, defaultSort]);
+  }, [dynamicFilters, activeView, views, sorting, searchParams, defaultSort, company]);
 
   // Create a stable query key
   const queryKey = React.useMemo(() => {
@@ -385,7 +391,6 @@ export function DynamicOrdersTable({
     queryFn: async () => {
       const { filters, sort } = buildQueryFilters();
       const offset = pagination.pageIndex * pagination.pageSize;
-      
       const result = await listOrders(
         pagination.pageSize,
         offset,
@@ -873,6 +878,9 @@ export function DynamicOrdersTable({
   }, [dynamicFilters]);
 
   const selectedRowCount = Object.keys(rowSelection).length;
+
+console.log(data, 'table data')
+
   return (
     <div className="w-full space-y-4">
       {/* Toolbar */}

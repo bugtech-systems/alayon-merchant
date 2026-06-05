@@ -244,7 +244,7 @@ const getFulfillmentStatusDisplay = (status: string | null): string => {
 const buildQueryString = (
   limit: number,
   offset: number,
-  filters?: OrderFilters,
+  filters?: OrderFilters | any,
   sort?: OrderSortOptions
 ): string => {
   const params = new URLSearchParams();
@@ -258,6 +258,7 @@ const buildQueryString = (
   if (filters?.payment_status) params.set("payment_status", filters.payment_status);
   if (filters?.fulfillment_status) params.set("fulfillment_status", filters.fulfillment_status);
   if (filters?.customer_id) params.set("customer_id", filters.customer_id);
+  if (filters?.company_id) params.set("company_id", filters.company_id);
   if (filters?.email) params.set("email", filters.email);
   if (filters?.created_from) params.set("created_from", filters.created_from.toISOString());
   if (filters?.created_to) params.set("created_to", filters.created_to.toISOString());
@@ -289,7 +290,7 @@ export const listOrders = async (
     const headers = await getAuthHeaders();
     const next = await getCacheOptions("orders");
     const queryString = buildQueryString(limit, offset, filters, sort);
-    
+      console.log(queryString, 'QUERY STRR', filters)
     // Use Medusa SDK client to fetch from custom endpoint
     const response = await sdk.client.fetch<any>(
       `/dashboard/orders?${queryString}`,

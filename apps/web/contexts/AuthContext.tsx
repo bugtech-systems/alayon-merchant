@@ -96,15 +96,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const userData  = await retrieveUser();
           const customer  = await retrieveCustomer();
-            console.log(userData, customer, 'CISSST')
 
                 if(userData && userData?.metadata?.role){
                     if(userData?.metadata?.role == 'driver'){
                         setCustomerGroupId(userData.driver.customer_group_id)
                     } else if(userData?.metadata?.role == 'company'){
-                        setCustomerGroupId(userData.company.customer_group_id)
+                        setCustomerGroupId(userData.employee.company.customer_group_id)
                     }
-                  console.log( userData, 'USSSERR STATE', customer)
             }
           if (customer) {
             const actorType = customer.metadata?.actor_type as ActorType;

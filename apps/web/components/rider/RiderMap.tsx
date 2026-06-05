@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Map,
   MapMarker,
@@ -43,74 +43,192 @@ import {
   School,
   ShoppingBag,
   Menu,
-  X
+  X,
+  Loader2,
+  AlertCircle
 } from "lucide-react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { getCustomers, type CustomerFilters, type CustomerListResponse } from "@/lib/actions/customer";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+// Customer type based on API response
+interface CustomerMetadata {
+  barangayId?: string;
+  mapAddress?: string;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
+  fullAddress?: string;
+  barangayCode?: string;
+  municipalityId?: string;
+  municipalityCode?: string;
+}
+
+interface CustomerAddress {
+  id: string;
+  address_1?: string;
+  address_2?: string;
+  city?: string;
+  country_code?: string;
+  province?: string;
+  postal_code?: string;
+  phone?: string;
+  metadata?: CustomerMetadata;
+}
+
+interface Customer {
+  id: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+  has_account?: boolean;
+  addresses?: CustomerAddress[];
+  metadata?: CustomerMetadata;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Transformed customer for map display
+interface MapCustomer {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  group: string;
+  address: string;
+  phone: string;
+  email: string;
+  lastOrder: string | null;
+  status: "active" | "inactive";
+  rating: number;
+  totalSpent: number;
+  orderCount: number;
+  metadata: CustomerMetadata;
+  created_at: string;
+}
 
 // Tacloban City Center Coordinates
 const TACLOBAN_CENTER: LatLngExpression = [11.2299, 125.0022];
 
-// Sample customer data - Tacloban Area
-const CUSTOMERS = [
-  // Downtown Tacloban Area
-  { id: 1, name: "Maria Santos", lat: 11.2449, lng: 125.0032, group: "Downtown", address: "Real St., Tacloban City", phone: "+63 (555) 123-4567", lastOrder: "2024-01-15", status: "active", rating: 4.8 },
-  { id: 2, name: "Jose Ramirez", lat: 11.2429, lng: 125.0052, group: "Downtown", address: "P. Gomez St., Tacloban", phone: "+63 (555) 234-5678", lastOrder: "2024-01-14", status: "active", rating: 4.5 },
-  { id: 3, name: "Ana Reyes", lat: 11.2469, lng: 125.0012, group: "Downtown", address: "Justice Romualdez St.", phone: "+63 (555) 345-6789", lastOrder: "2024-01-16", status: "active", rating: 4.9 },
+// Helper function to extract coordinates from customer
+const extractCoordinates = (customer: Customer): { lat: number; lng: number } | null => {
+  // Check metadata first
+  if (customer.metadata?.coordinates) {
+    return customer.metadata.coordinates;
+  }
   
-  // San Jose District
-  { id: 4, name: "Roberto Fernandez", lat: 11.2289, lng: 124.9922, group: "San Jose", address: "San Jose District", phone: "+63 (555) 456-7890", lastOrder: "2024-01-13", status: "active", rating: 4.2 },
-  { id: 5, name: "Carmen Gomez", lat: 11.2269, lng: 124.9942, group: "San Jose", address: "Brgy. 88, San Jose", phone: "+63 (555) 567-8901", lastOrder: "2024-01-12", status: "active", rating: 4.7 },
-  { id: 6, name: "Antonio Cruz", lat: 11.2309, lng: 124.9902, group: "San Jose", address: "San Jose Heights", phone: "+63 (555) 678-9012", lastOrder: "2024-01-16", status: "inactive", rating: 4.6 },
+  // Check first address metadata
+  if (customer.addresses && customer.addresses.length > 0) {
+    const firstAddress = customer.addresses[0];
+    if (firstAddress.metadata?.coordinates) {
+      return firstAddress.metadata.coordinates;
+    }
+  }
   
-  // Marasbaras Area
-  { id: 7, name: "Luzviminda Torres", lat: 11.2149, lng: 125.0082, group: "Marasbaras", address: "Marasbaras Road", phone: "+63 (555) 789-0123", lastOrder: "2024-01-15", status: "active", rating: 5.0 },
-  { id: 8, name: "Pedro Jimenez", lat: 11.2129, lng: 125.0102, group: "Marasbaras", address: "Brgy. Marasbaras", phone: "+63 (555) 890-1234", lastOrder: "2024-01-14", status: "active", rating: 4.3 },
-  { id: 9, name: "Elena Vargas", lat: 11.2169, lng: 125.0062, group: "Marasbaras", address: "Marasbaras Proper", phone: "+63 (555) 901-2345", lastOrder: "2024-01-11", status: "active", rating: 4.4 },
-  
-  // Sagkahan District
-  { id: 10, name: "Ramon Dela Cruz", lat: 11.2549, lng: 125.0122, group: "Sagkahan", address: "Sagkahan District", phone: "+63 (555) 012-3456", lastOrder: "2024-01-10", status: "active", rating: 4.1 },
-  { id: 11, name: "Fe Mercado", lat: 11.2569, lng: 125.0142, group: "Sagkahan", address: "Fatima Village", phone: "+63 (555) 123-7890", lastOrder: "2024-01-15", status: "active", rating: 4.8 },
-  { id: 12, name: "Gregorio Castillo", lat: 11.2529, lng: 125.0102, group: "Sagkahan", address: "Sagkahan National Road", phone: "+63 (555) 234-8901", lastOrder: "2024-01-14", status: "inactive", rating: 4.6 },
-  
-  // Abucay Area
-  { id: 13, name: "Teresa Gonzales", lat: 11.2349, lng: 124.9982, group: "Abucay", address: "Abucay Street", phone: "+63 (555) 345-9012", lastOrder: "2024-01-13", status: "active", rating: 4.7 },
-  { id: 14, name: "Manuel Ignacio", lat: 11.2369, lng: 124.9962, group: "Abucay", address: "Brgy. Abucay", phone: "+63 (555) 456-0123", lastOrder: "2024-01-12", status: "active", rating: 4.5 },
-  
-  // Diit
-  { id: 15, name: "Nieves Aquino", lat: 11.2049, lng: 125.0152, group: "Diit", address: "Diit Road", phone: "+63 (555) 567-1234", lastOrder: "2024-01-16", status: "active", rating: 4.9 },
-  { id: 16, name: "Felipe Santiago", lat: 11.2029, lng: 125.0172, group: "Diit", address: "Purok 5, Diit", phone: "+63 (555) 678-2345", lastOrder: "2024-01-15", status: "active", rating: 4.8 },
-  
-  // V&G Subdivision
-  { id: 17, name: "Corazon Mateo", lat: 11.2489, lng: 124.9882, group: "V&G Subd.", address: "V&G Subdivision", phone: "+63 (555) 789-3456", lastOrder: "2024-01-14", status: "active", rating: 4.4 },
-  { id: 18, name: "Ricardo Bautista", lat: 11.2509, lng: 124.9862, group: "V&G Subd.", address: "Phase 2, V&G Subd.", phone: "+63 (555) 890-4567", lastOrder: "2024-01-13", status: "inactive", rating: 4.2 },
-];
+  return null;
+};
 
-// Get group color
-const getGroupColor = (group: string) => {
+// Helper function to extract full address from customer
+const extractAddress = (customer: Customer): string => {
+  // Check metadata first
+  if (customer.metadata?.fullAddress) {
+    return customer.metadata.fullAddress;
+  }
+  
+  // Check first address
+  if (customer.addresses && customer.addresses.length > 0) {
+    const addr = customer.addresses[0];
+    const parts = [];
+    if (addr.address_1) parts.push(addr.address_1);
+    if (addr.address_2) parts.push(addr.address_2);
+    if (addr.city) parts.push(addr.city);
+    if (addr.province) parts.push(addr.province);
+    if (addr.postal_code) parts.push(addr.postal_code);
+    return parts.join(", ") || "Address not available";
+  }
+  
+  return "Address not available";
+};
+
+// Helper function to extract barangay for grouping
+const extractBarangay = (customer: Customer): string => {
+  // Check metadata
+  if (customer.metadata?.barangayId) {
+    // In a real app, you'd map barangayId to barangay name
+    return "Sagkahan"; // Placeholder
+  }
+  
+  if (customer.addresses && customer.addresses.length > 0) {
+    const addr = customer.addresses[0];
+    if (addr.city) return addr.city;
+  }
+  
+  return "Downtown";
+};
+
+// Get group color based on barangay/area
+const getGroupColor = (group: string): string => {
   const colors: Record<string, string> = {
-    Downtown: "#ef4444",
-    "San Jose": "#3b82f6",
-    Marasbaras: "#10b981",
-    Sagkahan: "#f59e0b",
-    Abucay: "#8b5cf6",
-    Diit: "#ec489a",
-    "V&G Subd.": "#06b6d4",
+    "Sagkahan": "#ef4444",
+    "Downtown": "#3b82f6",
+    "San Jose": "#10b981",
+    "Marasbaras": "#f59e0b",
+    "Abucay": "#8b5cf6",
+    "Diit": "#ec489a",
+    "Palanas": "#06b6d4",
+    "Caibaan": "#14b8a6",
+    "Fatima": "#f97316",
+    "Naga-naga": "#a855f7",
   };
   return colors[group] || "#6b7280";
 };
 
 // Get group icon
-const getGroupIcon = (group: string, className: string = "h-4 w-4") => {
+const getGroupIcon = (group: string, className: string = "h-4 w-4"): React.ReactNode => {
   const icons: Record<string, React.ReactNode> = {
-    Downtown: <Building className={className} />,
+    "Sagkahan": <Building className={className} />,
+    "Downtown": <Store className={className} />,
     "San Jose": <Church className={className} />,
-    Marasbaras: <Home className={className} />,
-    Sagkahan: <School className={className} />,
-    Abucay: <Store className={className} />,
-    Diit: <ShoppingBag className={className} />,
-    "V&G Subd.": <Coffee className={className} />,
+    "Marasbaras": <Home className={className} />,
+    "Abucay": <Coffee className={className} />,
+    "Diit": <ShoppingBag className={className} />,
+    "Palanas": <School className={className} />,
+    "Caibaan": <Briefcase className={className} />,
+    "Fatima": <Home className={className} />,
+    "Naga-naga": <MapPin className={className} />,
   };
-  return icons[group] || <MapPin className={className} />;
+  return icons[group] || <User className={className} />;
+};
+
+// Transform customer from API to MapCustomer
+const transformCustomer = (customer: Customer): MapCustomer | null => {
+  const coordinates = extractCoordinates(customer);
+  
+  // Skip customers without coordinates
+  if (!coordinates) return null;
+  
+  const fullName = [customer.first_name, customer.last_name].filter(Boolean).join(" ") || "Unknown";
+  const barangay = extractBarangay(customer);
+  
+  return {
+    id: customer.id,
+    name: fullName,
+    lat: coordinates.lat,
+    lng: coordinates.lng,
+    group: barangay,
+    address: extractAddress(customer),
+    phone: customer.phone || "N/A",
+    email: customer.email || "N/A",
+    lastOrder: null, // Would need order history API
+    status: customer.has_account ? "active" : "inactive",
+    rating: 4, // Default rating, would need review API
+    totalSpent: 0, // Would need order totals API
+    orderCount: 0, // Would need order count API
+    metadata: customer.metadata || {},
+    created_at: customer.created_at || new Date().toISOString(),
+  };
 };
 
 // Customer marker component
@@ -119,7 +237,7 @@ const CustomerMarker = ({
   isSelected,
   onClick 
 }: { 
-  customer: typeof CUSTOMERS[0]; 
+  customer: MapCustomer; 
   isSelected: boolean;
   onClick: () => void;
 }) => {
@@ -148,7 +266,7 @@ const CustomerMarker = ({
         {getGroupIcon(customer.group, "h-4 w-4")}
       </div>
       
-      {/* Tooltip on hover - only on desktop */}
+      {/* Tooltip on hover */}
       <div className="hidden lg:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
         <div className="bg-popover text-popover-foreground rounded-md px-2 py-1 text-xs shadow-lg border">
           {customer.name}
@@ -182,7 +300,7 @@ const ClusterIcon = ({ count }: { count: number }) => {
 };
 
 // Mobile Bottom Sheet for Customer Details
-function CustomerBottomSheet({ customer, onClose, distance }: { customer: any; onClose: () => void; distance: number | null }) {
+function CustomerBottomSheet({ customer, onClose, distance }: { customer: MapCustomer; onClose: () => void; distance: number | null }) {
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-background border-t rounded-t-2xl shadow-xl z-[2000] animate-in slide-in-from-bottom-5 lg:hidden">
       <div className="p-4">
@@ -225,8 +343,16 @@ function CustomerBottomSheet({ customer, onClose, distance }: { customer: any; o
             <span>{customer.phone}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Last Order:</span>
-            <span>{customer.lastOrder}</span>
+            <span className="text-muted-foreground">Email:</span>
+            <span className="text-xs truncate max-w-[200px]">{customer.email}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Customer since:</span>
+            <span>{new Date(customer.created_at).toLocaleDateString()}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Total Spent:</span>
+            <span className="font-medium">₱{customer.totalSpent.toLocaleString()}</span>
           </div>
         </div>
       </div>
@@ -235,14 +361,67 @@ function CustomerBottomSheet({ customer, onClose, distance }: { customer: any; o
 }
 
 export function RiderMap() {
-  const [selectedCustomer, setSelectedCustomer] = useState<typeof CUSTOMERS[0] | null>(null);
+  const [customers, setCustomers] = useState<MapCustomer[]>([]);
+  const [filteredCustomers, setFilteredCustomers] = useState<MapCustomer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<MapCustomer | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [riderPosition, setRiderPosition] = useState<LatLngExpression | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const isMobile = useMediaQuery("(max-width: 1024px)");
 
+  // Fetch customers from API
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const result = await getCustomers({ limit: 100 });
+        console.log("Fetched customers:", result.data);
+        
+        let customersList: any[] = result?.data?.customers ?? [];
+        
+        // Handle response format
+        // if (Array.isArray(result)) {
+        //   customersList = result;
+        // } else if (result.data && typeof result.data === 'object' && 'customers' in result.data) {
+        //   customersList = (result as any).customers;
+        // } else if (result && typeof result === 'object' && 'data' in result) {
+        //   customersList = (result as any).data;
+        // }
+        console.log(customersList, "CUSTOMs")
+        // Transform customers
+        const transformedCustomers = customersList
+          .map(transformCustomer)
+          .filter((c): c is MapCustomer => c !== null);
+        
+        console.log("Transformed customers:", transformedCustomers);
+        setCustomers(transformedCustomers);
+        setFilteredCustomers(transformedCustomers);
+      } catch (err) {
+        console.error("Error fetching customers:", err);
+        setError("Failed to load customers. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchCustomers();
+  }, []);
+
+  // Filter customers by group
+  useEffect(() => {
+    if (selectedGroup) {
+      setFilteredCustomers(customers.filter(c => c.group === selectedGroup));
+    } else {
+      setFilteredCustomers(customers);
+    }
+  }, [selectedGroup, customers]);
+
   // Calculate distance between two points (Haversine formula)
-  const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+  const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
     const R = 3959; // Miles
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLng = (lng2 - lng1) * Math.PI / 180;
@@ -254,10 +433,10 @@ export function RiderMap() {
   };
 
   // Handle customer selection
-  const handleCustomerSelect = (customer: typeof CUSTOMERS[0]) => {
+  const handleCustomerSelect = (customer: MapCustomer) => {
     setSelectedCustomer(customer);
     if (isMobile) {
-      setDrawerOpen(false); // Close drawer on mobile when customer is selected
+      setDrawerOpen(false);
     }
   };
 
@@ -268,13 +447,8 @@ export function RiderMap() {
     }
   };
 
-  // Filter customers by group
-  const filteredCustomers = selectedGroup 
-    ? CUSTOMERS.filter(c => c.group === selectedGroup)
-    : CUSTOMERS;
-
   // Get unique groups
-  const groups = Array.from(new Set(CUSTOMERS.map(c => c.group)));
+  const groups = Array.from(new Set(customers.map(c => c.group)));
 
   // Calculate stats
   const totalCustomers = filteredCustomers.length;
@@ -283,6 +457,28 @@ export function RiderMap() {
   const avgDistance = riderPosition && Array.isArray(riderPosition)
     ? filteredCustomers.reduce((sum, c) => sum + calculateDistance(riderPosition[0], riderPosition[1], c.lat, c.lng), 0) / filteredCustomers.length
     : 0;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[85vh] w-full bg-background">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading customers...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-[85vh] w-full bg-background">
+        <Alert variant="destructive" className="max-w-md">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   // Sidebar Content Component (reused for both desktop and mobile)
   const SidebarContent = () => (
@@ -298,7 +494,7 @@ export function RiderMap() {
           </Badge>
         </div>
         <p className="text-xs lg:text-sm text-muted-foreground">
-          Real-time customer tracking & intelligent routing
+          {customers.length} customers mapped • Real-time tracking
         </p>
       </div>
 
@@ -381,7 +577,7 @@ export function RiderMap() {
                             {customer.group}
                           </Badge>
                         </div>
-                        <p className="text-xs text-muted-foreground">{customer.address}</p>
+                        <p className="text-xs text-muted-foreground truncate">{customer.address}</p>
                         {distance && (
                           <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
                             <Navigation className="h-3 w-3" />
@@ -395,6 +591,13 @@ export function RiderMap() {
                   </Card>
                 );
               })}
+              
+              {filteredCustomers.length === 0 && (
+                <div className="text-center py-8">
+                  <Users className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">No customers found</p>
+                </div>
+              )}
             </div>
           </ScrollArea>
         </TabsContent>
@@ -413,7 +616,7 @@ export function RiderMap() {
                   <Users className="h-4 w-4 text-primary" />
                   <span className="font-medium text-sm">All Tacloban Areas</span>
                 </div>
-                <Badge variant="default">{CUSTOMERS.length}</Badge>
+                <Badge variant="default">{customers.length}</Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 View all customer groups across Tacloban City
@@ -422,9 +625,9 @@ export function RiderMap() {
 
             <ScrollArea className="h-[calc(80vh-300px)]">
               {groups.map(group => {
-                const count = CUSTOMERS.filter(c => c.group === group).length;
-                const activeCount = CUSTOMERS.filter(c => c.group === group && c.status === "active").length;
-                const avgGroupRating = CUSTOMERS.filter(c => c.group === group).reduce((sum, c) => sum + c.rating, 0) / count;
+                const count = customers.filter(c => c.group === group).length;
+                const activeCount = customers.filter(c => c.group === group && c.status === "active").length;
+                const avgGroupRating = customers.filter(c => c.group === group).reduce((sum, c) => sum + c.rating, 0) / count;
                 
                 return (
                   <Card 
@@ -455,13 +658,13 @@ export function RiderMap() {
                     <div className="flex items-center justify-between text-xs mb-1">
                       <span className="text-muted-foreground">Active: {activeCount}</span>
                       <span className="text-muted-foreground">
-                        {Math.round((count / CUSTOMERS.length) * 100)}% of total
+                        {Math.round((count / customers.length) * 100)}% of total
                       </span>
                     </div>
                     <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
                       <div 
                         className="h-full rounded-full transition-all"
-                        style={{ width: `${(count / CUSTOMERS.length) * 100}%`, backgroundColor: getGroupColor(group) }}
+                        style={{ width: `${(count / customers.length) * 100}%`, backgroundColor: getGroupColor(group) }}
                       />
                     </div>
                   </Card>
@@ -491,7 +694,7 @@ export function RiderMap() {
             <Card className="p-2 lg:p-3 text-center hover:shadow-md transition-shadow">
               <TrendingDown className="h-4 w-4 lg:h-5 lg:w-5 mx-auto mb-1 lg:mb-2 text-blue-500" />
               <p className="text-xl lg:text-2xl font-bold">{avgDistance.toFixed(1)}</p>
-              <p className="text-[10px] lg:text-xs text-muted-foreground">Avg Distance</p>
+              <p className="text-[10px] lg:text-xs text-muted-foreground">Avg Distance (mi)</p>
             </Card>
           </div>
 
@@ -501,8 +704,8 @@ export function RiderMap() {
             <p className="text-sm font-medium mb-3">Area Distribution</p>
             <div className="space-y-2 lg:space-y-3">
               {groups.map(group => {
-                const count = CUSTOMERS.filter(c => c.group === group).length;
-                const percentage = (count / CUSTOMERS.length) * 100;
+                const count = customers.filter(c => c.group === group).length;
+                const percentage = (count / customers.length) * 100;
                 return (
                   <div key={group}>
                     <div className="flex justify-between text-xs mb-1">
@@ -535,7 +738,7 @@ export function RiderMap() {
           <div>
             <p className="text-sm font-medium mb-2">Top Rated Customers</p>
             <div className="space-y-2">
-              {[...CUSTOMERS].sort((a, b) => b.rating - a.rating).slice(0, 3).map(customer => (
+              {[...customers].sort((a, b) => b.rating - a.rating).slice(0, 3).map(customer => (
                 <div key={customer.id} className="flex items-center justify-between text-xs p-2 bg-muted/30 rounded-lg">
                   <div className="flex items-center gap-2">
                     <div className="w-5 h-5 lg:w-6 lg:h-6 rounded-full bg-primary/10 flex items-center justify-center">
@@ -621,10 +824,9 @@ export function RiderMap() {
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
           <SheetTrigger asChild>
             {!drawerOpen && 
-            
-            <Button size="icon" variant="default" className="shadow-lg bg-primary">
-              <Menu className="h-5 w-5" />
-            </Button>
+              <Button size="icon" variant="default" className="shadow-lg bg-primary">
+                <Menu className="h-5 w-5" />
+              </Button>
             }
           </SheetTrigger>
 
@@ -687,38 +889,6 @@ export function RiderMap() {
         </Card>
       )}
 
-      {/* Desktop Rider Status Info Card */}
-      {/* <Card className="hidden lg:block absolute bottom-4 left-4 p-3 bg-background/95 backdrop-blur-sm shadow-lg z-[1000] min-w-[220px]">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          <p className="text-sm font-semibold">Rider Status</p>
-        </div>
-        {riderPosition && Array.isArray(riderPosition) ? (
-          <>
-            <p className="text-xs text-muted-foreground">📍 Location detected</p>
-            <p className="text-xs font-mono mt-1">
-              {riderPosition[0].toFixed(4)}°, {riderPosition[1].toFixed(4)}°
-            </p>
-            <Separator className="my-2" />
-            <div className="flex items-center justify-between text-xs">
-              <span>Nearby (&lt;2mi):</span>
-              <Badge variant="secondary">
-                {filteredCustomers.filter(c => 
-                  calculateDistance(riderPosition[0], riderPosition[1], c.lat, c.lng) < 2
-                ).length}
-              </Badge>
-            </div>
-          </>
-        ) : (
-          <>
-            <p className="text-xs text-muted-foreground">📍 Click locate button to find your position</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Use the locate control on the map
-            </p>
-          </>
-        )}
-      </Card> */}
-
       {/* Tacloban Area Info - Desktop only */}
       <Card className="hidden lg:block absolute top-3 right-3 p-3 bg-background/95 backdrop-blur-sm shadow-lg z-[1000] min-w-[180px]">
         <div className="flex items-center gap-2 mb-2">
@@ -735,42 +905,11 @@ export function RiderMap() {
             <span className="font-mono">{groups.length}</span>
           </div>
           <div className="flex justify-between mt-1">
-            <span>Active Riders:</span>
-            <span className="font-mono">8</span>
+            <span>Total Customers:</span>
+            <span className="font-mono">{customers.length}</span>
           </div>
         </div>
       </Card>
-
-      {/* Legend - Desktop only */}
-      {/* <Card className="hidden lg:block absolute top-4 right-4 p-3 bg-background/95 backdrop-blur-sm shadow-lg z-[1000]">
-        <div className="text-xs space-y-2">
-          <p className="font-semibold mb-1">Map Legend</p>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-green-500 rounded-full" />
-            <span>User Location</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm">
-              <span>3</span>
-            </div>
-            <span>Customer Cluster</span>
-          </div>
-          {groups.slice(0, 3).map(group => (
-            <div key={group} className="flex items-center gap-2">
-              <div 
-                className="w-4 h-4 rounded-full" 
-                style={{ backgroundColor: getGroupColor(group) }}
-              />
-              <span>{group}</span>
-            </div>
-          ))}
-          <Separator className="my-1" />
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <span>Active Customer</span>
-          </div>
-        </div>
-      </Card> */}
 
       {/* Mobile Location Indicator */}
       {riderPosition && Array.isArray(riderPosition) && (

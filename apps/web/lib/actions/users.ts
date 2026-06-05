@@ -382,7 +382,6 @@ export async function login(_currentState: unknown, formData: FormData) {
                     } else if(userData?.metadata?.role == 'company'){
                         setCustomerGroupId(userData.employee.company.customer_group_id)
                     }
-                  console.log( userData, 'USSSERR STATE', customer)
             }
         revalidateTag(productsCacheTag, "max")
         revalidateTag(cartsCacheTag, "max")

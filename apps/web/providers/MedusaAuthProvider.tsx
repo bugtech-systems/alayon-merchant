@@ -54,7 +54,6 @@ export function MedusaAuthProvider({ children }: { children: React.ReactNode }) 
     // console.log(res, 'rewee')
 
       const res = await retrieveUser();
-      console.log(res, "RESSSsss")
       //   const userData = await resUser.json() as any;
         if(res.user || res.customer || res.company || res.driver){
         setUser({...(res.user || res.customer || res.company || res.driver), actor_type: res.actor_type})

@@ -78,6 +78,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   };
 
   if (userRole === "company") {
+    let {company} = user.employee
     return (
       <div className="@container/main flex flex-col gap-4 md:gap-6">
         <DeliverySectionCards 
@@ -91,22 +92,15 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           onContactRider={handleContactRider}
         />
        <DynamicOrdersTable
-  views={[
-    { id: "all", label: "All Orders" },
-    { id: "pending", label: "Pending", paramValue: "pending" },
-    { id: "processing", label: "Processing", paramValue: "processing" },
-    { id: "completed", label: "Delivered", paramValue: "completed" },
-  ]}
-  filters={[
-    { id: "status", label: "Status", type: "multiselect", field: "status", options: [] },
-    { id: "created_at", label: "Date Range", type: "dateRange", field: "created_at" },
-  ]}
+  views={[]}
+  filters={[ ]}
   enableExport={true}
   enableBulkActions={true}
   onAssignRider={handleAssignRider}
   onUpdateStatus={handleUpdateStatus}
   onContactRider={handleContactRider}
   refreshInterval={30000}
+  company={company}
 />
       </div>
     );
