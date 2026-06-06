@@ -809,9 +809,7 @@ const preparePrintData = useCallback((): PrintOrderData => {
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setCheckoutDialogOpen(false)}>Cancel</Button>
-            <a href="com.samathosoft.webprint://#mling##sl#Hello from my web app!#/sl#">
-            <Button variant="outline" onClick={() => setCheckoutDialogOpen(false)}>Print</Button>
-            </a>
+            <Button variant="outline" onClick={() => setPrintDialogOpen(true)} >Print</Button>
             <Button onClick={handleCheckout} disabled={isCheckingOut}>
               {isCheckingOut && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Confirm Order
