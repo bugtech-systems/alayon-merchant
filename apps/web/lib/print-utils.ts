@@ -765,17 +765,17 @@ export const generateMobilePrintUrl = (data: PrintOrderData): string => {
   
   // ========== HEADER ==========
   receiptLines.push(DOUBLE_SEPARATOR);
-  receiptLines.push(centerText(data.merchant.name.toUpperCase()));
+  receiptLines.push(centerText('Belly Bytes'));
   receiptLines.push(DOUBLE_SEPARATOR);
   
   // Merchant details (wrapped for 58mm)
-  const addressParts = data.merchant.address.match(/.{1,30}/g) || [data.merchant.address];
-  addressParts.forEach(line => receiptLines.push(centerText(line)));
+  const addressParts = '016 Dadison Street';
+//   addressParts.forEach(line => receiptLines.push(centerText(line)));
   
-  receiptLines.push(centerText(`Tel: ${data.merchant.phone}`));
-  if (data.merchant.taxId) {
-    receiptLines.push(centerText(`TIN: ${data.merchant.taxId}`));
-  }
+//   receiptLines.push(centerText(`Tel: ${data.merchant.phone}`));
+//   if (data.merchant.taxId) {
+//     receiptLines.push(centerText(`TIN: ${data.merchant.taxId}`));
+//   }
   receiptLines.push("");
   
   // ========== ORDER INFO ==========
