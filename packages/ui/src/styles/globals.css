@@ -332,3 +332,25 @@ html {
   animation: spin 0.5s linear infinite;
 }
 
+/* styles/globals.css or add to your component */
+
+.fixed-footer-dialog {
+  display: flex;
+  flex-direction: column;
+  height: 85vh;
+  max-height: 700px;
+}
+
+.fixed-footer-dialog .dialog-header {
+  flex-shrink: 0;
+}
+
+.fixed-footer-dialog .dialog-content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.fixed-footer-dialog .dialog-footer {
+  flex-shrink: 0;
+}
