@@ -1,4 +1,4 @@
-// lib/print-utils.ts - REFINED VERSION
+// lib/print-utils.ts - REFINED WITH BETTER SPACING & VISUAL ENHANCEMENTS
 
 export interface PrintOrderData {
   orderNumber: string;
@@ -59,184 +59,217 @@ export const formatReceiptDate = (date: Date): string => {
 const LINE_WIDTH = 32;
 const SEPARATOR = "─".repeat(LINE_WIDTH);
 const DOUBLE_SEPARATOR = "═".repeat(LINE_WIDTH);
-const DOTTED_LINE = "·".repeat(LINE_WIDTH);
+const THIN_SEPARATOR = "·".repeat(LINE_WIDTH);
 
-// Center text
+// Enhanced center text with spacing
 const centerText = (text: string): string => {
   const padding = Math.max(0, (LINE_WIDTH - text.length) / 2);
   return " ".repeat(Math.floor(padding)) + text;
 };
 
-// Right align text
-const rightAlign = (text: string): string => {
-  return " ".repeat(LINE_WIDTH - text.length) + text;
+// Create emphasized text (using ASCII art style)
+const emphasizeText = (text: string): string => {
+  return `▶ ${text} ◀`;
 };
 
-// Left align with padding
-const leftAlign = (text: string, width: number = LINE_WIDTH): string => {
-  return text.padEnd(width);
+// Create large-looking text using spacing
+const makeLargeText = (text: string): string => {
+  return `  ${text.split('').join(' ')}  `;
 };
 
-// Format product line (2 columns: product name + total)
-const formatProductLine = (name: string, total: string): string => {
-  const maxNameLen = LINE_WIDTH - 10; // Reserve 10 chars for price
+// Format product with clear spacing
+const formatProductWithSpacing = (name: string, total: string): string => {
+  const maxNameLen = LINE_WIDTH - 12; // Reserve space for price
   let displayName = name;
   if (displayName.length > maxNameLen) {
     displayName = displayName.substring(0, maxNameLen - 3) + "...";
   }
   const namePart = displayName.padEnd(maxNameLen);
-  const pricePart = total.padStart(10);
+  const pricePart = total.padStart(12);
   return `${namePart}${pricePart}`;
 };
 
-// Format quantity line (indented)
-const formatQuantityLine = (quantity: number, variant?: string, notes?: string): string[] => {
-  const lines: string[] = [];
-  const qtyText = `  x${quantity}`;
-  lines.push(qtyText);
-  
-  if (variant) {
-    const variantText = `    ${variant}`;
-    if (variantText.length > LINE_WIDTH - 2) {
-      lines.push(variantText.substring(0, LINE_WIDTH - 2));
-    } else {
-      lines.push(variantText);
-    }
-  }
-  
-  if (notes) {
-    const noteText = `    * ${notes}`;
-    if (noteText.length > LINE_WIDTH - 2) {
-      lines.push(noteText.substring(0, LINE_WIDTH - 2));
-    } else {
-      lines.push(noteText);
-    }
-  }
-  
-  return lines;
+// Format quantity with visual indicators
+const formatQuantityWithIcon = (quantity: number): string => {
+  const qtyIcon = quantity > 1 ? "🔹" : "▪";
+  return `${qtyIcon} QTY: ${quantity}`;
 };
 
 // ============================================
-// MAIN RECEIPT GENERATOR
+// MAIN RECEIPT GENERATOR WITH ENHANCED SPACING
 // ============================================
 
 export const generateMobilePrintUrl = (data: PrintOrderData): string => {
   const receiptLines: string[] = [];
   
   // ========================================
-  // HEADER SECTION
+  // HEADER SECTION (Emphasized)
   // ========================================
+  receiptLines.push("");
   receiptLines.push(DOUBLE_SEPARATOR);
-  receiptLines.push(centerText("★ BELLY BYTES ★"));
+  receiptLines.push("");
+  receiptLines.push(centerText("★ B E L L Y   B Y T E S ★"));
+  receiptLines.push("");
   receiptLines.push(DOUBLE_SEPARATOR);
+  receiptLines.push("");
   receiptLines.push(centerText("016 Dadison Street"));
   receiptLines.push(centerText("San Antonio, Pasig City"));
   receiptLines.push(centerText("Tel: (02) 8123 4567"));
   receiptLines.push("");
-  receiptLines.push(SEPARATOR);
+  receiptLines.push(THIN_SEPARATOR);
+  receiptLines.push("");
   
   // ========================================
   // ORDER INFORMATION
   // ========================================
-  receiptLines.push(`ORDER #: ${data.orderNumber}`);
-  receiptLines.push(`DATE: ${formatReceiptDate(data.date)}`);
+  receiptLines.push(`📋 ORDER #: ${data.orderNumber}`);
+  receiptLines.push(`📅 DATE: ${formatReceiptDate(data.date)}`);
+  receiptLines.push("");
   
   if (data.placement) {
-    const typeIcon = data.placement.type === "table" ? "🏠 DINE IN" : 
-                     data.placement.type === "takeaway" ? "📦 TAKEAWAY" : "🚚 DELIVERY";
-    receiptLines.push(`${typeIcon}: ${data.placement.name}`);
+    const typeIcon = data.placement.type === "table" ? "🏠" : 
+                     data.placement.type === "takeaway" ? "📦" : "🚚";
+    receiptLines.push(`${typeIcon} ${data.placement.type.toUpperCase()}: ${data.placement.name}`);
+    receiptLines.push("");
   }
-  receiptLines.push(SEPARATOR);
+  
+  receiptLines.push(THIN_SEPARATOR);
+  receiptLines.push("");
   
   // ========================================
   // CUSTOMER INFORMATION
   // ========================================
   if (data.customer?.name) {
-    receiptLines.push(`CUSTOMER: ${data.customer.name}`);
+    receiptLines.push(`👤 CUSTOMER:`);
+    receiptLines.push(`   ${data.customer.name}`);
     if (data.customer.phone) {
-      receiptLines.push(`PHONE: ${data.customer.phone}`);
+      receiptLines.push(`📞 ${data.customer.phone}`);
     }
-    receiptLines.push(SEPARATOR);
-  }
-  
-  // ========================================
-  // ITEMS SECTION - 2 COLUMN LAYOUT
-  // ========================================
-  receiptLines.push("");
-  receiptLines.push("ITEM                 TOTAL");
-  receiptLines.push(SEPARATOR);
-  
-  for (const item of data.items) {
-    // Product name and total on same line
-    receiptLines.push(formatProductLine(item.name, formatCurrency(item.total)));
-    
-    // Quantity on its own line (indented)
-    const quantityLines = formatQuantityLine(item.quantity, item.variant, item.notes);
-    quantityLines.forEach(line => receiptLines.push(line));
-    
-    // Add spacing between items
+    receiptLines.push("");
+    receiptLines.push(THIN_SEPARATOR);
     receiptLines.push("");
   }
   
+  // ========================================
+  // ITEMS SECTION (Enhanced with spacing)
+  // ========================================
+  receiptLines.push(centerText("═══ I T E M S ═══"));
+  receiptLines.push("");
+  receiptLines.push("ITEM                      TOTAL");
+  receiptLines.push(SEPARATOR);
+  receiptLines.push("");
+  
+  for (let i = 0; i < data.items.length; i++) {
+    const item = data.items[i];
+    
+    // Product name and total on same line
+    receiptLines.push(formatProductWithSpacing(item.name, formatCurrency(item.total)));
+    
+    // Quantity with visual icon (separate line with spacing)
+    receiptLines.push(`   ${formatQuantityWithIcon(item.quantity)}`);
+    
+    // Unit price (for clarity)
+    receiptLines.push(`   @ ${formatCurrency(item.price)} each`);
+    
+    // Variant if exists
+    if (item.variant) {
+      receiptLines.push(`   📌 ${item.variant}`);
+    }
+    
+    // Item notes if exists
+    if (item.notes) {
+      receiptLines.push(`   📝 ${item.notes}`);
+    }
+    
+    // Add spacing between items (2 blank lines for better separation)
+    if (i < data.items.length - 1) {
+      receiptLines.push("");
+      receiptLines.push("");
+    }
+  }
+  
+  receiptLines.push("");
   receiptLines.push(SEPARATOR);
   receiptLines.push("");
   
   // ========================================
-  // TOTALS SECTION (EMPHASIZED)
+  // TOTALS SECTION (Emphasized)
   // ========================================
-  receiptLines.push("SUBTOTAL" + " ".repeat(14) + formatCurrency(data.subtotal));
+  receiptLines.push(centerText("═══ S U M M A R Y ═══"));
+  receiptLines.push("");
   
+  // Subtotal
+  receiptLines.push(`Subtotal` + " ".repeat(20) + `${formatCurrency(data.subtotal)}`);
+  
+  // Tax
   if (data.tax > 0) {
     const taxPercent = (data.taxRate * 100).toFixed(0);
-    receiptLines.push(`TAX (${taxPercent}%)` + " ".repeat(9) + formatCurrency(data.tax));
+    receiptLines.push(`Tax (${taxPercent}%)` + " ".repeat(15) + `${formatCurrency(data.tax)}`);
   }
   
+  receiptLines.push("");
   receiptLines.push(DOUBLE_SEPARATOR);
-  receiptLines.push(`TOTAL` + " ".repeat(16) + formatCurrency(data.total));
+  receiptLines.push("");
+  
+  // Total (emphasized with larger look)
+  receiptLines.push(centerText(makeLargeText("TOTAL")));
+  receiptLines.push(centerText(makeLargeText(formatCurrency(data.total))));
+  receiptLines.push("");
   receiptLines.push(DOUBLE_SEPARATOR);
   receiptLines.push("");
   
   // ========================================
   // PAYMENT SECTION
   // ========================================
-  receiptLines.push("PAYMENT");
-  receiptLines.push(DOTTED_LINE);
-  receiptLines.push(`${data.paymentMethod}` + " ".repeat(12) + formatCurrency(data.total));
-  receiptLines.push(DOTTED_LINE);
+  receiptLines.push(centerText("═══ P A Y M E N T ═══"));
+  receiptLines.push("");
+  receiptLines.push(`💳 ${data.paymentMethod}` + " ".repeat(12) + `${formatCurrency(data.total)}`);
+  receiptLines.push("");
+  receiptLines.push(THIN_SEPARATOR);
   receiptLines.push("");
   
   // ========================================
   // NOTES SECTION
   // ========================================
   if (data.notes) {
-    receiptLines.push("NOTES:");
+    receiptLines.push("📋 NOTES:");
+    receiptLines.push("");
     const noteLines = data.notes.match(/.{1,28}/g) || [data.notes];
     noteLines.forEach(line => {
-      receiptLines.push(`  ${line}`);
+      receiptLines.push(`   ${line}`);
     });
+    receiptLines.push("");
+    receiptLines.push(THIN_SEPARATOR);
     receiptLines.push("");
   }
   
   // ========================================
-  // FOOTER (EMPHASIZED)
+  // FOOTER (Highly Emphasized)
   // ========================================
-  receiptLines.push(SEPARATOR);
-  receiptLines.push(centerText("★★★ THANK YOU! ★★★"));
-  receiptLines.push(centerText("Please come again"));
-  receiptLines.push(SEPARATOR);
   receiptLines.push("");
-  receiptLines.push(centerText(data.orderNumber));
+  receiptLines.push(centerText("════════════════════════════"));
+  receiptLines.push(centerText("★★★  T H A N K   Y O U  ★★★"));
+  receiptLines.push(centerText("════════════════════════════"));
+  receiptLines.push("");
+  receiptLines.push(centerText("Please come again!"));
+  receiptLines.push("");
+  receiptLines.push(centerText(`#${data.orderNumber}`));
   receiptLines.push(centerText(formatReceiptDate(data.date)));
   receiptLines.push("");
   receiptLines.push(DOUBLE_SEPARATOR);
+  receiptLines.push("");
+  receiptLines.push("");
   
   // Paper cut spacing
-  receiptLines.push("\n\n");
+  if (data.autoCut) {
+    receiptLines.push("─ CUT HERE ─");
+    receiptLines.push("");
+  }
   
   // Handle multiple copies
   let finalText = receiptLines.join("\n");
   if (data.copies && data.copies > 1) {
-    const copySeparator = `\n${DOUBLE_SEPARATOR}\n${centerText(`COPY ${data.copies}`)}\n${DOUBLE_SEPARATOR}\n\n`;
+    const copySeparator = `\n\n${DOUBLE_SEPARATOR}\n${centerText(`📄 COPY ${data.copies} 📄`)}\n${DOUBLE_SEPARATOR}\n\n`;
     finalText = Array(data.copies).fill(finalText).join(copySeparator);
   }
   
@@ -245,30 +278,41 @@ export const generateMobilePrintUrl = (data: PrintOrderData): string => {
 };
 
 // ============================================
-// KITCHEN RECEIPT (Simplified)
+// KITCHEN RECEIPT (Enhanced for readability)
 // ============================================
 
 export const generateKitchenPrintUrl = (data: PrintOrderData): string => {
   const lines: string[] = [];
   
-  lines.push(DOUBLE_SEPARATOR);
-  lines.push(centerText("👨‍🍳 KITCHEN ORDER 👩‍🍳"));
+  lines.push("");
   lines.push(DOUBLE_SEPARATOR);
   lines.push("");
-  lines.push(`ORDER #: ${data.orderNumber}`);
-  lines.push(`TIME: ${formatReceiptDate(data.date)}`);
+  lines.push(centerText("👨‍🍳 K I T C H E N   O R D E R 👩‍🍳"));
+  lines.push("");
+  lines.push(DOUBLE_SEPARATOR);
+  lines.push("");
+  lines.push(`🔖 ORDER #: ${data.orderNumber}`);
+  lines.push(`⏰ TIME: ${formatReceiptDate(data.date)}`);
+  lines.push("");
   
   if (data.placement) {
-    lines.push(`TYPE: ${data.placement.type.toUpperCase()} - ${data.placement.name}`);
+    const typeIcon = data.placement.type === "table" ? "🏠" : 
+                     data.placement.type === "takeaway" ? "📦" : "🚚";
+    lines.push(`${typeIcon} ${data.placement.type.toUpperCase()}: ${data.placement.name}`);
+    lines.push("");
   }
   
+  lines.push(SEPARATOR);
   lines.push("");
+  lines.push("ITEM                          QTY");
   lines.push(SEPARATOR);
-  lines.push("ITEM                 QTY");
-  lines.push(SEPARATOR);
+  lines.push("");
   
-  for (const item of data.items) {
-    const maxNameLen = 22;
+  for (let i = 0; i < data.items.length; i++) {
+    const item = data.items[i];
+    
+    // Item name
+    const maxNameLen = 26;
     let nameDisplay = item.name;
     if (nameDisplay.length > maxNameLen) {
       nameDisplay = nameDisplay.substring(0, maxNameLen - 3) + "...";
@@ -277,50 +321,78 @@ export const generateKitchenPrintUrl = (data: PrintOrderData): string => {
     const qtyPart = `x${item.quantity}`.padStart(4);
     lines.push(`${namePart}${qtyPart}`);
     
+    // Variant
     if (item.variant) {
-      lines.push(`  ${item.variant.substring(0, 26)}`);
+      lines.push(`   📌 ${item.variant}`);
     }
     
+    // Notes
     if (item.notes) {
-      lines.push(`  * ${item.notes.substring(0, 26)}`);
+      lines.push(`   📝 ${item.notes}`);
     }
     
-    lines.push("");
+    // Spacing between items
+    if (i < data.items.length - 1) {
+      lines.push("");
+      lines.push("");
+    }
   }
   
+  lines.push("");
   lines.push(SEPARATOR);
+  lines.push("");
   lines.push(centerText("⚡ PRIORITY: NORMAL ⚡"));
+  lines.push("");
   lines.push(DOUBLE_SEPARATOR);
   lines.push("");
   lines.push(centerText("PLEASE PREPARE"));
   lines.push(centerText("THANK YOU!"));
+  lines.push("");
   lines.push(DOUBLE_SEPARATOR);
+  lines.push("");
   
   const printText = lines.join("\n");
   return `com.samathosoft.webprint://#mling##sl#${encodeURIComponent(printText)}#/sl#`;
 };
 
 // ============================================
-// PRINT FUNCTION
+// PRINT FUNCTIONS
 // ============================================
 
 export const printOrder = async (
-  data: any, 
-  settings: PrinterSettings = { paperSize: "58mm", copies: 1, autoCut: true }
-): Promise<void> => {
-  // Add copies to data for multi-print support
-  const printData = { ...data, copies: settings.copies };
-  
-  const printUrl = generateMobilePrintUrl(printData);
-  window.location.href = printUrl;
+  data: PrintOrderData, 
+  type: "receipt" | "kitchen",
+  settings: PrinterSettings
+): Promise<{ success: boolean; message: string }> => {
+  try {
+    // Add settings to data for the generator
+    const printData = { 
+      ...data, 
+      copies: settings.copies,
+      autoCut: settings.autoCut,
+      paperSize: settings.paperSize 
+    };
+    
+    const printUrl = type === "receipt" 
+      ? generateMobilePrintUrl(printData)
+      : generateKitchenPrintUrl(printData);
+    
+    window.location.href = printUrl;
+    
+    return { 
+      success: true, 
+      message: `Print job sent successfully!` 
+    };
+  } catch (error) {
+    console.error("Print error:", error);
+    return { 
+      success: false, 
+      message: error instanceof Error ? error.message : "Print failed" 
+    };
+  }
 };
 
-export const printKitchenReceipt = (data: any): void => {
+export const printKitchenReceipt = (data: PrintOrderData): void => {
   const printUrl = generateKitchenPrintUrl(data);
   window.location.href = printUrl;
-};
-
-// Detect mobile device
-export const isMobileDevice = (): boolean => {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 };
