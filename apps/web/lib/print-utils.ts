@@ -587,34 +587,423 @@ export const isMobileDevice = (): boolean => {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 };
 
-// Print using appropriate method
-export const printOrder = async (
+// utils/receipt-content-generator.ts
+
+
+
+
+// Create separator line
+const getSeparator = (lineWidth: number, char: string = "-"): string => {
+  return char.repeat(lineWidth);
+};
+
+
+
+// Main receipt content generator
+export const generateReceiptContent = (
   data: PrintOrderData, 
-  settings: PrinterSettings = { paperSize: "80mm", copies: 1, autoCut: true }
-): Promise<void> => {
-  const isMobile = isMobileDevice();
+  settings: PrinterSettings
+): string => {
+  // Set line width based on paper size
+  const LINE_WIDTH = settings.paperSize === "58mm" ? 32 : 48;
+  const SEPARATOR = getSeparator(LINE_WIDTH, "-");
+  const DOUBLE_SEPARATOR = getSeparator(LINE_WIDTH, "=");
+  const DOTTED_SEPARATOR = getSeparator(LINE_WIDTH, ".");
   
-  if (isMobile) {
-    // Mobile: Use Mobile Print Util app
-    const printUrl = generateMobilePrintUrl(data);
-    window.location.href = printUrl;
-    
-    // Fallback: If app not installed, open HTML print
-    setTimeout(() => {
-      const printWindow = window.open();
-      if (printWindow) {
-        printWindow.document.write(generatePrintHtml(data));
-        printWindow.document.close();
-      }
-    }, 1000);
+  const lines: string[] = [];
+  
+  // ========== HEADER SECTION ==========
+  lines.push(DOUBLE_SEPARATOR);
+  lines.push(centerText(data.merchant.name.toUpperCase(), LINE_WIDTH));
+  lines.push(DOUBLE_SEPARATOR);
+  
+  // Merchant address (wrap if needed)
+  const addressLines = data.merchant.address.match(new RegExp(`.{1,${LINE_WIDTH}}`, 'g')) || [data.merchant.address];
+  addressLines.forEach(line => lines.push(centerText(line, LINE_WIDTH)));
+  
+  lines.push(centerText(`Tel: ${data.merchant.phone}`, LINE_WIDTH));
+  
+  if (data.merchant.taxId) {
+    lines.push(centerText(`TIN: ${data.merchant.taxId}`, LINE_WIDTH));
+  }
+  
+  if (data.merchant.email) {
+    const emailLine = data.merchant.email.length > LINE_WIDTH 
+      ? data.merchant.email.substring(0, LINE_WIDTH - 3) + "..."
+      : data.merchant.email;
+    lines.push(centerText(emailLine, LINE_WIDTH));
+  }
+  
+  lines.push("");
+  lines.push(DOUBLE_SEPARATOR);
+  
+  // ========== ORDER INFORMATION ==========
+  lines.push(formatKeyValue("Order #", data.orderNumber, LINE_WIDTH));
+  lines.push(formatKeyValue("Date", formatReceiptDate(data.date), LINE_WIDTH));
+  
+  // Order type with icon
+  if (data.placement) {
+    const typeIcon = data.placement.type === "table" ? "🏠 Dine In" : 
+                     data.placement.type === "takeaway" ? "📦 Takeaway" : "🚚 Delivery";
+    lines.push(formatKeyValue(typeIcon, data.placement.name, LINE_WIDTH));
+  }
+  
+  lines.push("");
+  lines.push(SEPARATOR);
+  
+  // ========== CUSTOMER INFORMATION ==========
+  if (data.customer?.name) {
+    lines.push(formatKeyValue("Customer", data.customer.name, LINE_WIDTH));
+    if (data.customer.phone) {
+      lines.push(formatKeyValue("Phone", data.customer.phone, LINE_WIDTH));
+    }
+    if (data.customer.email) {
+      const emailShort = data.customer.email.length > 25 
+        ? data.customer.email.substring(0, 22) + "..."
+        : data.customer.email;
+      lines.push(formatKeyValue("Email", emailShort, LINE_WIDTH));
+    }
+    lines.push("");
+  }
+  
+  // ========== ITEMS HEADER ==========
+  lines.push(SEPARATOR);
+  
+  if (LINE_WIDTH === 32) {
+    // 58mm paper compact header
+    lines.push("ITEM                 QTY  TOTAL");
   } else {
-    // Desktop: Use browser print
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(generatePrintHtml(data));
-      printWindow.document.close();
+    // 80mm paper detailed header
+    lines.push("ITEM                          QTY     UNIT     TOTAL");
+  }
+  lines.push(SEPARATOR);
+  
+  // ========== ITEMS LIST ==========
+  for (let i = 0; i < data.items.length; i++) {
+    const item = data.items[i];
+    
+    if (LINE_WIDTH === 32) {
+      // 58mm format
+      lines.push(formatItemLine(item.name, item.quantity, item.total, LINE_WIDTH));
+    } else {
+      // 80mm format with more details
+      const nameStr = item.name.substring(0, 26).padEnd(26);
+      const qtyStr = item.quantity.toString().padStart(4);
+      const unitStr = formatCurrency(item.unit_price).padStart(8);
+      const totalStr = formatCurrency(item.total).padStart(8);
+      lines.push(`${nameStr} ${qtyStr} ${unitStr} ${totalStr}`);
+    }
+    
+    // Variant information
+    if (item.variant) {
+      const variantStr = `  ${item.variant}`;
+      const wrappedVariants = variantStr.match(new RegExp(`.{1,${LINE_WIDTH - 2}}`, 'g')) || [variantStr];
+      wrappedVariants.forEach(line => lines.push(line));
+    }
+    
+    // Item notes
+    if (item.notes) {
+      const noteLines = item.notes.match(new RegExp(`.{1,${LINE_WIDTH - 4}}`, 'g')) || [item.notes];
+      noteLines.forEach(line => {
+        lines.push(`  * ${line}`);
+      });
+    }
+    
+    // Add spacing between items
+    if (i < data.items.length - 1) {
+      lines.push("");
     }
   }
+  
+  lines.push(SEPARATOR);
+  
+  // ========== TOTALS SECTION ==========
+  // Subtotal
+  const subtotalLine = `Subtotal:${formatCurrency(data.subtotal).padStart(LINE_WIDTH - 9)}`;
+  lines.push(subtotalLine);
+  
+  // Discount
+  if (data.discount_total > 0) {
+    const discountLine = `Discount:-${formatCurrency(data.discount_total).padStart(LINE_WIDTH - 10)}`;
+    lines.push(discountLine);
+  }
+  
+  // Tax
+  if (data.tax_total > 0) {
+    const taxRate = data.subtotal > 0 
+      ? ((data.tax_total / data.subtotal) * 100).toFixed(1)
+      : "0";
+    const taxLine = `Tax (${taxRate}%):${formatCurrency(data.tax_total).padStart(LINE_WIDTH - 13 - taxRate.length)}`;
+    lines.push(taxLine);
+  }
+  
+  // Shipping
+  if (data.shipping_total && data.shipping_total > 0) {
+    const shippingLine = `Shipping:${formatCurrency(data.shipping_total).padStart(LINE_WIDTH - 9)}`;
+    lines.push(shippingLine);
+  }
+  
+  lines.push(DOUBLE_SEPARATOR);
+  
+  // Grand Total (emphasized)
+  const totalText = "TOTAL";
+  const totalAmount = formatCurrency(data.total);
+  const totalPadding = LINE_WIDTH - totalText.length - totalAmount.length;
+  const totalLine = `${totalText}${" ".repeat(totalPadding)}${totalAmount}`;
+  lines.push(totalLine);
+  
+  lines.push(DOUBLE_SEPARATOR);
+  
+  // ========== PAYMENT DETAILS ==========
+  if (data.payments && data.payments.length > 0) {
+    lines.push("");
+    lines.push("PAYMENT BREAKDOWN:");
+    lines.push(DOTTED_SEPARATOR);
+    
+    for (const payment of data.payments) {
+      const method = payment.type.length > 15 
+        ? payment.type.substring(0, 12) + "..."
+        : payment.type;
+      const amount = formatCurrency(payment.amount);
+      const padding = LINE_WIDTH - method.length - amount.length - 2;
+      lines.push(`  ${method}${" ".repeat(padding)}${amount}`);
+    }
+    
+    // Calculate change if needed (assuming cash payment)
+    const cashPayment = data.payments.find(p => p.type.toLowerCase().includes('cash'));
+    if (cashPayment && cashPayment.amount > data.total) {
+      const change = cashPayment.amount - data.total;
+      lines.push(DOTTED_SEPARATOR);
+      const changeLine = `  Change:${" ".repeat(LINE_WIDTH - 10)}${formatCurrency(change)}`;
+      lines.push(changeLine);
+    }
+    
+    lines.push(DOTTED_SEPARATOR);
+  } else {
+    lines.push("");
+    lines.push(`Payment: ${data.paymentMethod}`);
+  }
+  
+  // ========== NOTES SECTION ==========
+  if (data.notes) {
+    lines.push("");
+    lines.push(SEPARATOR);
+    lines.push("NOTES:");
+    const noteLines = data.notes.match(new RegExp(`.{1,${LINE_WIDTH - 2}}`, 'g')) || [data.notes];
+    noteLines.forEach(line => {
+      lines.push(`  ${line}`);
+    });
+    lines.push(SEPARATOR);
+  }
+  
+  // Staff note
+  if (data.staff_note) {
+    lines.push("");
+    lines.push(`Staff: ${data.staff_note}`);
+  }
+  
+  // ========== FOOTER SECTION ==========
+  lines.push("");
+  lines.push(DOUBLE_SEPARATOR);
+  
+  // Thank you message
+  const thankYouMessages = [
+    "THANK YOU!",
+    "Please come again",
+    "Have a great day!"
+  ];
+  
+  thankYouMessages.forEach(msg => {
+    lines.push(centerText(msg, LINE_WIDTH));
+  });
+  
+  lines.push(DOUBLE_SEPARATOR);
+  
+  // Barcode / Reference
+  lines.push("");
+  lines.push(centerText(`Order #${data.orderNumber}`, LINE_WIDTH));
+  lines.push(centerText(formatReceiptDate(data.date), LINE_WIDTH));
+  
+  // Warranty / Return policy for 80mm
+  if (LINE_WIDTH === 48) {
+    lines.push("");
+    lines.push(centerText("This serves as your official receipt", LINE_WIDTH));
+    lines.push(centerText("Keep for warranty claims", LINE_WIDTH));
+  }
+  
+  lines.push(DOUBLE_SEPARATOR);
+  
+  // ========== MULTIPLE COPIES ==========
+  let finalContent = lines.join("\n");
+  
+  if (settings.copies > 1) {
+    const copySeparator = `\n${getSeparator(LINE_WIDTH, "=")}\n${centerText(`COPY ${settings.copies - 1}`, LINE_WIDTH)}\n${getSeparator(LINE_WIDTH, "=")}\n\n`;
+    finalContent = Array(settings.copies).fill(finalContent).join(copySeparator);
+  }
+  
+  // ========== PAPER CUT COMMAND ==========
+  if (settings.autoCut) {
+    // Add form feed for thermal printer cut
+    finalContent += "\n\n\n\x0C";
+  } else {
+    // Add manual cut indicator
+    finalContent += "\n" + getSeparator(LINE_WIDTH, "✂") + "\n";
+  }
+  
+  return finalContent;
+};
+
+// Generate kitchen ticket (simpler format, focused on preparation)
+export const generateKitchenContent = (data: PrintOrderData): string => {
+  const LINE_WIDTH = 32;
+  const SEPARATOR = getSeparator(LINE_WIDTH, "-");
+  const DOUBLE_SEPARATOR = getSeparator(LINE_WIDTH, "=");
+  
+  const lines: string[] = [];
+  
+  // Header
+  lines.push(DOUBLE_SEPARATOR);
+  lines.push(centerText("KITCHEN ORDER", LINE_WIDTH));
+  lines.push(DOUBLE_SEPARATOR);
+  
+  // Order info
+  lines.push(`Order #: ${data.orderNumber}`);
+  lines.push(`Time: ${formatReceiptDate(data.date)}`);
+  
+  if (data.placement) {
+    const typeLabel = data.placement.type === "table" ? "Table" : 
+                      data.placement.type === "takeaway" ? "Takeaway" : "Delivery";
+    lines.push(`${typeLabel}: ${data.placement.name}`);
+  }
+  
+  lines.push("");
+  lines.push(SEPARATOR);
+  lines.push("ITEM                     QTY");
+  lines.push(SEPARATOR);
+  
+  // Items (simplified for kitchen)
+  for (const item of data.items) {
+    const nameStr = item.name.substring(0, 22).padEnd(22);
+    const qtyStr = item.quantity.toString().padStart(4);
+    lines.push(`${nameStr} ${qtyStr}`);
+    
+    if (item.variant) {
+      lines.push(`  ${item.variant.substring(0, 28)}`);
+    }
+    
+    if (item.notes) {
+      lines.push(`  NOTE: ${item.notes.substring(0, 26)}`);
+    }
+    
+    lines.push("");
+  }
+  
+  lines.push(SEPARATOR);
+  
+  // Priority and special instructions
+  if (data.notes) {
+    lines.push("SPECIAL INSTRUCTIONS:");
+    const noteLines = data.notes.match(/.{1,28}/g) || [data.notes];
+    noteLines.forEach(line => {
+      lines.push(`  ${line}`);
+    });
+    lines.push("");
+  }
+  
+  lines.push(centerText("PRIORITY: STANDARD", LINE_WIDTH));
+  lines.push(DOUBLE_SEPARATOR);
+  lines.push(centerText("THANK YOU", LINE_WIDTH));
+  lines.push(DOUBLE_SEPARATOR);
+  
+  return lines.join("\n");
+};
+
+// Generate RawBT content with ESC/POS commands
+export const generateRawBTContent = (data: PrintOrderData, settings: PrinterSettings): string => {
+  // For RawBT, we can use ESC/POS commands for better formatting
+  const ESC = '\x1B';
+  const GS = '\x1D';
+  
+  // ESC/POS commands
+  const INIT = `${ESC}@`; // Initialize printer
+  const ALIGN_CENTER = `${ESC}a${0x01}`;
+  const ALIGN_LEFT = `${ESC}a${0x00}`;
+  const BOLD_ON = `${ESC}E${0x01}`;
+  const BOLD_OFF = `${ESC}E${0x00}`;
+  const FONT_DOUBLE_WIDTH = `${ESC}!${0x20}`;
+  const FONT_DOUBLE_HEIGHT = `${ESC}!${0x10}`;
+  const FONT_QUADRUPLE = `${ESC}!${0x30}`;
+  const FONT_NORMAL = `${ESC}!${0x00}`;
+  const CUT_PAPER = `${GS}V${0x00}`;
+  
+  // Paper size selection
+  const PAPER_58MM = `${GS}r${0x00}`;
+  const PAPER_80MM = `${GS}r${0x01}`;
+  
+  const paperCmd = settings.paperSize === "58mm" ? PAPER_58MM : PAPER_80MM;
+  
+  // Generate plain receipt content first
+  const plainContent = generateReceiptContent(data, settings);
+  
+  // Wrap with ESC/POS commands
+  let posContent = INIT + paperCmd;
+  
+  // Split into lines and apply formatting
+  const lines = plainContent.split('\n');
+  for (const line of lines) {
+    if (line.includes(data.merchant.name.toUpperCase())) {
+      // Merchant name - large and bold
+      posContent += ALIGN_CENTER + FONT_QUADRUPLE + BOLD_ON + line + BOLD_OFF + FONT_NORMAL + '\n';
+    } else if (line.includes('TOTAL:') || line.includes('TOTAL')) {
+      // Total amount - bold and double width
+      posContent += ALIGN_CENTER + FONT_DOUBLE_WIDTH + BOLD_ON + line + BOLD_OFF + FONT_NORMAL + '\n';
+    } else if (line.includes('THANK YOU!') || line.includes('Please come again')) {
+      // Footer - centered bold
+      posContent += ALIGN_CENTER + BOLD_ON + line + BOLD_OFF + '\n';
+    } else if (line.includes('='.repeat(32)) || line.includes('-'.repeat(32))) {
+      // Separators - normal
+      posContent += line + '\n';
+    } else {
+      // Regular text - left aligned
+      posContent += ALIGN_LEFT + line + '\n';
+    }
+  }
+  
+  // Add paper cut
+  if (settings.autoCut) {
+    posContent += CUT_PAPER;
+  }
+  
+  return posContent;
+};
+
+// For Mobile Print Util - similar Intent URL pattern
+export const generateMobilePrintUtilIntentUrl = (content: string): string => {
+  return `intent://print?text=${encodeURIComponent(content)}#Intent;scheme=com.samathosoft.webprint;package=com.samathosoft.mobileprintutil;S.browser_fallback_url=https://play.google.com/store/apps/details?id=com.samathosoft.mobileprintutil;end;`;
+};
+
+// Print using appropriate method
+// Updated print function using Intent URLs
+export const printOrder = async (data: PrintOrderData, settings: PrinterSettings): Promise<void> => {
+  const content = generateReceiptContent(data, settings);
+  
+  let url: string;
+  if (settings.printApp === "mobile-print-util") {
+    url = generateMobilePrintUtilIntentUrl(content);
+  } else {
+    // Use RAW content for better ESC/POS support
+    const rawContent = generateRawBTContent(data, settings);
+    url = generateRawBTIntentUrl(rawContent);
+  }
+  
+  // Direct navigation - no detection needed
+  // If app is installed: opens RawBT/Mobile Print Util
+  // If not installed: opens Play Store
+  window.location.href = url;
+  
+  return new Promise((resolve) => {
+    setTimeout(resolve, 500);
+  });
 };
 
 // Print kitchen receipt (simplified version for kitchen)
@@ -735,13 +1124,13 @@ const SEPARATOR = "-".repeat(LINE_WIDTH);
 const DOUBLE_SEPARATOR = "=".repeat(LINE_WIDTH);
 
 // Center text for 58mm paper
-const centerText = (text: string): string => {
+export const centerText = (text: string): string => {
   const padding = Math.max(0, (LINE_WIDTH - text.length) / 2);
   return " ".repeat(Math.floor(padding)) + text;
 };
 
 // Format item line with proper alignment
-const formatItemLine = (name: string, qty: number, total: number): string => {
+export const formatItemLine = (name: string, qty: number, total: number): string => {
   // Maximum name length that leaves room for qty (3 chars + space) and price (8 chars)
   const maxNameLen = LINE_WIDTH - 12; // 12 = 3(qty) + 1(space) + 8(price)
   const shortName = name.length > maxNameLen ? name.substring(0, maxNameLen - 3) + "..." : name;
@@ -907,35 +1296,25 @@ export const generateMobilePrintUrl = (data: PrintOrderData): string => {
   return `com.samathosoft.webprint://#mling##sl#${encodeURIComponent(printText)}#/sl#`;
 };
 
-// With RawBT - Supports actual font size changes
-export const generateRawBTUrl = (data: PrintOrderData): string => {
-  // ESC/POS commands for font enlargement
-  const ESC = '\x1B';
-  const GS = '\x1D';
+// utils/print-url-generator.ts
+
+/**
+ * Generate a RawBT Intent URL with automatic fallback to Play Store
+ * This works without needing to detect if the app is installed first
+ */
+export const generateRawBTIntentUrl = (content: string): string => {
+  // Escape special characters for the Intent URL
+  const escapedContent = content
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '%3B')
+    .replace(/#/g, '%23');
   
-  // Font size commands
-  const FONT_DOUBLE_HEIGHT = `${ESC}!${0x10}`;  // Double height
-  const FONT_DOUBLE_WIDTH = `${ESC}!${0x20}`;   // Double width
-  const FONT_QUADRUPLE = `${ESC}!${0x30}`;      // Both (quadruple size)
-  const FONT_NORMAL = `${ESC}!${0x00}`;
-  
-  // Align center
-  const ALIGN_CENTER = `${ESC}a${0x01}`;
-  const ALIGN_LEFT = `${ESC}a${0x00}`;
-  
-  const printCommands = [
-    ALIGN_CENTER,
-    FONT_QUADRUPLE,
-    "ALAYON RESTAURANT",
-    FONT_NORMAL,
-    "\n",
-    FONT_DOUBLE_WIDTH,
-    formatCurrency(data.total),
-    FONT_NORMAL,
-    ALIGN_LEFT,
-    "\n\n\n"
-  ];
-  
-  const encodedCommands = encodeURIComponent(printCommands.join(''));
-  return `rawbt:${encodedCommands}`;
+  // RawBT Intent URL with Play Store fallback
+  // Format: intent://[DATA]#Intent;scheme=[SCHEME];package=[PACKAGE];S.browser_fallback_url=[FALLBACK];end;
+  return `intent://print?data=${encodeURIComponent(escapedContent)}#Intent;scheme=rawbt;package=ru.a40k.rawbt;S.browser_fallback_url=https://play.google.com/store/apps/details?id=ru.a40k.rawbt;end;`;
+};
+
+// For kitchen receipts with simpler formatting
+export const generateRawBTIntentUrlSimple = (content: string): string => {
+  return `intent://print?text=${encodeURIComponent(content)}#Intent;scheme=rawbt;package=ru.a40k.rawbt;S.browser_fallback_url=https://play.google.com/store/apps/details?id=ru.a40k.rawbt;end;`;
 };

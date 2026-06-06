@@ -1,76 +1,32 @@
-// components/print-dialog.tsx
+// components/print-dialog.tsx (updated)
+
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Printer, QrCode, Smartphone, Monitor, Loader2, CheckCircle2, AlertCircle, TabletSmartphone, ScanLine, ScanLineIcon } from "lucide-react";
-import { printOrder, printKitchenReceipt, type PrintOrderData, type PrinterSettings } from "@/lib/print-utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Printer,
+  QrCode,
+  Smartphone,
+  Loader2,
+  ExternalLink,
+  TabletSmartphone,
+} from "lucide-react";
+import { printOrder, printKitchenReceipt, formatCurrency, PrinterSettings } from "@/lib/print-utils";
 
-interface PrintDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  orderData: PrintOrderData;
-}
-
-
-
-// Check if printing apps are installed
-const checkAppInstalled = (app: any): Promise<boolean> => {
-  return new Promise((resolve) => {
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    
-    const url = app === "mobile-print-util" 
-      ? "com.samathosoft.webprint://test" 
-      : "rawbt://test";
-    
-    let timeout: NodeJS.Timeout;
-    
-    const handleBlur = () => {
-      clearTimeout(timeout);
-      document.body.removeChild(iframe);
-      resolve(true);
-    };
-    
-    const handleError = () => {
-      clearTimeout(timeout);
-      document.body.removeChild(iframe);
-      resolve(false);
-    };
-    
-    window.addEventListener('blur', handleBlur);
-    iframe.onerror = handleError;
-    
-    timeout = setTimeout(() => {
-      window.removeEventListener('blur', handleBlur);
-      document.body.removeChild(iframe);
-      resolve(false);
-    }, 500);
-    
-    iframe.src = url;
-    document.body.appendChild(iframe);
-  });
-};
-
-export function PrintDialog({ open, onOpenChange, orderData }: PrintDialogProps) {
+export function PrintDialog({ open, onOpenChange, orderData }: any) {
   const [printType, setPrintType] = useState<"receipt" | "kitchen">("receipt");
   const [printerSettings, setPrinterSettings] = useState<PrinterSettings>({
     paperSize: "58mm",
@@ -79,37 +35,9 @@ export function PrintDialog({ open, onOpenChange, orderData }: PrintDialogProps)
     printApp: "mobile-print-util",
   });
   const [isPrinting, setIsPrinting] = useState(false);
-  const [appStatus, setAppStatus] = useState<Record<any, boolean | null>>({
-    "mobile-print-util": null,
-    "rawbt": null,
-  });
-  const [showInstallAlert, setShowInstallAlert] = useState(false);
-
-  // Check app installation status when dialog opens
-  useEffect(() => {
-    if (open) {
-      const checkApps = async () => {
-        const mobileStatus = await checkAppInstalled("mobile-print-util");
-        const rawbtStatus = await checkAppInstalled("rawbt");
-        setAppStatus({
-          "mobile-print-util": mobileStatus,
-          "rawbt": rawbtStatus,
-        });
-      };
-      checkApps();
-    }
-  }, [open]);
 
   const handlePrint = async () => {
-    // Validate app is installed
-    const selectedApp = printerSettings.printApp;
-    if (!appStatus[selectedApp]) {
-      setShowInstallAlert(true);
-      return;
-    }
-    
     setIsPrinting(true);
-    setShowInstallAlert(false);
     
     try {
       if (printType === "receipt") {
@@ -118,7 +46,7 @@ export function PrintDialog({ open, onOpenChange, orderData }: PrintDialogProps)
         await printKitchenReceipt(orderData);
       }
       
-      // Show success and close after delay
+      // Close dialog after print attempt
       setTimeout(() => {
         onOpenChange(false);
         setIsPrinting(false);
@@ -127,12 +55,6 @@ export function PrintDialog({ open, onOpenChange, orderData }: PrintDialogProps)
       console.error("Print error:", error);
       setIsPrinting(false);
     }
-  };
-
-  const getAppInstallUrl = (app: any): string => {
-    return app === "mobile-print-util"
-      ? "https://play.google.com/store/apps/details?id=com.samathosoft.mobileprintutil"
-      : "https://play.google.com/store/apps/details?id=ru.a40k.rawbt";
   };
 
   return (
@@ -174,10 +96,10 @@ export function PrintDialog({ open, onOpenChange, orderData }: PrintDialogProps)
             </RadioGroup>
           </div>
 
-          {/* Only show printer settings for receipt type */}
+          {/* Printer Settings (only for receipt) */}
           {printType === "receipt" && (
             <>
-              {/* Print App Selection */}
+              {/* Print App Selection - Simplified */}
               <div className="space-y-3">
                 <Label>Print App</Label>
                 <RadioGroup
@@ -200,12 +122,6 @@ export function PrintDialog({ open, onOpenChange, orderData }: PrintDialogProps)
                         </p>
                       </Label>
                     </div>
-                    {appStatus["mobile-print-util"] === true && (
-                      <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    )}
-                    {appStatus["mobile-print-util"] === false && (
-                      <AlertCircle className="h-4 w-4 text-red-500" />
-                    )}
                   </div>
 
                   <div className="flex items-center justify-between p-3 border rounded-lg">
@@ -221,36 +137,9 @@ export function PrintDialog({ open, onOpenChange, orderData }: PrintDialogProps)
                         </p>
                       </Label>
                     </div>
-                    {appStatus["rawbt"] === true && (
-                      <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    )}
-                    {appStatus["rawbt"] === false && (
-                      <AlertCircle className="h-4 w-4 text-red-500" />
-                    )}
                   </div>
                 </RadioGroup>
               </div>
-
-              {/* Show install alert if app not detected */}
-              {showInstallAlert && !appStatus[printerSettings.printApp] && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription className="flex items-center justify-between">
-                    <span>
-                      {printerSettings.printApp === "mobile-print-util" 
-                        ? "Mobile Print Util" 
-                        : "RawBT"} is not installed
-                    </span>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => window.open(getAppInstallUrl(printerSettings.printApp), '_blank')}
-                    >
-                      Install Now
-                    </Button>
-                  </AlertDescription>
-                </Alert>
-              )}
 
               {/* Paper Size */}
               <div className="space-y-3">
@@ -305,38 +194,19 @@ export function PrintDialog({ open, onOpenChange, orderData }: PrintDialogProps)
             </>
           )}
 
-          {/* Print Method Info based on selected app */}
-          <div className="rounded-lg bg-muted p-3 text-sm">
-            <div className="flex items-center gap-2 mb-2">
-              {printerSettings.printApp === "mobile-print-util" ? (
-                <Smartphone className="h-4 w-4" />
-              ) : (
-                <ScanLineIcon className="h-4 w-4" />
-              )}
-              <span className="font-medium">
-                {printerSettings.printApp === "mobile-print-util" 
-                  ? "Mobile Print Util" 
-                  : "RawBT"} Setup
-              </span>
-            </div>
-            <ul className="text-muted-foreground text-xs space-y-1 list-disc list-inside">
-              {printerSettings.printApp === "mobile-print-util" ? (
-                <>
-                  <li>Ensure Mobile Print Util is installed from Play Store</li>
-                  <li>Pair your Bluetooth thermal printer in Android settings</li>
-                  <li>Open the app once to grant necessary permissions</li>
-                  <li>Free version includes a small watermark</li>
-                </>
-              ) : (
-                <>
-                  <li>Ensure RawBT is installed from Play Store</li>
-                  <li>Supports ESC/POS commands for larger fonts</li>
-                  <li>Better formatting and no watermark (paid)</li>
-                  <li>Configure printer in RawBT app first</li>
-                </>
-              )}
-            </ul>
-          </div>
+          {/* Important: How Intent URLs work */}
+          <Alert className="bg-blue-50 border-blue-200">
+            <ExternalLink className="h-4 w-4 text-blue-600" />
+            <AlertDescription className="text-sm text-blue-800">
+              <p className="font-medium mb-1">How printing works:</p>
+              <ul className="text-xs space-y-1 list-disc list-inside">
+                <li>Clicking print will attempt to open {printerSettings.printApp === "rawbt" ? "RawBT" : "Mobile Print Util"}</li>
+                <li>If the app is installed, it will open and print automatically</li>
+                <li>If not installed, you'll be directed to Google Play Store to install it</li>
+                <li>No manual setup or detection required</li>
+              </ul>
+            </AlertDescription>
+          </Alert>
 
           {/* Order Summary */}
           <div className="rounded-lg border p-3 space-y-2">
@@ -378,8 +248,4 @@ export function PrintDialog({ open, onOpenChange, orderData }: PrintDialogProps)
       </DialogContent>
     </Dialog>
   );
-}
-// Helper function for formatting currency
-function formatCurrency(amount: number): string {
-  return `PHP ${amount.toFixed(2)}`;
 }
