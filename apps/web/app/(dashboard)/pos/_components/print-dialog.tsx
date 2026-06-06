@@ -1,7 +1,7 @@
 // components/print-dialog.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -20,8 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Printer, QrCode, Smartphone, Monitor, Loader2 } from "lucide-react";
+import { Printer, QrCode, Smartphone, Monitor, Loader2, CheckCircle2, AlertCircle, TabletSmartphone, ScanLine, ScanLineIcon } from "lucide-react";
 import { printOrder, printKitchenReceipt, type PrintOrderData, type PrinterSettings } from "@/lib/print-utils";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface PrintDialogProps {
   open: boolean;
@@ -29,25 +30,95 @@ interface PrintDialogProps {
   orderData: PrintOrderData;
 }
 
+
+
+// Check if printing apps are installed
+const checkAppInstalled = (app: any): Promise<boolean> => {
+  return new Promise((resolve) => {
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    
+    const url = app === "mobile-print-util" 
+      ? "com.samathosoft.webprint://test" 
+      : "rawbt://test";
+    
+    let timeout: NodeJS.Timeout;
+    
+    const handleBlur = () => {
+      clearTimeout(timeout);
+      document.body.removeChild(iframe);
+      resolve(true);
+    };
+    
+    const handleError = () => {
+      clearTimeout(timeout);
+      document.body.removeChild(iframe);
+      resolve(false);
+    };
+    
+    window.addEventListener('blur', handleBlur);
+    iframe.onerror = handleError;
+    
+    timeout = setTimeout(() => {
+      window.removeEventListener('blur', handleBlur);
+      document.body.removeChild(iframe);
+      resolve(false);
+    }, 500);
+    
+    iframe.src = url;
+    document.body.appendChild(iframe);
+  });
+};
+
 export function PrintDialog({ open, onOpenChange, orderData }: PrintDialogProps) {
   const [printType, setPrintType] = useState<"receipt" | "kitchen">("receipt");
   const [printerSettings, setPrinterSettings] = useState<PrinterSettings>({
     paperSize: "58mm",
     copies: 1,
     autoCut: true,
+    printApp: "mobile-print-util",
   });
   const [isPrinting, setIsPrinting] = useState(false);
+  const [appStatus, setAppStatus] = useState<Record<any, boolean | null>>({
+    "mobile-print-util": null,
+    "rawbt": null,
+  });
+  const [showInstallAlert, setShowInstallAlert] = useState(false);
+
+  // Check app installation status when dialog opens
+  useEffect(() => {
+    if (open) {
+      const checkApps = async () => {
+        const mobileStatus = await checkAppInstalled("mobile-print-util");
+        const rawbtStatus = await checkAppInstalled("rawbt");
+        setAppStatus({
+          "mobile-print-util": mobileStatus,
+          "rawbt": rawbtStatus,
+        });
+      };
+      checkApps();
+    }
+  }, [open]);
 
   const handlePrint = async () => {
+    // Validate app is installed
+    const selectedApp = printerSettings.printApp;
+    if (!appStatus[selectedApp]) {
+      setShowInstallAlert(true);
+      return;
+    }
+    
     setIsPrinting(true);
+    setShowInstallAlert(false);
+    
     try {
       if (printType === "receipt") {
         await printOrder(orderData, printerSettings);
       } else {
-        printKitchenReceipt(orderData);
+        await printKitchenReceipt(orderData);
       }
       
-      // Close dialog after print attempt
+      // Show success and close after delay
       setTimeout(() => {
         onOpenChange(false);
         setIsPrinting(false);
@@ -58,11 +129,20 @@ export function PrintDialog({ open, onOpenChange, orderData }: PrintDialogProps)
     }
   };
 
+  const getAppInstallUrl = (app: any): string => {
+    return app === "mobile-print-util"
+      ? "https://play.google.com/store/apps/details?id=com.samathosoft.mobileprintutil"
+      : "https://play.google.com/store/apps/details?id=ru.a40k.rawbt";
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Print Order</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Printer className="h-5 w-5" />
+            Print Order
+          </DialogTitle>
           <DialogDescription>
             Select print options for order #{orderData.orderNumber}
           </DialogDescription>
@@ -94,30 +174,111 @@ export function PrintDialog({ open, onOpenChange, orderData }: PrintDialogProps)
             </RadioGroup>
           </div>
 
-          {/* Printer Settings (only for receipt) */}
+          {/* Only show printer settings for receipt type */}
           {printType === "receipt" && (
             <>
+              {/* Print App Selection */}
+              <div className="space-y-3">
+                <Label>Print App</Label>
+                <RadioGroup
+                  value={printerSettings.printApp}
+                  onValueChange={(v: any) => 
+                    setPrinterSettings(prev => ({ ...prev, printApp: v }))
+                  }
+                  className="space-y-2"
+                >
+                  <div className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <RadioGroupItem value="mobile-print-util" id="mobile-print-util" />
+                      <Label htmlFor="mobile-print-util" className="cursor-pointer">
+                        <div className="flex items-center gap-2">
+                          <Smartphone className="h-4 w-4" />
+                          <span>Mobile Print Util</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Simple text printing, free with watermark
+                        </p>
+                      </Label>
+                    </div>
+                    {appStatus["mobile-print-util"] === true && (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    )}
+                    {appStatus["mobile-print-util"] === false && (
+                      <AlertCircle className="h-4 w-4 text-red-500" />
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <RadioGroupItem value="rawbt" id="rawbt" />
+                      <Label htmlFor="rawbt" className="cursor-pointer">
+                        <div className="flex items-center gap-2">
+                          <TabletSmartphone className="h-4 w-4" />
+                          <span>RawBT</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          ESC/POS support, larger fonts, no watermark
+                        </p>
+                      </Label>
+                    </div>
+                    {appStatus["rawbt"] === true && (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    )}
+                    {appStatus["rawbt"] === false && (
+                      <AlertCircle className="h-4 w-4 text-red-500" />
+                    )}
+                  </div>
+                </RadioGroup>
+              </div>
+
+              {/* Show install alert if app not detected */}
+              {showInstallAlert && !appStatus[printerSettings.printApp] && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="flex items-center justify-between">
+                    <span>
+                      {printerSettings.printApp === "mobile-print-util" 
+                        ? "Mobile Print Util" 
+                        : "RawBT"} is not installed
+                    </span>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => window.open(getAppInstallUrl(printerSettings.printApp), '_blank')}
+                    >
+                      Install Now
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Paper Size */}
               <div className="space-y-3">
                 <Label>Paper Size</Label>
                 <Select
                   value={printerSettings.paperSize}
-                  onValueChange={(v: any) => setPrinterSettings(prev => ({ ...prev, paperSize: v }))}
+                  onValueChange={(v: any) => 
+                    setPrinterSettings(prev => ({ ...prev, paperSize: v }))
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="58mm">58mm (Thermal)</SelectItem>
+                    <SelectItem value="58mm">58mm (Thermal) - Recommended</SelectItem>
                     <SelectItem value="80mm">80mm (Standard)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
+              {/* Number of Copies */}
               <div className="space-y-3">
                 <Label>Number of Copies</Label>
                 <Select
                   value={printerSettings.copies.toString()}
-                  onValueChange={(v) => setPrinterSettings(prev => ({ ...prev, copies: parseInt(v) }))}
+                  onValueChange={(v) => 
+                    setPrinterSettings(prev => ({ ...prev, copies: parseInt(v) }))
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -130,27 +291,51 @@ export function PrintDialog({ open, onOpenChange, orderData }: PrintDialogProps)
                 </Select>
               </div>
 
+              {/* Auto Cut Paper */}
               <div className="flex items-center justify-between">
                 <Label htmlFor="auto-cut">Auto Cut Paper</Label>
                 <Switch
                   id="auto-cut"
                   checked={printerSettings.autoCut}
-                  onCheckedChange={(checked) => setPrinterSettings(prev => ({ ...prev, autoCut: checked }))}
+                  onCheckedChange={(checked) => 
+                    setPrinterSettings(prev => ({ ...prev, autoCut: checked }))
+                  }
                 />
               </div>
             </>
           )}
 
-          {/* Print Method Info */}
+          {/* Print Method Info based on selected app */}
           <div className="rounded-lg bg-muted p-3 text-sm">
             <div className="flex items-center gap-2 mb-2">
-              <Smartphone className="h-4 w-4" />
-              <span className="font-medium">Mobile Print</span>
+              {printerSettings.printApp === "mobile-print-util" ? (
+                <Smartphone className="h-4 w-4" />
+              ) : (
+                <ScanLineIcon className="h-4 w-4" />
+              )}
+              <span className="font-medium">
+                {printerSettings.printApp === "mobile-print-util" 
+                  ? "Mobile Print Util" 
+                  : "RawBT"} Setup
+              </span>
             </div>
-            <p className="text-muted-foreground text-xs">
-              Make sure Mobile Print Util app is installed and your Bluetooth printer is paired.
-              The app will handle the printing automatically.
-            </p>
+            <ul className="text-muted-foreground text-xs space-y-1 list-disc list-inside">
+              {printerSettings.printApp === "mobile-print-util" ? (
+                <>
+                  <li>Ensure Mobile Print Util is installed from Play Store</li>
+                  <li>Pair your Bluetooth thermal printer in Android settings</li>
+                  <li>Open the app once to grant necessary permissions</li>
+                  <li>Free version includes a small watermark</li>
+                </>
+              ) : (
+                <>
+                  <li>Ensure RawBT is installed from Play Store</li>
+                  <li>Supports ESC/POS commands for larger fonts</li>
+                  <li>Better formatting and no watermark (paid)</li>
+                  <li>Configure printer in RawBT app first</li>
+                </>
+              )}
+            </ul>
           </div>
 
           {/* Order Summary */}
@@ -167,11 +352,16 @@ export function PrintDialog({ open, onOpenChange, orderData }: PrintDialogProps)
           </div>
         </div>
 
+        {/* Action Buttons */}
         <div className="flex gap-3">
           <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button className="flex-1" onClick={handlePrint} disabled={isPrinting}>
+          <Button 
+            className="flex-1" 
+            onClick={handlePrint} 
+            disabled={isPrinting}
+          >
             {isPrinting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -189,7 +379,6 @@ export function PrintDialog({ open, onOpenChange, orderData }: PrintDialogProps)
     </Dialog>
   );
 }
-
 // Helper function for formatting currency
 function formatCurrency(amount: number): string {
   return `PHP ${amount.toFixed(2)}`;

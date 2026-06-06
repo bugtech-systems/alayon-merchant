@@ -906,3 +906,36 @@ export const generateMobilePrintUrl = (data: PrintOrderData): string => {
   const printText = receiptLines.join("\n");
   return `com.samathosoft.webprint://#mling##sl#${encodeURIComponent(printText)}#/sl#`;
 };
+
+// With RawBT - Supports actual font size changes
+export const generateRawBTUrl = (data: PrintOrderData): string => {
+  // ESC/POS commands for font enlargement
+  const ESC = '\x1B';
+  const GS = '\x1D';
+  
+  // Font size commands
+  const FONT_DOUBLE_HEIGHT = `${ESC}!${0x10}`;  // Double height
+  const FONT_DOUBLE_WIDTH = `${ESC}!${0x20}`;   // Double width
+  const FONT_QUADRUPLE = `${ESC}!${0x30}`;      // Both (quadruple size)
+  const FONT_NORMAL = `${ESC}!${0x00}`;
+  
+  // Align center
+  const ALIGN_CENTER = `${ESC}a${0x01}`;
+  const ALIGN_LEFT = `${ESC}a${0x00}`;
+  
+  const printCommands = [
+    ALIGN_CENTER,
+    FONT_QUADRUPLE,
+    "ALAYON RESTAURANT",
+    FONT_NORMAL,
+    "\n",
+    FONT_DOUBLE_WIDTH,
+    formatCurrency(data.total),
+    FONT_NORMAL,
+    ALIGN_LEFT,
+    "\n\n\n"
+  ];
+  
+  const encodedCommands = encodeURIComponent(printCommands.join(''));
+  return `rawbt:${encodedCommands}`;
+};
