@@ -3,72 +3,68 @@ import { NextRequest, NextResponse } from "next/server";
 
 const DEFAULT_REGION = "ph";
 
-// Your dynamic route prefixes - these will NEVER be treated as country codes
+// Dynamic routes - these will NEVER be treated as country codes
 const DYNAMIC_ROUTES = new Set([
-  "store",      // for /[storeId]
-  "merchant",   // for /[merchantId] 
-  "user",       // for /[userId]
-  "shop",       // for /[shopId]
-  // Add all your dynamic route prefixes here
+  "store",
+  "merchant",
+  "user",
+  "shop",
   "products",
   "admin",
-  "leo",
   "api",
   "auth",
+  "cart",
+  "checkout",
+  "account",
+  "categories",
+  "search",
+  "leo",
   "your-order",
-  "_next",
-]);
-
-// Valid country codes (if you ever want to use them)
-const VALID_COUNTRIES = new Set([
-  "ph", "us", "gb", "ca", "au", "de", "fr", "jp", "cn", "in"
+  "pos"
 ]);
 
 export async function middleware(request: NextRequest) {
-  const response = NextResponse.next();
   const { pathname } = request.nextUrl;
   
-  // Get first path segment
-  const firstSegment = pathname.split("/")[1];
-  
-  // Check if this is a dynamic route (NOT a country)
-  if (firstSegment && DYNAMIC_ROUTES.has(firstSegment)) {
-    // Still set region cookie if not exists
-    const userRegion = request.cookies.get("user_region")?.value;
-    if (!userRegion) {
-      response.cookies.set("user_region", DEFAULT_REGION, {
-        maxAge: 60 * 60 * 24 * 30,
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-      });
-    }
-    
-    // Add headers for SDK
-    response.headers.set("x-user-region", userRegion || DEFAULT_REGION);
-    response.headers.set("x-medusa-region-handled", "true");
-    
-    return response;
+  // Skip static assets
+  if (
+    pathname.startsWith('/_next') ||
+    pathname === '/favicon.ico' ||
+    pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|css|js)$/)
+  ) {
+    return NextResponse.next();
   }
   
-  // Handle root path or actual country paths
-  const userRegion = request.cookies.get("user_region")?.value;
+  // Get region from cookie only - NO URL path checking
+  let userRegion = request.cookies.get("user_region")?.value;
   
+  // Set default region if not exists
   if (!userRegion) {
+    userRegion = DEFAULT_REGION;
+  }
+  
+  // Create response
+  const response = NextResponse.next();
+  
+  // Set/update cookie only if needed (prevents unnecessary writes)
+  if (!request.cookies.get("user_region")?.value) {
     response.cookies.set("user_region", DEFAULT_REGION, {
-      maxAge: 60 * 60 * 24 * 30,
+      maxAge: 60 * 60 * 24 * 30, // 30 days
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
+      path: "/",
     });
   }
   
-  response.headers.set("x-user-region", userRegion || DEFAULT_REGION);
+  // Add headers for Medusa SDK
+  response.headers.set("x-user-region", userRegion);
+  response.headers.set("x-medusa-region", userRegion);
   response.headers.set("x-medusa-region-handled", "true");
   
   return response;
 }
 
 export const config = {
-  matcher: "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  matcher: "/((?!_next/static|_next/image|favicon.ico).*)",
 };

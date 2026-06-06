@@ -1,52 +1,74 @@
 // lib/medusa-client.ts
 import Medusa from "@medusajs/js-sdk"
 
-// Defaults to standard port for Medusa server
 let MEDUSA_BACKEND_URL = "http://localhost:9000"
 
 if (process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL) {
   MEDUSA_BACKEND_URL = process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL
 }
 
-export const sdk = new Medusa({
-  baseUrl: MEDUSA_BACKEND_URL,
-  debug: process.env.NODE_ENV === "development",
-  publishableKey: process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY,
-  // apiKey: process.env.NEXT_PUBLIC_MEDUSA_API_KEY
-  // Add default region to prevent auto-redirects
-  // defaultRegion: "ph",
-})
+// Simple singleton without complex interception
+class MedusaClient {
+  private static instance: Medusa;
+  private static currentRegion: string = "ph";
 
-
-
-// Optional: Create a wrapper to ensure region is always set
-export const getMedusaClient = (region?: string) => {
-  // Create a new instance with custom headers
-  const client = new Medusa({
-    baseUrl: MEDUSA_BACKEND_URL,
-    debug: process.env.NODE_ENV === "development",
-    publishableKey: process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY,
-    // defaultRegion: region || "ph",
-  })
-  
-  // Add custom headers to prevent redirects
-  // @ts-ignore - accessing internal fetch client
-  if (client.client?.fetch) {
-    // @ts-ignore
-    const originalFetch = client.client.fetch;
-    // @ts-ignore
-    client.client.fetch = (url: string, options: any = {}) => {
-      options.headers = {
-        ...options.headers,
-        'x-medusa-region-handled': 'true',
-        'x-user-region': region || 'ph',
+  static getInstance(region?: string) {
+    const targetRegion = region || this.currentRegion;
+    
+    // Create new instance if region changed or no instance exists
+    if (!this.instance || (region && region !== this.currentRegion)) {
+      if (region) {
+        this.currentRegion = region;
       }
-      return originalFetch(url, options)
+      
+      this.instance = new Medusa({
+        baseUrl: MEDUSA_BACKEND_URL,
+        debug: process.env.NODE_ENV === "development",
+        publishableKey: process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY,
+      });
+    }
+    
+    return this.instance;
+  }
+
+  static getRegion() {
+    return this.currentRegion;
+  }
+
+  static setRegion(region: string) {
+    if (region !== this.currentRegion) {
+      this.currentRegion = region;
+      // Reset instance to force new client with new region
+      this.instance = undefined;
+      // Update cookie on client-side only
+      if (typeof window !== 'undefined') {
+        document.cookie = `user_region=${region}; path=/; max-age=${60 * 60 * 24 * 30}`;
+      }
     }
   }
-  
-  return client
 }
 
-// Singleton instance for default usage
-export default sdk
+// Export singleton instance
+export const sdk = MedusaClient.getInstance();
+
+// Export helper functions
+export const getMedusaClient = (region?: string) => {
+  return MedusaClient.getInstance(region);
+};
+
+// Client-side helper to sync region
+export const syncRegion = () => {
+  if (typeof window === 'undefined') return;
+  
+  const getCookie = (name: string) => {
+    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return match ? match[2] : null;
+  };
+  
+  const cookieRegion = getCookie('user_region');
+  if (cookieRegion && cookieRegion !== MedusaClient.getRegion()) {
+    MedusaClient.setRegion(cookieRegion);
+  }
+};
+
+export default sdk;

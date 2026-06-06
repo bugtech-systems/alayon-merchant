@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent } from "@/components/ui/card";
+import { useInfiniteQuery, useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -13,7 +12,6 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
 } from "@/components/ui/sheet";
 import {
   Dialog,
@@ -47,13 +45,13 @@ import {
   MapPin,
   UserPlus,
   User,
-  Edit2,
-  CheckCircle2,
+  Printer,
+  Save,
+  History,
 } from "lucide-react";
-import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { listCategories, listProducts, listCustomers, createCustomer, type MedusaProduct, type MedusaProductVariant, type MedusaProductCategory, type MedusaCustomer } from "@/lib/actions/pos";
+import { listCategories, listProducts, type MedusaProduct, type MedusaProductVariant, type MedusaProductCategory, type MedusaCustomer } from "@/lib/actions/pos";
 
 // Import local components
 import { ProductCard } from "./product-card";
@@ -63,7 +61,7 @@ import { TableGrid } from "./table-grid";
 import { CustomerSearch } from "./customer-search";
 import { PrintDialog } from "./print-dialog";
 import { type PrintOrderData } from "@/lib/print-utils";
-import { Printer } from "lucide-react";
+
 // Types
 interface CartItem {
   id: string;
@@ -163,12 +161,254 @@ const useLocalStorage = <T,>(key: string, initialValue: T): [T, (value: T | ((va
   return [storedValue, setValue];
 };
 
+// Mobile Draft Card Component
+const MobileDraftCard = ({ draft, onLoad, onDelete, currencyCode }: any) => (
+  <div className="flex items-center justify-between p-3 rounded-lg border bg-card mb-2">
+    <div className="flex-1">
+      <div className="flex items-center gap-2 mb-1">
+        <Badge variant="outline" className="text-xs">
+          Draft #{draft.draft_number}
+        </Badge>
+        {draft.placement && (
+          <Badge variant="secondary" className="text-xs gap-1">
+            <MapPin className="h-3 w-3" />
+            {draft.placement.name}
+          </Badge>
+        )}
+      </div>
+      {draft.customer && (
+        <p className="text-xs text-muted-foreground">
+          {draft.customer.first_name} {draft.customer.last_name}
+        </p>
+      )}
+      <div className="flex items-center justify-between mt-2">
+        <p className="text-xs text-muted-foreground">
+          {draft.items.length} items
+        </p>
+        <p className="text-sm font-semibold">
+          {currencyCode} {draft.total.toFixed(2)}
+        </p>
+      </div>
+    </div>
+    <div className="flex gap-1 ml-2">
+      <Button size="sm" variant="ghost" onClick={onLoad}>
+        <ShoppingCart className="h-4 w-4" />
+      </Button>
+      <Button size="sm" variant="ghost" onClick={onDelete} className="text-destructive">
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
+  </div>
+);
+
+// Mobile Drafts Sheet Component
+const MobileDraftsSheet = ({ open, onOpenChange, drafts, onLoadDraft, onDeleteDraft, currencyCode }: any) => (
+  <Sheet open={open} onOpenChange={onOpenChange}>
+    <SheetContent side="bottom" className="h-[70vh] rounded-t-xl">
+      <SheetHeader>
+        <SheetTitle className="flex items-center gap-2">
+          <History className="h-5 w-5" />
+          Saved Drafts
+        </SheetTitle>
+      </SheetHeader>
+      <ScrollArea className="h-[calc(70vh-80px)] mt-4">
+        <div className="space-y-3">
+          {drafts.length === 0 ? (
+            <div className="text-center py-8">
+              <History className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">No saved drafts</p>
+              <p className="text-xs text-muted-foreground">Save your cart to continue later</p>
+            </div>
+          ) : (
+            drafts.map((draft: DraftOrder) => (
+              <MobileDraftCard
+                key={draft.id}
+                draft={draft}
+                onLoad={() => {
+                  onLoadDraft(draft);
+                  onOpenChange(false);
+                }}
+                onDelete={() => onDeleteDraft(draft.id)}
+                currencyCode={currencyCode}
+              />
+            ))
+          )}
+        </div>
+      </ScrollArea>
+    </SheetContent>
+  </Sheet>
+);
+
+// Mobile Cart Sheet Component
+const MobileCartSheet = ({ 
+  open, 
+  onOpenChange, 
+  cartItems, 
+  updateQuantity, 
+  removeFromCart,
+  subtotal,
+  tax,
+  total,
+  region,
+  clearCart,
+  saveDraft,
+  onCheckout,
+  onPrint,
+  onAssignTable,
+  onAssignCustomer,
+  currentPlacement,
+  selectedCustomer,
+  orderNotes,
+  setOrderNotes,
+  releaseTable,
+  clearCustomer,
+  activeDraft,
+  taxRate,
+  addItemNote,
+}: any) => (
+  <Sheet open={open} onOpenChange={onOpenChange}>
+    <SheetContent side="bottom" className="h-[85vh] rounded-t-xl p-0">
+      <SheetHeader className="border-b p-4">
+        <SheetTitle className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ShoppingCart className="h-5 w-5" />
+            <span>Your Order</span>
+            {activeDraft && <Badge variant="outline">Draft #{activeDraft.draft_number}</Badge>}
+          </div>
+          <Button variant="ghost" size="sm" onClick={clearCart} className="text-destructive">
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </SheetTitle>
+      </SheetHeader>
+      
+      <div className="flex flex-col h-[calc(95vh-60px)]">
+        <div className="flex-1  p-2">
+          <div className="flex gap-2 mb-3">
+            {!currentPlacement ? (
+              <Button variant="outline" size="sm" className="flex-1" onClick={onAssignTable}>
+                <MapPin className="mr-1 h-3 w-3" />
+                Assign Table
+              </Button>
+            ) : (
+              <Badge variant="secondary" className="flex-1 gap-1 py-2 justify-center">
+                <MapPin className="h-3 w-3" />
+                {currentPlacement.name}
+                <button onClick={releaseTable} className="ml-1 hover:text-destructive">
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+            
+            {!selectedCustomer ? (
+              <Button variant="outline" size="sm" className="flex-1" onClick={onAssignCustomer}>
+                <UserPlus className="mr-1 h-3 w-3" />
+                Add Customer
+              </Button>
+            ) : (
+              <Badge variant="secondary" className="flex-1 gap-1 py-2 justify-center">
+                <User className="h-3 w-3" />
+                {selectedCustomer.first_name} {selectedCustomer.last_name}
+                <button onClick={clearCustomer} className="ml-1 hover:text-destructive">
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+          </div>
+          
+          <Input
+            placeholder="Add order notes..."
+            value={orderNotes}
+            onChange={(e) => setOrderNotes(e.target.value)}
+            className="text-sm mb-3"
+          />
+          
+          <ScrollArea className="h-[40vh] overflow-auto">
+            <div className="space-y-2">
+              {cartItems.length === 0 ? (
+                <div className="text-center py-8">
+                  <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">Your cart is empty</p>
+                  <p className="text-xs text-muted-foreground">Add items to get started</p>
+                </div>
+              ) : (
+                cartItems.map((item: CartItem) => (
+                  <CartItemComponent
+                    key={item.id}
+                    item={item}
+                    onUpdateQuantity={updateQuantity}
+                    onRemove={removeFromCart}
+                    region={region}
+                    onAddNote={addItemNote}
+                  />
+                ))
+              )}
+            </div>
+          </ScrollArea>
+          
+          <div className="space-y-2 border-t pt-3 mt-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span>{region?.currency_code?.toUpperCase() || "PHP"} {subtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Tax ({(taxRate * 100).toFixed(0)}%)</span>
+              <span>{region?.currency_code?.toUpperCase() || "PHP"} {tax.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between font-bold text-lg">
+              <span>Total</span>
+              <span>{region?.currency_code?.toUpperCase() || "PHP"} {total.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="border-t p-4 space-y-2">
+          <div className="grid grid-cols-3 gap-2">
+            <Button variant="outline" size="sm" className="flex-col h-auto py-2 gap-1">
+              <DollarSign className="h-4 w-4 text-green-600" />
+              <span className="text-xs">Cash</span>
+            </Button>
+            <Button variant="outline" size="sm" className="flex-col h-auto py-2 gap-1">
+              <CreditCard className="h-4 w-4 text-blue-600" />
+              <span className="text-xs">Card</span>
+            </Button>
+            <Button variant="outline" size="sm" className="flex-col h-auto py-2 gap-1">
+              <QrCode className="h-4 w-4 text-purple-600" />
+              <span className="text-xs">QR Code</span>
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={saveDraft} disabled={cartItems.length === 0}>
+              <Save className="mr-2 h-4 w-4" />
+              Save Draft
+            </Button>
+            <Button variant="outline" className="flex-1" onClick={onPrint} disabled={cartItems.length === 0}>
+              <Printer className="mr-2 h-4 w-4" />
+              Print
+            </Button>
+            <Button 
+              className="flex-1 bg-primary hover:bg-primary/90" 
+              onClick={() => {
+                onOpenChange(false);
+                onCheckout();
+              }} 
+              disabled={cartItems.length === 0}
+            >
+              Checkout
+            </Button>
+          </div>
+        </div>
+      </div>
+    </SheetContent>
+  </Sheet>
+);
+
 interface PosAppProps {
   region?: Region | any;
 }
 
 export default function PosApp({ region }: PosAppProps) {
   const { toast } = useToast();
+  const [isMobile, setIsMobile] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [cartItems, setCartItems] = useLocalStorage<CartItem[]>("pos-cart", []);
@@ -183,8 +423,19 @@ export default function PosApp({ region }: PosAppProps) {
   const [orderNotes, setOrderNotes] = useState("");
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [sections] = useState(mockSections);
-const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [mobileDraftsOpen, setMobileDraftsOpen] = useState(false);
 
+  // Check if mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Fetch categories
   const { 
@@ -210,7 +461,7 @@ const [printDialogOpen, setPrintDialogOpen] = useState(false);
     queryFn: async ({ pageParam = 1 }) => {
       const result = await listProducts({
         page: pageParam,
-        limit: 24,
+        limit: isMobile ? 12 : 24,
         categoryId: selectedCategoryId !== "all" ? selectedCategoryId : undefined,
         search: searchQuery || undefined,
         sortBy,
@@ -292,10 +543,12 @@ const [printDialogOpen, setPrintDialogOpen] = useState(false);
         )
       );
     }
+    window.dispatchEvent(new Event("cart-updated"));
   };
   
   const removeFromCart = (id: string) => {
     setCartItems(prev => prev.filter(item => item.id !== id));
+    window.dispatchEvent(new Event("cart-updated"));
   };
   
   const addItemNote = (id: string, note: string) => {
@@ -334,6 +587,7 @@ const [printDialogOpen, setPrintDialogOpen] = useState(false);
     localStorage.setItem("current_draft_id", newDraft.id);
     
     toast({ title: "Draft saved", description: `Order saved${currentPlacement ? ` for ${currentPlacement.name}` : ""}` });
+    if (isMobile) setMobileCartOpen(false);
   };
   
   const loadDraft = (draft: DraftOrder) => {
@@ -344,6 +598,7 @@ const [printDialogOpen, setPrintDialogOpen] = useState(false);
     setOrderNotes(draft.notes || "");
     localStorage.setItem("current_draft_id", draft.id);
     toast({ title: "Draft loaded", description: `Loaded order #${draft.draft_number}` });
+    window.dispatchEvent(new Event("cart-updated"));
   };
   
   const deleteDraft = (draftId: string) => {
@@ -364,6 +619,8 @@ const [printDialogOpen, setPrintDialogOpen] = useState(false);
     setOrderNotes("");
     localStorage.removeItem("current_draft_id");
     toast({ title: "Cart cleared", description: "All items have been removed" });
+    if (isMobile) setMobileCartOpen(false);
+    window.dispatchEvent(new Event("cart-updated"));
   };
   
   const assignTable = (table: any, section: any) => {
@@ -390,30 +647,23 @@ const [printDialogOpen, setPrintDialogOpen] = useState(false);
     toast({ title: "Table released", description: "Table has been unassigned" });
   };
   
-// Update handleCheckout to show print dialog
-const handleCheckout = async () => {
-  setIsCheckingOut(true);
+  const clearCustomer = () => {
+    setSelectedCustomer(null);
+    toast({ title: "Customer removed", description: "Customer has been unassigned" });
+  };
   
-  // Simulate checkout process
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  
-  if (currentDraftId) {
-    setDraftOrders(prev => prev.map(d => d.id === currentDraftId ? { ...d, status: "completed" } : d));
-  }
-  
-  if (currentPlacement && currentPlacement.type === "table") {
-    // Update table status to cleaning
-  }
-  
-  setIsCheckingOut(false);
-  setCheckoutDialogOpen(false);
-  
-  // Show print dialog after successful checkout
-  setPrintDialogOpen(true);
-  
-  // Clear cart after print (or keep for reference)
-  // clearCart(); // Uncomment if you want to clear after print
-};
+  const handleCheckout = async () => {
+    setIsCheckingOut(true);
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    if (currentDraftId) {
+      setDraftOrders(prev => prev.map(d => d.id === currentDraftId ? { ...d, status: "completed" } : d));
+    }
+    
+    setIsCheckingOut(false);
+    setCheckoutDialogOpen(false);
+    setPrintDialogOpen(true);
+  };
   
   // Calculate totals
   const subtotal = cartItems.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
@@ -423,35 +673,34 @@ const handleCheckout = async () => {
   const itemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   
   const activeDraft = draftOrders.find(d => d.id === currentDraftId);
+  const activeDrafts = draftOrders.filter(d => d.status === "active");
 
-
-  // Add this function to prepare print data
-const preparePrintData = useCallback((): PrintOrderData => {
-  return {
-    orderNumber: activeDraft ? `DRAFT-${activeDraft.draft_number}` : `ORD-${Date.now()}`,
-    date: new Date(),
-    customer: selectedCustomer ? {
-      name: `${selectedCustomer.first_name} ${selectedCustomer.last_name}`,
-      email: selectedCustomer.email,
-      phone: selectedCustomer.phone || undefined,
-    } : undefined,
-    placement: currentPlacement || undefined,
-    items: cartItems.map(item => ({
-      name: item.title,
-      quantity: item.quantity,
-      price: item.unit_price,
-      total: item.unit_price * item.quantity,
-      notes: item.notes,
-      variant: item.variant_title,
-    })),
-    subtotal,
-    tax,
-    taxRate: taxRate,
-    total,
-    paymentMethod: "Cash", // You can make this dynamic
-    notes: orderNotes || undefined,
-  };
-}, [cartItems, selectedCustomer, currentPlacement, subtotal, tax, total, orderNotes, activeDraft]);
+  const preparePrintData = useCallback((): PrintOrderData => {
+    return {
+      orderNumber: activeDraft ? `DRAFT-${activeDraft.draft_number}` : `ORD-${Date.now()}`,
+      date: new Date(),
+      customer: selectedCustomer ? {
+        name: `${selectedCustomer.first_name} ${selectedCustomer.last_name}`,
+        email: selectedCustomer.email,
+        phone: selectedCustomer.phone || undefined,
+      } : undefined,
+      placement: currentPlacement || undefined,
+      items: cartItems.map(item => ({
+        name: item.title,
+        quantity: item.quantity,
+        price: item.unit_price,
+        total: item.unit_price * item.quantity,
+        notes: item.notes,
+        variant: item.variant_title,
+      })),
+      subtotal,
+      tax,
+      taxRate: taxRate,
+      total,
+      paymentMethod: "Cash",
+      notes: orderNotes || undefined,
+    };
+  }, [cartItems, selectedCustomer, currentPlacement, subtotal, tax, total, orderNotes, activeDraft]);
 
   if (categoriesError) {
     return (
@@ -464,13 +713,245 @@ const preparePrintData = useCallback((): PrintOrderData => {
       </div>
     );
   }
-  
-  return (
-    <div className="flex h-full overflow-hidden">
-      {/* Main Content */}
-      <div className="flex-1 overflow-y-auto">
+
+  // Mobile Layout
+  if (isMobile) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden pb-16">
         {/* Search and Categories */}
         <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b">
+          <div className="flex flex-col gap-3 p-3">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 h-10"
+                />
+              </div>
+              <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
+                <SelectTrigger className="w-[100px] h-10">
+                  <SelectValue placeholder="Sort" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="created_at">Newest</SelectItem>
+                  <SelectItem value="title">Name</SelectItem>
+                  <SelectItem value="price">Price</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => refetchProducts()}>
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              <button
+                onClick={() => setSelectedCategoryId("all")}
+                className={cn(
+                  "flex flex-col items-center gap-1 rounded-lg px-3 py-1.5 transition-all flex-shrink-0",
+                  selectedCategoryId === "all"
+                    ? "bg-primary text-primary-foreground shadow-md"
+                    : "bg-card hover:bg-accent"
+                )}
+              >
+                <span className="text-sm">📋</span>
+                <span className="text-xs">All</span>
+              </button>
+              {!categoriesLoading && categoriesData?.slice(0, 8).map((category) => (
+                <CategoryCard
+                  key={category.id}
+                  category={category}
+                  isSelected={selectedCategoryId === category.id}
+                  onClick={() => setSelectedCategoryId(category.id)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+        
+        {/* Products Grid */}
+        <div className="flex-1 overflow-y-auto p-3">
+          {productsLoading && !productsData ? (
+            <div className="grid grid-cols-2 gap-3">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="aspect-square rounded-lg bg-muted animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                {products.slice(0, 20).map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onAddToCart={(variant) => addToCart(product, variant)}
+                    isLoading={addToCartMutation.isPending}
+                    region={region}
+                  />
+                ))}
+              </div>
+              
+              {hasNextPage && (
+                <div className="mt-4 flex justify-center">
+                  <Button variant="outline" size="sm" onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
+                    {isFetchingNextPage ? <Loader2 className="h-4 w-4 animate-spin" /> : "Load More"}
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Mobile Bottom Bar */}
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-card p-3">
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              className="flex-1" 
+              onClick={() => setMobileDraftsOpen(true)}
+            >
+              <History className="mr-2 h-4 w-4" />
+              Drafts {activeDrafts.length > 0 && `(${activeDrafts.length})`}
+            </Button>
+            <Button 
+              className="flex-1 bg-primary hover:bg-primary/90" 
+              onClick={() => setMobileCartOpen(true)}
+            >
+              <ShoppingCart className="mr-2 h-4 w-4" />
+              Cart • {region?.currency_code?.toUpperCase() || "PHP"} {total.toFixed(2)}
+            </Button>
+          </div>
+        </div>
+
+        {/* Mobile Drafts Sheet */}
+        <MobileDraftsSheet
+          open={mobileDraftsOpen}
+          onOpenChange={setMobileDraftsOpen}
+          drafts={activeDrafts}
+          onLoadDraft={loadDraft}
+          onDeleteDraft={deleteDraft}
+          currencyCode={region?.currency_code?.toUpperCase() || "PHP"}
+        />
+
+        {/* Mobile Cart Sheet */}
+        <MobileCartSheet
+          open={mobileCartOpen}
+          onOpenChange={setMobileCartOpen}
+          cartItems={cartItems}
+          updateQuantity={updateQuantity}
+          removeFromCart={removeFromCart}
+          addItemNote={addItemNote}
+          subtotal={subtotal}
+          tax={tax}
+          total={total}
+          region={region}
+          taxRate={taxRate}
+          clearCart={clearCart}
+          saveDraft={saveDraft}
+          onCheckout={() => setCheckoutDialogOpen(true)}
+          onPrint={() => setPrintDialogOpen(true)}
+          onAssignTable={() => setAssignTableDialogOpen(true)}
+          onAssignCustomer={() => setAssignCustomerDialogOpen(true)}
+          currentPlacement={currentPlacement}
+          selectedCustomer={selectedCustomer}
+          orderNotes={orderNotes}
+          setOrderNotes={setOrderNotes}
+          releaseTable={releaseTable}
+          clearCustomer={clearCustomer}
+          activeDraft={activeDraft}
+        />
+
+        {/* Dialogs */}
+        <Dialog open={assignTableDialogOpen} onOpenChange={setAssignTableDialogOpen}>
+          <DialogContent className="max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Assign Table</DialogTitle>
+              <DialogDescription>Select a table for this order</DialogDescription>
+            </DialogHeader>
+            <TableGrid sections={sections} onSelectTable={(table, section) => { assignTable(table, section); }} />
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAssignTableDialogOpen(false)}>Cancel</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
+        <Dialog open={assignCustomerDialogOpen} onOpenChange={setAssignCustomerDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Assign Customer</DialogTitle>
+              <DialogDescription>Search for an existing customer or create a new one</DialogDescription>
+            </DialogHeader>
+            <CustomerSearch onSelectCustomer={assignCustomer} />
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAssignCustomerDialogOpen(false)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
+        <Dialog open={checkoutDialogOpen} onOpenChange={setCheckoutDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Complete Order</DialogTitle>
+              <DialogDescription>Review and confirm the order</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              {currentPlacement && (
+                <div className="flex items-center gap-2 text-sm bg-muted p-2 rounded">
+                  <MapPin className="h-4 w-4" />
+                  <span>{currentPlacement.name}</span>
+                </div>
+              )}
+              {selectedCustomer && (
+                <div className="flex items-center gap-2 text-sm bg-muted p-2 rounded">
+                  <User className="h-4 w-4" />
+                  <span>{selectedCustomer.first_name} {selectedCustomer.last_name}</span>
+                </div>
+              )}
+              <Separator />
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span>{region?.currency_code?.toUpperCase() || "PHP"} {subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Tax</span>
+                  <span>{region?.currency_code?.toUpperCase() || "PHP"} {tax.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-lg font-bold">
+                  <span>Total</span>
+                  <span>{region?.currency_code?.toUpperCase() || "PHP"} {total.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+            <DialogFooter className="gap-2 flex-col sm:flex-row">
+              <Button variant="outline" onClick={() => setCheckoutDialogOpen(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => setPrintDialogOpen(true)}>Print</Button>
+              <Button onClick={handleCheckout} disabled={isCheckingOut}>
+                {isCheckingOut && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Confirm Order
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <PrintDialog
+          open={printDialogOpen}
+          onOpenChange={setPrintDialogOpen}
+          orderData={preparePrintData()}
+        />
+      </div>
+    );
+  }
+
+  // Desktop Layout - With Fixed Cart Sidebar Header/Footer and Scrollable Items
+  return (
+    <div className="flex h-full overflow-hidden">
+      {/* Main Content - Scrollable Products Grid */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Search and Categories - Sticky Header */}
+        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b flex-shrink-0">
           <div className="flex flex-col gap-4 p-4">
             <div className="flex gap-2">
               <div className="relative flex-1">
@@ -497,6 +978,7 @@ const preparePrintData = useCallback((): PrintOrderData => {
               </Button>
             </div>
             
+            {/* Categories Scroll */}
             <div className="flex gap-2 overflow-x-auto pb-2">
               <button
                 onClick={() => setSelectedCategoryId("all")}
@@ -522,8 +1004,8 @@ const preparePrintData = useCallback((): PrintOrderData => {
           </div>
         </div>
         
-        {/* Products Grid */}
-        <div className="p-4">
+        {/* Products Grid - Scrollable Area */}
+        <div className="flex-1 overflow-y-auto p-4">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold">
               {selectedCategoryId === "all" ? "All Items" : categoriesData?.find(c => c.id === selectedCategoryId)?.name || "Products"}
@@ -532,14 +1014,14 @@ const preparePrintData = useCallback((): PrintOrderData => {
           </div>
           
           {productsLoading && !productsData ? (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5">
               {[...Array(12)].map((_, i) => (
                 <div key={i} className="aspect-square rounded-lg bg-muted animate-pulse" />
               ))}
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5">
                 {products.map((product) => (
                   <ProductCard
                     key={product.id}
@@ -558,14 +1040,35 @@ const preparePrintData = useCallback((): PrintOrderData => {
                   </Button>
                 </div>
               )}
+              
+              {products.length === 0 && !productsLoading && (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <Package className="h-16 w-16 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold">No products found</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Try adjusting your search or category filter
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="mt-4"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSelectedCategoryId("all");
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </div>
       </div>
       
-      {/* Cart Sidebar */}
+      {/* Cart Sidebar - Desktop with Fixed Header and Footer */}
       <aside className="hidden w-96 flex-col border-l bg-card lg:flex">
-        <div className="border-b p-4">
+        {/* Fixed Header */}
+        <div className="border-b p-4 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ShoppingCart className="h-5 w-5" />
@@ -601,29 +1104,34 @@ const preparePrintData = useCallback((): PrintOrderData => {
           </div>
         </div>
         
-        <ScrollArea className="flex-1 h-[45vh]">
-          <div className="space-y-3 p-4">
-            {cartItems.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <ShoppingCart className="h-12 w-12 text-muted-foreground mb-3" />
-                <p className="text-sm text-muted-foreground">Your cart is empty</p>
-              </div>
-            ) : (
-              cartItems.map((item) => (
-                <CartItemComponent
-                  key={item.id}
-                  item={item}
-                  onUpdateQuantity={updateQuantity}
-                  onRemove={removeFromCart}
-                  region={region}
-                  onAddNote={addItemNote}
-                />
-              ))
-            )}
-          </div>
-        </ScrollArea>
+        {/* Scrollable Items Area */}
+        <div className="flex-1 overflow-hidden">
+          <ScrollArea className="max-h-[50vh]">
+            <div className="space-y-3 p-4">
+              {cartItems.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <ShoppingCart className="h-12 w-12 text-muted-foreground mb-3" />
+                  <p className="text-sm text-muted-foreground">Your cart is empty</p>
+                  <p className="text-xs text-muted-foreground">Add items to get started</p>
+                </div>
+              ) : (
+                cartItems.map((item) => (
+                  <CartItemComponent
+                    key={item.id}
+                    item={item}
+                    onUpdateQuantity={updateQuantity}
+                    onRemove={removeFromCart}
+                    region={region}
+                    onAddNote={addItemNote}
+                  />
+                ))
+              )}
+            </div>
+          </ScrollArea>
+        </div>
         
-        <div className="border-t p-4">
+        {/* Fixed Footer with Actions */}
+        <div className="border-t p-4 flex-shrink-0">
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
@@ -662,18 +1170,17 @@ const preparePrintData = useCallback((): PrintOrderData => {
               </div>
               <span className="text-xs">Card</span>
             </Button>
-
             <Button variant="outline" className="flex flex-col items-center py-2 h-auto gap-1">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100">
                 <QrCode className="h-4 w-4 text-purple-600" />
               </div>
               <span className="text-xs">QR Code</span>
             </Button>
-
           </div>
           
           <div className="mt-4 flex gap-2">
             <Button variant="outline" className="flex-1" onClick={saveDraft} disabled={cartItems.length === 0 && !currentPlacement}>
+              <Save className="mr-2 h-4 w-4" />
               Save Draft
             </Button>
             <Button 
@@ -696,54 +1203,7 @@ const preparePrintData = useCallback((): PrintOrderData => {
         </div>
       </aside>
       
-      {/* Mobile Cart Drawer */}
-      <Sheet>
-        <SheetTrigger asChild>
-          <Button className="fixed bottom-4 right-4 rounded-full shadow-lg lg:hidden">
-            <ShoppingCart className="h-5 w-5" />
-            {itemCount > 0 && (
-              <Badge className="absolute -right-1 -top-1 px-1.5 py-0.5">
-                {itemCount}
-              </Badge>
-            )}
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="bottom" className="h-[85vh] rounded-t-xl">
-          <SheetHeader>
-            <SheetTitle className="flex items-center justify-between">
-              <span>Your Order</span>
-              <Button variant="ghost" size="sm" onClick={clearCart}>Clear</Button>
-            </SheetTitle>
-          </SheetHeader>
-          <ScrollArea className="h-[calc(85vh-180px)] mt-4">
-            <div className="space-y-3">
-              {cartItems.map((item) => (
-                <CartItemComponent
-                  key={item.id}
-                  item={item}
-                  onUpdateQuantity={updateQuantity}
-                  onRemove={removeFromCart}
-                  region={region}
-                />
-              ))}
-            </div>
-          </ScrollArea>
-          <div className="border-t pt-4 mt-4">
-            <div className="space-y-2">
-              <div className="flex justify-between font-bold text-lg">
-                <span>Total</span>
-                <span>{region?.currency_code?.toUpperCase() || "PHP"} {total.toFixed(2)}</span>
-              </div>
-            </div>
-            <div className="mt-4 flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={saveDraft}>Save</Button>
-              <Button className="flex-1" onClick={() => setCheckoutDialogOpen(true)}>Checkout</Button>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
-      
-      {/* Dialogs */}
+      {/* Dialogs - Desktop */}
       <Dialog open={assignTableDialogOpen} onOpenChange={setAssignTableDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -807,7 +1267,7 @@ const preparePrintData = useCallback((): PrintOrderData => {
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setCheckoutDialogOpen(false)}>Cancel</Button>
-            <Button variant="outline" onClick={() => setPrintDialogOpen(true)} >Print</Button>
+            <Button variant="outline" onClick={() => setPrintDialogOpen(true)}>Print</Button>
             <Button onClick={handleCheckout} disabled={isCheckingOut}>
               {isCheckingOut && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Confirm Order
@@ -815,11 +1275,12 @@ const preparePrintData = useCallback((): PrintOrderData => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
       <PrintDialog
-  open={printDialogOpen}
-  onOpenChange={setPrintDialogOpen}
-  orderData={preparePrintData()}
-/>
+        open={printDialogOpen}
+        onOpenChange={setPrintDialogOpen}
+        orderData={preparePrintData()}
+      />
     </div>
   );
 }
