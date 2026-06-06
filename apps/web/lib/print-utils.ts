@@ -1,4 +1,4 @@
-// lib/print-utils.ts - REFINED WITH BETTER SPACING & VISUAL ENHANCEMENTS
+// lib/print-utils.ts - CORRECT LINE BREAKS FOR MOBILE PRINT UTIL
 
 export interface PrintOrderData {
   orderNumber: string;
@@ -57,29 +57,19 @@ export const formatReceiptDate = (date: Date): string => {
 // ============================================
 
 const LINE_WIDTH = 32;
-const SEPARATOR = "─".repeat(LINE_WIDTH / 2);
-const DOUBLE_SEPARATOR = "═".repeat(LINE_WIDTH / 2);
-const THIN_SEPARATOR = "·".repeat(LINE_WIDTH / 2);
+const SEPARATOR = "-".repeat(LINE_WIDTH);
+const DOUBLE_SEPARATOR = "=".repeat(LINE_WIDTH);
+const THIN_SEPARATOR = ".".repeat(LINE_WIDTH);
 
-// Enhanced center text with spacing
+// Center text
 const centerText = (text: string): string => {
   const padding = Math.max(0, (LINE_WIDTH - text.length) / 2);
   return " ".repeat(Math.floor(padding)) + text;
 };
 
-// Create emphasized text (using ASCII art style)
-const emphasizeText = (text: string): string => {
-  return `▶ ${text} ◀`;
-};
-
-// Create large-looking text using spacing
-const makeLargeText = (text: string): string => {
-  return `  ${text.split('').join(' ')}  `;
-};
-
-// Format product with clear spacing
-const formatProductWithSpacing = (name: string, total: string): string => {
-  const maxNameLen = LINE_WIDTH - 12; // Reserve space for price
+// Format product line
+const formatProductLine = (name: string, total: string): string => {
+  const maxNameLen = LINE_WIDTH - 12;
   let displayName = name;
   if (displayName.length > maxNameLen) {
     displayName = displayName.substring(0, maxNameLen - 3) + "...";
@@ -89,270 +79,246 @@ const formatProductWithSpacing = (name: string, total: string): string => {
   return `${namePart}${pricePart}`;
 };
 
-// Format quantity with visual indicators
-const formatQuantityWithIcon = (quantity: number): string => {
-  const qtyIcon = quantity > 1 ? "🔹" : "▪";
-  return `${qtyIcon} QTY: ${quantity}`;
-};
-
 // ============================================
-// MAIN RECEIPT GENERATOR WITH ENHANCED SPACING
+// RECEIPT GENERATOR WITH LITERAL LINE BREAKS
 // ============================================
 
 export const generateMobilePrintUrl = (data: PrintOrderData): string => {
-  const receiptLines: string[] = [];
+  // Build the receipt text with literal line breaks using template literals
+  let receiptText = "";
   
   // ========================================
-  // HEADER SECTION (Emphasized)
+  // HEADER SECTION
   // ========================================
-  receiptLines.push("");
-  receiptLines.push(DOUBLE_SEPARATOR);
-  receiptLines.push("");
-  receiptLines.push(centerText("★ B E L L Y   B Y T E S ★"));
-  receiptLines.push("");
-  receiptLines.push(DOUBLE_SEPARATOR);
-  receiptLines.push("");
-  receiptLines.push(centerText("016 Dadison Street"));
-  receiptLines.push(centerText("Pericohon, Tacloban City"));
-  receiptLines.push(centerText("#: 09368263352"));
-  receiptLines.push("");
-  receiptLines.push(THIN_SEPARATOR);
-  receiptLines.push("");
+  receiptText += `\n`;
+  receiptText += `${DOUBLE_SEPARATOR}\n`;
+  receiptText += `\n`;
+  receiptText += `${centerText("★ BELLY BYTES ★")}\n`;
+  receiptText += `\n`;
+  receiptText += `${DOUBLE_SEPARATOR}\n`;
+  receiptText += `\n`;
+  receiptText += `${centerText("016 Dadison Street")}\n`;
+  receiptText += `${centerText("San Antonio, Pasig City")}\n`;
+  receiptText += `${centerText("Tel: (02) 8123 4567")}\n`;
+  receiptText += `\n`;
+  receiptText += `${THIN_SEPARATOR}\n`;
+  receiptText += `\n`;
   
   // ========================================
   // ORDER INFORMATION
   // ========================================
-  receiptLines.push(`📋 ORDER #: ${data.orderNumber}`);
-  receiptLines.push(`📅 DATE: ${formatReceiptDate(data.date)}`);
-  receiptLines.push("");
+  receiptText += `ORDER #: ${data.orderNumber}\n`;
+  receiptText += `DATE: ${formatReceiptDate(data.date)}\n`;
+  receiptText += `\n`;
   
   if (data.placement) {
-    const typeIcon = data.placement.type === "table" ? "🏠" : 
-                     data.placement.type === "takeaway" ? "📦" : "🚚";
-    receiptLines.push(`${typeIcon} ${data.placement.type.toUpperCase()}: ${data.placement.name}`);
-    receiptLines.push("");
+    const typeIcon = data.placement.type === "table" ? "DINE-IN" : 
+                     data.placement.type === "takeaway" ? "TAKEAWAY" : "DELIVERY";
+    receiptText += `${typeIcon}: ${data.placement.name}\n`;
+    receiptText += `\n`;
   }
   
-  receiptLines.push(THIN_SEPARATOR);
-  receiptLines.push("");
+  receiptText += `${THIN_SEPARATOR}\n`;
+  receiptText += `\n`;
   
   // ========================================
   // CUSTOMER INFORMATION
   // ========================================
   if (data.customer?.name) {
-    receiptLines.push(`👤 CUSTOMER:`);
-    receiptLines.push(`   ${data.customer.name}`);
+    receiptText += `CUSTOMER: ${data.customer.name}\n`;
     if (data.customer.phone) {
-      receiptLines.push(`📞 ${data.customer.phone}`);
+      receiptText += `PHONE: ${data.customer.phone}\n`;
     }
-    receiptLines.push("");
-    receiptLines.push(THIN_SEPARATOR);
-    receiptLines.push("");
+    receiptText += `\n`;
+    receiptText += `${THIN_SEPARATOR}\n`;
+    receiptText += `\n`;
   }
   
   // ========================================
-  // ITEMS SECTION (Enhanced with spacing)
+  // ITEMS SECTION
   // ========================================
-  receiptLines.push(centerText("═══ I T E M S ═══"));
-  receiptLines.push("");
-  receiptLines.push("ITEM                      TOTAL");
-  receiptLines.push(SEPARATOR);
-  receiptLines.push("");
+  receiptText += `ITEMS\n`;
+  receiptText += `\n`;
+  receiptText += `ITEM                      TOTAL\n`;
+  receiptText += `${SEPARATOR}\n`;
+  receiptText += `\n`;
   
   for (let i = 0; i < data.items.length; i++) {
     const item = data.items[i];
     
-    // Product name and total on same line
-    receiptLines.push(formatProductWithSpacing(item.name, formatCurrency(item.total)));
+    // Main item line
+    receiptText += `${formatProductLine(item.name, formatCurrency(item.total))}\n`;
     
-    // Quantity with visual icon (separate line with spacing)
-    receiptLines.push(`   ${formatQuantityWithIcon(item.quantity)}`);
+    // Quantity line
+    receiptText += `  x${item.quantity}\n`;
     
-    // Unit price (for clarity)
-    receiptLines.push(`   @ ${formatCurrency(item.price)} each`);
+    // Unit price
+    receiptText += `    @ ${formatCurrency(item.price)} each\n`;
     
     // Variant if exists
     if (item.variant) {
-      receiptLines.push(`   📌 ${item.variant}`);
+      receiptText += `    * ${item.variant}\n`;
     }
     
-    // Item notes if exists
+    // Notes if exists
     if (item.notes) {
-      receiptLines.push(`   📝 ${item.notes}`);
+      receiptText += `    Note: ${item.notes}\n`;
     }
     
-    // Add spacing between items (2 blank lines for better separation)
+    // Add blank lines between items
     if (i < data.items.length - 1) {
-      receiptLines.push("");
-      receiptLines.push("");
+      receiptText += `\n`;
+      receiptText += `\n`;
     }
   }
   
-  receiptLines.push("");
-  receiptLines.push(SEPARATOR);
-  receiptLines.push("");
+  receiptText += `\n`;
+  receiptText += `${SEPARATOR}\n`;
+  receiptText += `\n`;
   
   // ========================================
-  // TOTALS SECTION (Emphasized)
+  // TOTALS SECTION
   // ========================================
-  receiptLines.push(centerText("═══ S U M M A R Y ═══"));
-  receiptLines.push("");
+  receiptText += `SUMMARY\n`;
+  receiptText += `\n`;
+  receiptText += `Subtotal${" ".repeat(20)}${formatCurrency(data.subtotal)}\n`;
   
-  // Subtotal
-  receiptLines.push(`Subtotal` + " ".repeat(20) + `${formatCurrency(data.subtotal)}`);
-  
-  // Tax
   if (data.tax > 0) {
     const taxPercent = (data.taxRate * 100).toFixed(0);
-    receiptLines.push(`Tax (${taxPercent}%)` + " ".repeat(15) + `${formatCurrency(data.tax)}`);
+    receiptText += `Tax (${taxPercent}%)${" ".repeat(15)}${formatCurrency(data.tax)}\n`;
   }
   
-  receiptLines.push("");
-  receiptLines.push(DOUBLE_SEPARATOR);
-  receiptLines.push("");
-  
-  // Total (emphasized with larger look)
-  receiptLines.push(centerText(makeLargeText("TOTAL")));
-  receiptLines.push(centerText(makeLargeText(formatCurrency(data.total))));
-  receiptLines.push("");
-  receiptLines.push(DOUBLE_SEPARATOR);
-  receiptLines.push("");
+  receiptText += `\n`;
+  receiptText += `${DOUBLE_SEPARATOR}\n`;
+  receiptText += `\n`;
+  receiptText += `TOTAL${" ".repeat(23)}${formatCurrency(data.total)}\n`;
+  receiptText += `\n`;
+  receiptText += `${DOUBLE_SEPARATOR}\n`;
+  receiptText += `\n`;
   
   // ========================================
   // PAYMENT SECTION
   // ========================================
-  receiptLines.push(centerText("═══ P A Y M E N T ═══"));
-  receiptLines.push("");
-  receiptLines.push(`💳 ${data.paymentMethod}` + " ".repeat(12) + `${formatCurrency(data.total)}`);
-  receiptLines.push("");
-  receiptLines.push(THIN_SEPARATOR);
-  receiptLines.push("");
+  receiptText += `PAYMENT\n`;
+  receiptText += `${THIN_SEPARATOR}\n`;
+  receiptText += `${data.paymentMethod}${" ".repeat(18)}${formatCurrency(data.total)}\n`;
+  receiptText += `${THIN_SEPARATOR}\n`;
+  receiptText += `\n`;
   
   // ========================================
   // NOTES SECTION
   // ========================================
   if (data.notes) {
-    receiptLines.push("📋 NOTES:");
-    receiptLines.push("");
+    receiptText += `NOTES:\n`;
     const noteLines = data.notes.match(/.{1,28}/g) || [data.notes];
     noteLines.forEach(line => {
-      receiptLines.push(`   ${line}`);
+      receiptText += `  ${line}\n`;
     });
-    receiptLines.push("");
-    receiptLines.push(THIN_SEPARATOR);
-    receiptLines.push("");
+    receiptText += `\n`;
   }
   
   // ========================================
-  // FOOTER (Highly Emphasized)
+  // FOOTER
   // ========================================
-  receiptLines.push("");
-  receiptLines.push(centerText("════════════════════════════"));
-  receiptLines.push(centerText("★★★  T H A N K   Y O U  ★★★"));
-  receiptLines.push(centerText("════════════════════════════"));
-  receiptLines.push("");
-  receiptLines.push(centerText("Please come again!"));
-  receiptLines.push("");
-  receiptLines.push(centerText(`#${data.orderNumber}`));
-  receiptLines.push(centerText(formatReceiptDate(data.date)));
-  receiptLines.push("");
-  receiptLines.push(DOUBLE_SEPARATOR);
-  receiptLines.push("");
-  receiptLines.push("");
+  receiptText += `${SEPARATOR}\n`;
+  receiptText += `\n`;
+  receiptText += `${centerText("THANK YOU!")}\n`;
+  receiptText += `${centerText("Please come again")}\n`;
+  receiptText += `\n`;
+  receiptText += `${centerText(`#${data.orderNumber}`)}\n`;
+  receiptText += `${centerText(formatReceiptDate(data.date))}\n`;
+  receiptText += `\n`;
+  receiptText += `${DOUBLE_SEPARATOR}\n`;
+  receiptText += `\n`;
+  receiptText += `\n`;
   
-  // Paper cut spacing
+  // Paper cut indicator
   if (data.autoCut) {
-    receiptLines.push("─ CUT HERE ─");
-    receiptLines.push("");
+    receiptText += `- CUT HERE -\n`;
+    receiptText += `\n`;
   }
   
   // Handle multiple copies
-  let finalText = receiptLines.join("\n");
+  let finalText = receiptText;
   if (data.copies && data.copies > 1) {
-    const copySeparator = `\n\n${DOUBLE_SEPARATOR}\n${centerText(`📄 COPY ${data.copies} 📄`)}\n${DOUBLE_SEPARATOR}\n\n`;
-    finalText = Array(data.copies).fill(finalText).join(copySeparator);
+    let multiCopyText = "";
+    for (let i = 0; i < data.copies; i++) {
+      multiCopyText += receiptText;
+      if (i < data.copies - 1) {
+        multiCopyText += `\n${DOUBLE_SEPARATOR}\n`;
+        multiCopyText += `${centerText(`COPY ${i + 2}`)}\n`;
+        multiCopyText += `${DOUBLE_SEPARATOR}\n`;
+        multiCopyText += `\n\n`;
+      }
+    }
+    finalText = multiCopyText;
   }
   
-  // Generate Mobile Print Util URL
+  // IMPORTANT: Use the literal text WITHOUT additional encoding
+  // The #mling##sl# tag handles the line breaks automatically
   return `com.samathosoft.webprint://#mling##sl#${encodeURIComponent(finalText)}#/sl#`;
 };
 
 // ============================================
-// KITCHEN RECEIPT (Enhanced for readability)
+// KITCHEN RECEIPT WITH LITERAL LINE BREAKS
 // ============================================
 
 export const generateKitchenPrintUrl = (data: PrintOrderData): string => {
-  const lines: string[] = [];
+  let receiptText = "";
   
-  lines.push("");
-  lines.push(DOUBLE_SEPARATOR);
-  lines.push("");
-  lines.push(centerText("👨‍🍳 K I T C H E N   O R D E R 👩‍🍳"));
-  lines.push("");
-  lines.push(DOUBLE_SEPARATOR);
-  lines.push("");
-  lines.push(`🔖 ORDER #: ${data.orderNumber}`);
-  lines.push(`⏰ TIME: ${formatReceiptDate(data.date)}`);
-  lines.push("");
+  receiptText += `${DOUBLE_SEPARATOR}\n`;
+  receiptText += `${centerText("KITCHEN ORDER")}\n`;
+  receiptText += `${DOUBLE_SEPARATOR}\n`;
+  receiptText += `\n`;
+  receiptText += `ORDER #: ${data.orderNumber}\n`;
+  receiptText += `TIME: ${formatReceiptDate(data.date)}\n`;
+  receiptText += `\n`;
   
   if (data.placement) {
-    const typeIcon = data.placement.type === "table" ? "🏠" : 
-                     data.placement.type === "takeaway" ? "📦" : "🚚";
-    lines.push(`${typeIcon} ${data.placement.type.toUpperCase()}: ${data.placement.name}`);
-    lines.push("");
+    const typeLabel = data.placement.type === "table" ? "TABLE" : 
+                      data.placement.type === "takeaway" ? "TAKEAWAY" : "DELIVERY";
+    receiptText += `${typeLabel}: ${data.placement.name}\n`;
+    receiptText += `\n`;
   }
   
-  lines.push(SEPARATOR);
-  lines.push("");
-  lines.push("ITEM                          QTY");
-  lines.push(SEPARATOR);
-  lines.push("");
+  receiptText += `${SEPARATOR}\n`;
+  receiptText += `ITEM                 QTY\n`;
+  receiptText += `${SEPARATOR}\n`;
+  receiptText += `\n`;
   
   for (let i = 0; i < data.items.length; i++) {
     const item = data.items[i];
     
-    // Item name
-    const maxNameLen = 26;
+    const maxNameLen = 22;
     let nameDisplay = item.name;
     if (nameDisplay.length > maxNameLen) {
       nameDisplay = nameDisplay.substring(0, maxNameLen - 3) + "...";
     }
     const namePart = nameDisplay.padEnd(maxNameLen);
     const qtyPart = `x${item.quantity}`.padStart(4);
-    lines.push(`${namePart}${qtyPart}`);
+    receiptText += `${namePart} ${qtyPart}\n`;
     
-    // Variant
     if (item.variant) {
-      lines.push(`   📌 ${item.variant}`);
+      receiptText += `  ${item.variant}\n`;
     }
     
-    // Notes
     if (item.notes) {
-      lines.push(`   📝 ${item.notes}`);
+      receiptText += `  Note: ${item.notes}\n`;
     }
     
-    // Spacing between items
     if (i < data.items.length - 1) {
-      lines.push("");
-      lines.push("");
+      receiptText += `\n`;
+      receiptText += `\n`;
     }
   }
   
-  lines.push("");
-  lines.push(SEPARATOR);
-  lines.push("");
-  lines.push(centerText("⚡ PRIORITY: NORMAL ⚡"));
-  lines.push("");
-  lines.push(DOUBLE_SEPARATOR);
-  lines.push("");
-  lines.push(centerText("PLEASE PREPARE"));
-  lines.push(centerText("THANK YOU!"));
-  lines.push("");
-  lines.push(DOUBLE_SEPARATOR);
-  lines.push("");
+  receiptText += `\n`;
+  receiptText += `${SEPARATOR}\n`;
+  receiptText += `${centerText("PRIORITY: NORMAL")}\n`;
+  receiptText += `${DOUBLE_SEPARATOR}\n`;
+  receiptText += `\n`;
   
-  const printText = lines.join("\n");
-  return `com.samathosoft.webprint://#mling##sl#${encodeURIComponent(printText)}#/sl#`;
+  return `com.samathosoft.webprint://#mling##sl#${encodeURIComponent(receiptText)}#/sl#`;
 };
 
 // ============================================
@@ -360,12 +326,11 @@ export const generateKitchenPrintUrl = (data: PrintOrderData): string => {
 // ============================================
 
 export const printOrder = async (
-  data: any, 
+  data: PrintOrderData, 
   type: "receipt" | "kitchen",
   settings: PrinterSettings
 ): Promise<{ success: boolean; message: string }> => {
   try {
-    // Add settings to data for the generator
     const printData = { 
       ...data, 
       copies: settings.copies,
@@ -377,6 +342,7 @@ export const printOrder = async (
       ? generateMobilePrintUrl(printData)
       : generateKitchenPrintUrl(printData);
     
+    // Open the URL to trigger the print app
     window.location.href = printUrl;
     
     return { 
@@ -390,9 +356,4 @@ export const printOrder = async (
       message: error instanceof Error ? error.message : "Print failed" 
     };
   }
-};
-
-export const printKitchenReceipt = (data: PrintOrderData): void => {
-  const printUrl = generateKitchenPrintUrl(data);
-  window.location.href = printUrl;
 };
