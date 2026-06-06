@@ -32,7 +32,7 @@ interface PrintDialogProps {
 export function PrintDialog({ open, onOpenChange, orderData }: PrintDialogProps) {
   const [printType, setPrintType] = useState<"receipt" | "kitchen">("receipt");
   const [printerSettings, setPrinterSettings] = useState<PrinterSettings>({
-    paperSize: "80mm",
+    paperSize: "58mm",
     copies: 1,
     autoCut: true,
   });

@@ -35,10 +35,7 @@ export interface PrinterSettings {
   autoCut: boolean;
 }
 
-// Format currency
-export const formatCurrency = (amount: number, currency: string = "PHP"): string => {
-  return `${currency} ${amount.toFixed(2)}`;
-};
+
 
 // Format date for receipt
 export const formatReceiptDate = (date: Date): string => {
@@ -730,16 +727,7 @@ export const formatCurrency = (amount: number): string => {
   }).format(amount).replace('PHP', '₱');
 };
 
-export const formatReceiptDate = (date: Date): string => {
-  return new Intl.DateTimeFormat('en-PH', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true
-  }).format(date);
-};
+
 
 // For 58mm paper: 32 characters max per line
 const LINE_WIDTH = 32;
