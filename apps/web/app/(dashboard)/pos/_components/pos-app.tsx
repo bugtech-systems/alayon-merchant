@@ -281,8 +281,8 @@ const MobileCartSheet = ({
         </SheetTitle>
       </SheetHeader>
       
-      <div className="flex flex-col h-[calc(95vh-60px)]">
-        <div className="flex-1  p-2">
+      <div className="flex flex-col h-[calc(85vh-60px)]">
+        <div className="p-2">
           <div className="flex gap-2 mb-3">
             {!currentPlacement ? (
               <Button variant="outline" size="sm" className="flex-1" onClick={onAssignTable}>
