@@ -267,7 +267,7 @@ const MobileCartSheet = ({
   addItemNote,
 }: any) => (
   <Sheet open={open} onOpenChange={onOpenChange}>
-    <SheetContent side="bottom" className="h-[85vh] rounded-t-xl p-0">
+    <SheetContent side="bottom" className="rounded-t-xl p-0">
       <SheetHeader className="border-b p-4">
         <SheetTitle className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -322,7 +322,7 @@ const MobileCartSheet = ({
             className="text-sm mb-3"
           />
           
-          <ScrollArea className="h-[40vh] overflow-auto">
+          <ScrollArea className="h-[35vh] overflow-auto">
             <div className="space-y-2">
               {cartItems.length === 0 ? (
                 <div className="text-center py-8">
@@ -345,7 +345,7 @@ const MobileCartSheet = ({
             </div>
           </ScrollArea>
           
-          <div className="space-y-2 border-t pt-3 mt-3">
+          <div className="space-y-2 border-t pt-2 mt-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
               <span>{region?.currency_code?.toUpperCase() || "PHP"} {subtotal.toFixed(2)}</span>
@@ -361,7 +361,7 @@ const MobileCartSheet = ({
           </div>
         </div>
         
-        <div className="border-t p-4 space-y-2">
+        <div className="border-t p-2 space-y-2">
           <div className="grid grid-cols-3 gap-2">
             <Button variant="outline" size="sm" className="flex-col h-auto py-2 gap-1">
               <DollarSign className="h-4 w-4 text-green-600" />
