@@ -18,7 +18,7 @@ import { rootUser } from "@/data/users";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
 import { NavMain } from "./nav-main";
-import { companySidebarItems, riderSidebarItems } from "@/data/sidebar/company-sidebar-items";
+import { companySidebarItems, riderSidebarItems, storeSidebarItems } from "@/data/sidebar/company-sidebar-items";
 import { NavUser } from "./nav-user";
 
 
@@ -53,7 +53,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar> | 
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={isCompany ? companySidebarItems : riderSidebarItems} {...props}/>
+        <NavMain items={user?.metadata?.role == 'company' ? companySidebarItems : user?.metadata?.role == 'driver' ? riderSidebarItems : storeSidebarItems} {...props}/>
         {/* <NavDocuments items={_data.documents} /> */}
         {/* <NavSecondary items={_data.navSecondary} className="mt-auto" /> */}
       </SidebarContent>

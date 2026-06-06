@@ -144,11 +144,63 @@ export const riderSidebarItems: NavGroup[] = [
         comingSoon: false,
       },
       {
-        title: "Test page",
-        url: "/test",
+        title: "POS",
+        url: "/pos",
         icon: Banknote,
         // comingSoon: true
       },
+      // {
+      //   title: "Finance",
+      //   url: "/dashboard/finance",
+      //   icon: Banknote,
+      //   // comingSoon: true
+      // },
+      // {
+      //   title: "Analytics",
+      //   url: "/dashboard/analytics",
+      //   icon: Gauge,
+      //   // comingSoon: true
+      // },
+      // {
+      //   title: "Productivity",
+      //   url: "/dashboard/productivity",
+      //   icon: ListTodo,
+      //   // comingSoon: true
+
+      // },
+      // {
+      //   title: "E-commerce",
+      //   url: "/dashboard/coming-soon",
+      //   icon: ShoppingBag,
+      //   comingSoon: true,
+      // },
+      // {
+      //   title: "Academy",
+      //   url: "/dashboard/coming-soon",
+      //   icon: GraduationCap,
+      //   comingSoon: true,
+      // },
+      // {
+      //   title: "Logistics",
+      //   url: "/dashboard/coming-soon",
+      //   icon: Forklift,
+      //   comingSoon: true,
+      // },
+    ],
+  },
+
+];
+
+export const storeSidebarItems: NavGroup[] = [
+  {
+    id: 1,
+    label: "Dashboards",
+    items: [
+      {
+        title: "Dashboard",
+        url: "/pos",
+        icon: LayoutDashboard,
+      }
       // {
       //   title: "Finance",
       //   url: "/dashboard/finance",
