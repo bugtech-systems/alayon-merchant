@@ -6,6 +6,74 @@ import {
   ProductDTO,
 } from "@medusajs/types";
 
+// types/print.types.ts
+
+export interface PrintOrderData {
+  // Merchant Details
+  merchant: {
+    name: string;
+    address: string;
+    phone: string;
+    email?: string;
+    taxId?: string;
+    website?: string;
+  };
+  
+  // Order Details
+  orderNumber: string;
+  date: Date;
+  
+  // Customer Details
+  customer?: {
+    name: string;
+    email?: string;
+    phone?: string;
+  };
+  
+  // Placement (for dine-in)
+  placement?: {
+    type: "table" | "takeaway" | "delivery";
+    name: string;
+  };
+  
+  // Order Items
+  items: Array<{
+    id?: string;
+    name: string;
+    quantity: number;
+    unit_price: number;
+    total: number;
+    variant?: string;
+    notes?: string;
+    is_giftcard?: boolean;
+  }>;
+  
+  // Financials
+  subtotal: number;
+  discount_total: number;
+  tax_total: number;
+  shipping_total?: number;
+  total: number;
+  
+  // Payment
+  paymentMethod: string;
+  payments?: Array<{
+    type: string;
+    amount: number;
+  }>;
+  
+  // Additional Info
+  notes?: string;
+  staff_note?: string;
+}
+
+export interface PrinterSettings {
+  printerName?: string;
+  paperSize: "58mm" | "80mm";
+  copies: number;
+  autoCut: boolean;
+}
+
 export enum DeliveryStatus {
   PENDING = "pending",
   COMPANY_DECLINED = "company_declined",
