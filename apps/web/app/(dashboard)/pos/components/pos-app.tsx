@@ -61,7 +61,9 @@ import { CartItemComponent } from "./cart-item";
 import { CategoryCard } from "./category-card";
 import { TableGrid } from "./table-grid";
 import { CustomerSearch } from "./customer-search";
-
+import { PrintDialog } from "./print-dialog";
+import { type PrintOrderData } from "@/lib/print-utils";
+import { Printer } from "lucide-react";
 // Types
 interface CartItem {
   id: string;
@@ -181,6 +183,8 @@ export default function PosApp({ region }: PosAppProps) {
   const [orderNotes, setOrderNotes] = useState("");
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [sections] = useState(mockSections);
+const [printDialogOpen, setPrintDialogOpen] = useState(false);
+
 
   // Fetch categories
   const { 
@@ -386,20 +390,30 @@ export default function PosApp({ region }: PosAppProps) {
     toast({ title: "Table released", description: "Table has been unassigned" });
   };
   
-  const handleCheckout = async () => {
-    setIsCheckingOut(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    if (currentDraftId) {
-      setDraftOrders(prev => prev.map(d => d.id === currentDraftId ? { ...d, status: "completed" } : d));
-    }
-    
-    clearCart();
-    setIsCheckingOut(false);
-    setCheckoutDialogOpen(false);
-    
-    toast({ title: "Order completed", description: "Your order has been placed successfully" });
-  };
+// Update handleCheckout to show print dialog
+const handleCheckout = async () => {
+  setIsCheckingOut(true);
+  
+  // Simulate checkout process
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  
+  if (currentDraftId) {
+    setDraftOrders(prev => prev.map(d => d.id === currentDraftId ? { ...d, status: "completed" } : d));
+  }
+  
+  if (currentPlacement && currentPlacement.type === "table") {
+    // Update table status to cleaning
+  }
+  
+  setIsCheckingOut(false);
+  setCheckoutDialogOpen(false);
+  
+  // Show print dialog after successful checkout
+  setPrintDialogOpen(true);
+  
+  // Clear cart after print (or keep for reference)
+  // clearCart(); // Uncomment if you want to clear after print
+};
   
   // Calculate totals
   const subtotal = cartItems.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
@@ -409,7 +423,36 @@ export default function PosApp({ region }: PosAppProps) {
   const itemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   
   const activeDraft = draftOrders.find(d => d.id === currentDraftId);
-  
+
+
+  // Add this function to prepare print data
+const preparePrintData = useCallback((): PrintOrderData => {
+  return {
+    orderNumber: activeDraft ? `DRAFT-${activeDraft.draft_number}` : `ORD-${Date.now()}`,
+    date: new Date(),
+    customer: selectedCustomer ? {
+      name: `${selectedCustomer.first_name} ${selectedCustomer.last_name}`,
+      email: selectedCustomer.email,
+      phone: selectedCustomer.phone || undefined,
+    } : undefined,
+    placement: currentPlacement || undefined,
+    items: cartItems.map(item => ({
+      name: item.title,
+      quantity: item.quantity,
+      price: item.unit_price,
+      total: item.unit_price * item.quantity,
+      notes: item.notes,
+      variant: item.variant_title,
+    })),
+    subtotal,
+    tax,
+    taxRate: taxRate,
+    total,
+    paymentMethod: "Cash", // You can make this dynamic
+    notes: orderNotes || undefined,
+  };
+}, [cartItems, selectedCustomer, currentPlacement, subtotal, tax, total, orderNotes, activeDraft]);
+
   if (categoriesError) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -635,7 +678,20 @@ export default function PosApp({ region }: PosAppProps) {
             <Button variant="outline" className="flex-1" onClick={saveDraft} disabled={cartItems.length === 0 && !currentPlacement}>
               Save Draft
             </Button>
-            <Button className="flex-1 bg-primary hover:bg-primary/90" onClick={() => setCheckoutDialogOpen(true)} disabled={cartItems.length === 0}>
+            <Button 
+              variant="outline" 
+              className="flex-1" 
+              onClick={() => setPrintDialogOpen(true)} 
+              disabled={cartItems.length === 0}
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              Print
+            </Button>
+            <Button 
+              className="flex-1 bg-primary hover:bg-primary/90" 
+              onClick={() => setCheckoutDialogOpen(true)} 
+              disabled={cartItems.length === 0}
+            >
               Checkout
             </Button>
           </div>
@@ -763,6 +819,11 @@ export default function PosApp({ region }: PosAppProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <PrintDialog
+  open={printDialogOpen}
+  onOpenChange={setPrintDialogOpen}
+  orderData={preparePrintData()}
+/>
     </div>
   );
 }
