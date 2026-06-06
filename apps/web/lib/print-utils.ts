@@ -360,7 +360,7 @@ export const generateKitchenPrintUrl = (data: PrintOrderData): string => {
 // ============================================
 
 export const printOrder = async (
-  data: PrintOrderData, 
+  data: any, 
   type: "receipt" | "kitchen",
   settings: PrinterSettings
 ): Promise<{ success: boolean; message: string }> => {

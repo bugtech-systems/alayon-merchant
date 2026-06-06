@@ -44,7 +44,7 @@ export function PrintDialog({ open, onOpenChange, orderData }: PrintDialogProps)
 
   const handlePrint = async () => {
     setIsPrinting(true);
-    await printOrder(orderData, printerSettings);
+    await printOrder(orderData, printType, printerSettings);
     setTimeout(() => {
       onOpenChange(false);
       setIsPrinting(false);
