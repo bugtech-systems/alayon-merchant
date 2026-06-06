@@ -167,18 +167,15 @@ interface PosAppProps {
 
 export default function PosApp({ region }: PosAppProps) {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [cartItems, setCartItems] = useLocalStorage<CartItem[]>("pos-cart", []);
   const [draftOrders, setDraftOrders] = useLocalStorage<DraftOrder[]>("pos-drafts", []);
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
-  const [activeNav, setActiveNav] = useState("products");
   const [sortBy, setSortBy] = useState<"created_at" | "title" | "price">("created_at");
   const [checkoutDialogOpen, setCheckoutDialogOpen] = useState(false);
   const [assignTableDialogOpen, setAssignTableDialogOpen] = useState(false);
   const [assignCustomerDialogOpen, setAssignCustomerDialogOpen] = useState(false);
-  const [selectedTable, setSelectedTable] = useState<{ table: any; section: any } | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<MedusaCustomer | null>(null);
   const [currentPlacement, setCurrentPlacement] = useState<Placement | null>(null);
   const [orderNotes, setOrderNotes] = useState("");
@@ -756,6 +753,9 @@ export default function PosApp({ region }: PosAppProps) {
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setCheckoutDialogOpen(false)}>Cancel</Button>
+            <a href="com.samathosoft.webprint://#mling##sl#Hello from my web app!#/sl#">
+            <Button variant="outline" onClick={() => setCheckoutDialogOpen(false)}>Print</Button>
+            </a>
             <Button onClick={handleCheckout} disabled={isCheckingOut}>
               {isCheckingOut && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Confirm Order
