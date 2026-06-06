@@ -113,8 +113,8 @@ export const generateMobilePrintUrl = (data: PrintOrderData): string => {
   receiptLines.push(DOUBLE_SEPARATOR);
   receiptLines.push("");
   receiptLines.push(centerText("016 Dadison Street"));
-  receiptLines.push(centerText("San Antonio, Pasig City"));
-  receiptLines.push(centerText("Tel: (02) 8123 4567"));
+  receiptLines.push(centerText("Pericohon, Tacloban City"));
+  receiptLines.push(centerText("#: 09368263352"));
   receiptLines.push("");
   receiptLines.push(THIN_SEPARATOR);
   receiptLines.push("");
