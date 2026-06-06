@@ -57,9 +57,9 @@ export const formatReceiptDate = (date: Date): string => {
 // ============================================
 
 const LINE_WIDTH = 32;
-const SEPARATOR = "─".repeat(LINE_WIDTH);
-const DOUBLE_SEPARATOR = "═".repeat(LINE_WIDTH);
-const THIN_SEPARATOR = "·".repeat(LINE_WIDTH);
+const SEPARATOR = "─".repeat(LINE_WIDTH / 2);
+const DOUBLE_SEPARATOR = "═".repeat(LINE_WIDTH / 2);
+const THIN_SEPARATOR = "·".repeat(LINE_WIDTH / 2);
 
 // Enhanced center text with spacing
 const centerText = (text: string): string => {
