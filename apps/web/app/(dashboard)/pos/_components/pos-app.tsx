@@ -539,7 +539,7 @@ const preparePrintData = useCallback((): PrintOrderData => {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 {products.map((product) => (
                   <ProductCard
                     key={product.id}
@@ -663,14 +663,12 @@ const preparePrintData = useCallback((): PrintOrderData => {
               <span className="text-xs">Card</span>
             </Button>
 
-<a href="com.samathosoft.webprint://#mling##sl#Hello from my web app!#/sl#">
             <Button variant="outline" className="flex flex-col items-center py-2 h-auto gap-1">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100">
                 <QrCode className="h-4 w-4 text-purple-600" />
               </div>
               <span className="text-xs">QR Code</span>
             </Button>
-            </a>
 
           </div>
           

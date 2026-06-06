@@ -51,9 +51,9 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { icon: Building2, label: "Products", href: "/pos" },
-  { icon: Layers, label: "Tables", href: "/pos/tables", disable: true },
+  { icon: Layers, label: "Tables", href: "/pos/tables", disable: false },
   { icon: Users, label: "Customers", href: "/pos/customers", disable: true },
-  { icon: History, label: "Drafts", href: "/pos/drafts", disable: true },
+  { icon: History, label: "Drafts", href: "/pos/drafts", disable: false },
   { icon: FileText, label: "Reports", href: "/pos/reports", disable: true },
   { icon: Settings, label: "Settings", href: "/pos/settings", disable: true },
 ];

@@ -501,89 +501,89 @@ export const generatePrintHtml = (data: PrintOrderData): string => {
   `;
 };
 
-// Generate Mobile Print Util URL scheme
-export const generateMobilePrintUrl = (data: PrintOrderData): string => {
-  // Format the receipt text for Mobile Print Util
-  const receiptLines: string[] = [];
+// // Generate Mobile Print Util URL scheme
+// export const generateMobilePrintUrl = (data: PrintOrderData): string => {
+//   // Format the receipt text for Mobile Print Util
+//   const receiptLines: string[] = [];
   
-  // Header
-  receiptLines.push("=".repeat(32));
-  receiptLines.push("ALAYON RESTAURANT");
-  receiptLines.push("=".repeat(32));
-  receiptLines.push("123 Main Street, City");
-  receiptLines.push("Tel: (02) 1234 5678");
-  receiptLines.push("");
+//   // Header
+//   receiptLines.push("=".repeat(32));
+//   receiptLines.push("ALAYON RESTAURANT");
+//   receiptLines.push("=".repeat(32));
+//   receiptLines.push("123 Main Street, City");
+//   receiptLines.push("Tel: (02) 1234 5678");
+//   receiptLines.push("");
   
-  // Order info
-  receiptLines.push(`Order #: ${data.orderNumber}`);
-  receiptLines.push(`Date: ${formatReceiptDate(data.date)}`);
-  receiptLines.push("");
+//   // Order info
+//   receiptLines.push(`Order #: ${data.orderNumber}`);
+//   receiptLines.push(`Date: ${formatReceiptDate(data.date)}`);
+//   receiptLines.push("");
   
-  // Customer info
-  if (data.customer?.name) {
-    receiptLines.push(`Customer: ${data.customer.name}`);
-    if (data.customer.phone) receiptLines.push(`Phone: ${data.customer.phone}`);
-    receiptLines.push("");
-  }
+//   // Customer info
+//   if (data.customer?.name) {
+//     receiptLines.push(`Customer: ${data.customer.name}`);
+//     if (data.customer.phone) receiptLines.push(`Phone: ${data.customer.phone}`);
+//     receiptLines.push("");
+//   }
   
-  // Table info
-  if (data.placement?.name) {
-    receiptLines.push(`${data.placement.type === "table" ? "Table" : "Section"}: ${data.placement.name}`);
-    receiptLines.push("");
-  }
+//   // Table info
+//   if (data.placement?.name) {
+//     receiptLines.push(`${data.placement.type === "table" ? "Table" : "Section"}: ${data.placement.name}`);
+//     receiptLines.push("");
+//   }
   
-  // Items header
-  receiptLines.push("-".repeat(32));
-  receiptLines.push("QTY  ITEM                    TOTAL");
-  receiptLines.push("-".repeat(32));
+//   // Items header
+//   receiptLines.push("-".repeat(32));
+//   receiptLines.push("QTY  ITEM                    TOTAL");
+//   receiptLines.push("-".repeat(32));
   
-  // Items
-  for (const item of data.items) {
-    const qtyStr = item.quantity.toString().padEnd(4);
-    const nameStr = item.name.substring(0, 20).padEnd(20);
-    const totalStr = formatCurrency(item.total).padStart(8);
-    receiptLines.push(`${qtyStr} ${nameStr} ${totalStr}`);
+//   // Items
+//   for (const item of data.items) {
+//     const qtyStr = item.quantity.toString().padEnd(4);
+//     const nameStr = item.name.substring(0, 20).padEnd(20);
+//     const totalStr = formatCurrency(item.total).padStart(8);
+//     receiptLines.push(`${qtyStr} ${nameStr} ${totalStr}`);
     
-    if (item.variant) {
-      receiptLines.push(`     (${item.variant})`);
-    }
-    if (item.notes) {
-      receiptLines.push(`     Note: ${item.notes.substring(0, 30)}`);
-    }
-  }
+//     if (item.variant) {
+//       receiptLines.push(`     (${item.variant})`);
+//     }
+//     if (item.notes) {
+//       receiptLines.push(`     Note: ${item.notes.substring(0, 30)}`);
+//     }
+//   }
   
-  receiptLines.push("-".repeat(32));
+//   receiptLines.push("-".repeat(32));
   
-  // Totals
-  receiptLines.push(`Subtotal:${formatCurrency(data.subtotal).padStart(24)}`);
-  receiptLines.push(`Tax (${(data.taxRate * 100).toFixed(0)}%):${formatCurrency(data.tax).padStart(24)}`);
-  receiptLines.push("=".repeat(32));
-  receiptLines.push(`TOTAL:${formatCurrency(data.total).padStart(27)}`);
-  receiptLines.push("=".repeat(32));
+//   // Totals
+//   receiptLines.push(`Subtotal:${formatCurrency(data.subtotal).padStart(24)}`);
+//   receiptLines.push(`Tax (${(data.taxRate * 100).toFixed(0)}%):${formatCurrency(data.tax).padStart(24)}`);
+//   receiptLines.push("=".repeat(32));
+//   receiptLines.push(`TOTAL:${formatCurrency(data.total).padStart(27)}`);
+//   receiptLines.push("=".repeat(32));
   
-  // Payment
-  receiptLines.push(`Payment: ${data.paymentMethod}`);
-  receiptLines.push("");
+//   // Payment
+//   receiptLines.push(`Payment: ${data.paymentMethod}`);
+//   receiptLines.push("");
   
-  // Notes
-  if (data.notes) {
-    receiptLines.push("Notes:");
-    receiptLines.push(data.notes);
-    receiptLines.push("");
-  }
+//   // Notes
+//   if (data.notes) {
+//     receiptLines.push("Notes:");
+//     receiptLines.push(data.notes);
+//     receiptLines.push("");
+//   }
   
-  // Footer
-  receiptLines.push("Thank you!");
-  receiptLines.push("Please come again!");
-  receiptLines.push("=".repeat(32));
+//   // Footer
+//   receiptLines.push("Thank you!");
+//   receiptLines.push("Please come again!");
+//   receiptLines.push("=".repeat(32));
   
-  // Join with newlines and encode
-  const printText = receiptLines.join("\n");
+//   // Join with newlines and encode
+//   const printText = receiptLines.join("\n");
   
-  // Create Mobile Print Util URL
-  // Format: com.samathosoft.webprint://#mling##sl#TEXT#/sl#
-  return `com.samathosoft.webprint://#mling##sl#${encodeURIComponent(printText)}#/sl#`;
-};
+//   // Create Mobile Print Util URL
+//   // Format: com.samathosoft.webprint://#mling##sl#TEXT#/sl#
+//   return `com.samathosoft.webprint://#mling##sl#${encodeURIComponent(printText)}#/sl#`;
+// };
 
 // Detect if running on mobile device
 export const isMobileDevice = (): boolean => {
@@ -658,4 +658,263 @@ export const printKitchenReceipt = (data: PrintOrderData): void => {
   const printUrl = `com.samathosoft.webprint://#mling##sl#${encodeURIComponent(printText)}#/sl#`;
   
   window.location.href = printUrl;
+};
+
+
+// types.ts
+export interface PrintOrderData {
+  // Merchant Details
+  merchant: {
+    name: string;
+    address: string;
+    phone: string;
+    email?: string;
+    taxId?: string;
+    website?: string;
+  };
+  
+  // Order Details
+  orderNumber: string;
+  date: Date;
+  
+  // Customer Details
+  customer?: {
+    name: string;
+    email?: string;
+    phone?: string;
+  };
+  
+  // Placement (for dine-in)
+  placement?: {
+    type: "table" | "takeaway" | "delivery";
+    name: string;
+  };
+  
+  // Order Items
+  items: Array<{
+    id: string;
+    name: string;
+    quantity: number;
+    unit_price: number;
+    total: number;
+    variant?: string;
+    notes?: string;
+    is_giftcard?: boolean;
+  }>;
+  
+  // Financials
+  subtotal: number;
+  discount_total: number;
+  tax_total: number;
+  shipping_total?: number;
+  total: number;
+  
+  // Payment
+  paymentMethod: string;
+  payments?: Array<{
+    type: string;
+    amount: number;
+  }>;
+  
+  // Additional Info
+  notes?: string;
+  staff_note?: string;
+}
+
+// utils/formatting.ts
+export const formatCurrency = (amount: number): string => {
+  return new Intl.NumberFormat('en-PH', {
+    style: 'currency',
+    currency: 'PHP',
+    minimumFractionDigits: 2
+  }).format(amount).replace('PHP', '₱');
+};
+
+export const formatReceiptDate = (date: Date): string => {
+  return new Intl.DateTimeFormat('en-PH', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  }).format(date);
+};
+
+// For 58mm paper: 32 characters max per line
+const LINE_WIDTH = 32;
+const SEPARATOR = "-".repeat(LINE_WIDTH);
+const DOUBLE_SEPARATOR = "=".repeat(LINE_WIDTH);
+
+// Center text for 58mm paper
+const centerText = (text: string): string => {
+  const padding = Math.max(0, (LINE_WIDTH - text.length) / 2);
+  return " ".repeat(Math.floor(padding)) + text;
+};
+
+// Format item line with proper alignment
+const formatItemLine = (name: string, qty: number, total: number): string => {
+  // Maximum name length that leaves room for qty (3 chars + space) and price (8 chars)
+  const maxNameLen = LINE_WIDTH - 12; // 12 = 3(qty) + 1(space) + 8(price)
+  const shortName = name.length > maxNameLen ? name.substring(0, maxNameLen - 3) + "..." : name;
+  const qtyStr = qty.toString().padStart(3);
+  const priceStr = formatCurrency(total).padStart(8);
+  return `${qtyStr} ${shortName.padEnd(maxNameLen)}${priceStr}`;
+};
+
+// Format key-value pair for display
+const formatKeyValue = (key: string, value: string, valueWidth?: number): string => {
+  const maxKeyLen = 12;
+  const shortKey = key.length > maxKeyLen ? key.substring(0, maxKeyLen - 2) + ":" : key + ":";
+  const valWidth = valueWidth || LINE_WIDTH - shortKey.length - 1;
+  const shortVal = value.length > valWidth ? value.substring(0, valWidth - 3) + "..." : value;
+  return `${shortKey} ${shortVal}`;
+};
+
+// Main receipt generator
+export const generateMobilePrintUrl = (data: PrintOrderData): string => {
+  const receiptLines: string[] = [];
+  
+  // ========== HEADER ==========
+  receiptLines.push(DOUBLE_SEPARATOR);
+  receiptLines.push(centerText(data.merchant.name.toUpperCase()));
+  receiptLines.push(DOUBLE_SEPARATOR);
+  
+  // Merchant details (wrapped for 58mm)
+  const addressParts = data.merchant.address.match(/.{1,30}/g) || [data.merchant.address];
+  addressParts.forEach(line => receiptLines.push(centerText(line)));
+  
+  receiptLines.push(centerText(`Tel: ${data.merchant.phone}`));
+  if (data.merchant.taxId) {
+    receiptLines.push(centerText(`TIN: ${data.merchant.taxId}`));
+  }
+  receiptLines.push("");
+  
+  // ========== ORDER INFO ==========
+  receiptLines.push(`Order #: ${data.orderNumber}`);
+  receiptLines.push(`Date: ${formatReceiptDate(data.date)}`);
+  
+  // Order type indicator
+  if (data.placement) {
+    const typeIcon = data.placement.type === "table" ? "🏠" : 
+                     data.placement.type === "takeaway" ? "📦" : "🚚";
+    receiptLines.push(`${typeIcon} ${data.placement.type.toUpperCase()}: ${data.placement.name}`);
+  }
+  receiptLines.push("");
+  
+  // ========== CUSTOMER INFO (if available) ==========
+  if (data.customer?.name) {
+    receiptLines.push(formatKeyValue("Customer", data.customer.name));
+    if (data.customer.phone) {
+      receiptLines.push(formatKeyValue("Phone", data.customer.phone));
+    }
+    if (data.customer.email) {
+      receiptLines.push(formatKeyValue("Email", data.customer.email.substring(0, 25)));
+    }
+    receiptLines.push("");
+  }
+  
+  // ========== ITEMS HEADER ==========
+  receiptLines.push(SEPARATOR);
+  receiptLines.push(" QTY ITEM                       TOTAL");
+  receiptLines.push(SEPARATOR);
+  
+  // ========== ITEMS ==========
+  for (const item of data.items) {
+    // Main item line
+    receiptLines.push(formatItemLine(item.name, item.quantity, item.total));
+    
+    // Variant if exists
+    if (item.variant) {
+      receiptLines.push(`    ${item.variant.substring(0, 28)}`);
+    }
+    
+    // Item notes
+    if (item.notes) {
+      const noteLines = item.notes.match(/.{1,28}/g) || [item.notes];
+      noteLines.forEach(line => {
+        receiptLines.push(`    * ${line.substring(0, 26)}`);
+      });
+    }
+    
+    // Price breakdown for gift cards
+    if (item.is_giftcard) {
+      receiptLines.push(`    (Gift Card)`);
+    }
+  }
+  
+  receiptLines.push(SEPARATOR);
+  
+  // ========== TOTALS ==========
+  // Subtotal
+  receiptLines.push(`Subtotal:${formatCurrency(data.subtotal).padStart(LINE_WIDTH - 9)}`);
+  
+  // Discount (if any)
+  if (data.discount_total > 0) {
+    receiptLines.push(`Discount:-${formatCurrency(data.discount_total).padStart(LINE_WIDTH - 10)}`);
+  }
+  
+  // Tax
+  if (data.tax_total > 0) {
+    const taxRate = ((data.tax_total / (data.subtotal - data.discount_total)) * 100).toFixed(1);
+    receiptLines.push(`Tax(${taxRate}%):${formatCurrency(data.tax_total).padStart(LINE_WIDTH - 11)}`);
+  }
+  
+  // Shipping
+  if (data.shipping_total && data.shipping_total > 0) {
+    receiptLines.push(`Shipping:${formatCurrency(data.shipping_total).padStart(LINE_WIDTH - 9)}`);
+  }
+  
+  receiptLines.push(DOUBLE_SEPARATOR);
+  receiptLines.push(`TOTAL:${formatCurrency(data.total).padStart(LINE_WIDTH - 6)}`);
+  receiptLines.push(DOUBLE_SEPARATOR);
+  
+  // ========== PAYMENT DETAILS ==========
+  receiptLines.push("");
+  receiptLines.push("PAYMENT BREAKDOWN:");
+  
+  if (data.payments && data.payments.length > 0) {
+    for (const payment of data.payments) {
+      const method = payment.type.length > 10 ? payment.type.substring(0, 10) : payment.type;
+      receiptLines.push(`  ${method.padEnd(10)} ${formatCurrency(payment.amount).padStart(18)}`);
+    }
+  } else {
+    receiptLines.push(`  ${data.paymentMethod.padEnd(10)} ${formatCurrency(data.total).padStart(18)}`);
+  }
+  
+  receiptLines.push("");
+  receiptLines.push(`Change: ${formatCurrency(0).padStart(26)}`); // Calculate if needed
+  receiptLines.push("");
+  
+  // ========== NOTES ==========
+  if (data.notes) {
+    receiptLines.push(SEPARATOR);
+    receiptLines.push("NOTES:");
+    const noteLines = data.notes.match(/.{1,30}/g) || [data.notes];
+    noteLines.forEach(line => {
+      receiptLines.push(`  ${line}`);
+    });
+    receiptLines.push(SEPARATOR);
+  }
+  
+  if (data.staff_note) {
+    receiptLines.push("");
+    receiptLines.push(`Staff: ${data.staff_note}`);
+  }
+  
+  // ========== FOOTER ==========
+  receiptLines.push("");
+  receiptLines.push(centerText("Thank you!"));
+  receiptLines.push(centerText("Please come again"));
+  receiptLines.push("");
+  receiptLines.push(centerText(`Order #${data.orderNumber}`));
+  receiptLines.push(centerText(formatReceiptDate(data.date)));
+  receiptLines.push(DOUBLE_SEPARATOR);
+  
+  // Add some spacing for cutting
+  receiptLines.push("\n\n");
+  
+  // Join and encode for Mobile Print Util
+  const printText = receiptLines.join("\n");
+  return `com.samathosoft.webprint://#mling##sl#${encodeURIComponent(printText)}#/sl#`;
 };

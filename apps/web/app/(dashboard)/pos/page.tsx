@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { getRegion } from "@/lib/actions/regions";
-import PosApp from "./components/pos-app";
+import PosApp from "./_components/pos-app";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const dynamic = 'force-dynamic';
