@@ -244,7 +244,7 @@ function DraftsDialog({ open, onOpenChange, drafts, onLoadDraft, onDeleteDraft, 
                   <div className="flex justify-between text-xs">
                     <span>{draft.items.length} items</span>
                     <span className="font-semibold">
-                      {region?.currency_code?.toUpperCase() || "PHP"} {draft.total.toFixed(2)}
+                      {region?.currency_code?.toUpperCase() || "PHP"} {draft?.total?.toFixed(2)}
                     </span>
                   </div>
                 </div>
