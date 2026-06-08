@@ -26,6 +26,7 @@ import { printOrder } from "@/lib/print-utils";
 import { PrintOrderData, PrinterSettings } from "@/lib/types";
 import { formatCurrency } from "@/lib/print-utils";
 import { cn } from "@/lib/utils";
+import { retrieveCart } from "@/lib/actions";
 
 interface PrintDialogProps {
   open: boolean;
@@ -35,9 +36,9 @@ interface PrintDialogProps {
 
 function formatCartToPrintData(cart: any): any {
   // Calculate tax rate and amount if available
-  const taxRate = cart.tax_rate || 0;
-  const taxTotal = cart.tax_total;
-  const subtotal = cart.subtotal ;
+  const taxRate = cart?.tax_rate || 0;
+  const taxTotal = cart?.tax_total;
+  const subtotal = cart?.subtotal ;
   
   // Calculate tax rate percentage
   let calculatedTaxRate = 0;
@@ -46,7 +47,7 @@ function formatCartToPrintData(cart: any): any {
   }
 
   // Format items
-  const items = cart.items.map((item) => ({
+  const items = cart?.items?.map((item) => ({
     id: item.id,
     name: item.title,
     quantity: item.quantity,
@@ -59,25 +60,25 @@ function formatCartToPrintData(cart: any): any {
   }));
 
   // Extract customer information
-  const customerName = cart.customer 
-    ? `${cart.customer.first_name || ''} ${cart.customer.last_name || ''}`.trim()
+  const customerName = cart?.customer 
+    ? `${cart?.customer.first_name || ''} ${cart?.customer.last_name || ''}`.trim()
     : undefined;
 
   // Determine placement type
   let placementType: "table" | "takeaway" | "delivery" = "takeaway";
   let placementName = "Takeaway";
   
-  if (cart.metadata?.placement_type) {
+  if (cart?.metadata?.placement_type) {
     placementType = cart.metadata.placement_type as "table" | "takeaway" | "delivery";
     placementName = cart.metadata.placement_name as string;
-  } else if (cart.shipping_methods && cart.shipping_methods.length > 0) {
+  } else if (cart?.shipping_methods && cart?.shipping_methods.length > 0) {
     placementType = "delivery";
     placementName = cart.shipping_methods[0].shipping_option?.name || "Delivery";
   }
 
   // Get payment method
   let paymentMethod = "Cash";
-  if (cart.payment_session?.provider_id) {
+  if (cart?.payment_session?.provider_id) {
     const provider = cart.payment_session.provider_id;
     if (provider === "cash") paymentMethod = "Cash";
     else if (provider.includes("stripe")) paymentMethod = "Card";
@@ -91,12 +92,12 @@ function formatCartToPrintData(cart: any): any {
       address: "016 Dadison Street, Barangay 56, Tacloban City",
       phone: "(02) 8123 4567",
     },
-    orderNumber: cart.id.slice(-8).toUpperCase(),
-    date: new Date(cart.updated_at || cart.created_at),
+    orderNumber: cart?.id?.slice(-8).toUpperCase(),
+    date: new Date(cart?.updated_at || cart?.created_at),
     customer: customerName ? {
       name: customerName,
-      email: cart.customer?.email,
-      phone: cart.customer?.phone,
+      email: cart?.customer?.email,
+      phone: cart?.customer?.phone,
     } : undefined,
     placement: {
       type: placementType,
@@ -106,11 +107,11 @@ function formatCartToPrintData(cart: any): any {
     subtotal: subtotal,
     tax: taxTotal,
     taxRate: calculatedTaxRate,
-    discount_total: cart.discount_total / 100,
-    shipping_total: cart.shipping_total ? cart.shipping_total / 100 : 0,
-    total: cart.total,
+    discount_total: cart?.discount_total / 100,
+    shipping_total: cart?.shipping_total ? cart.shipping_total / 100 : 0,
+    total: cart?.total,
     paymentMethod: paymentMethod,
-    notes: cart.metadata?.notes as string,
+    notes: cart?.metadata?.notes as string,
     autoCut: true, // Auto cut paper after printing
     copies: 1, // Number of copies to print
   };
@@ -119,7 +120,6 @@ function formatCartToPrintData(cart: any): any {
 // Example usage:
 
 export function PrintDialog({ open, onOpenChange, cart }: PrintDialogProps) {
-  const orderData = formatCartToPrintData(cart)
   const [printType, setPrintType] = useState<"receipt" | "kitchen">("receipt");
   const [printerSettings, setPrinterSettings] = useState<PrinterSettings>({
     paperSize: "58mm",
@@ -127,10 +127,13 @@ export function PrintDialog({ open, onOpenChange, cart }: PrintDialogProps) {
     autoCut: true,
   });
   const [isPrinting, setIsPrinting] = useState(false);
+  const [cartData, setCartData] = useState(null);
+
 
   const handlePrint = async () => {
     setIsPrinting(true);
-    await printOrder(orderData, printType, printerSettings);
+
+    await printOrder(cartData, printType, printerSettings);
     setTimeout(() => {
       onOpenChange(false);
       setIsPrinting(false);
@@ -138,8 +141,26 @@ export function PrintDialog({ open, onOpenChange, cart }: PrintDialogProps) {
   };
 
   const getTotalItems = () => {
-    return orderData.items.reduce((sum, item) => sum + item.quantity, 0);
+    return cartData?.items?.reduce((sum, item) => sum + item.quantity, 0);
   };
+  
+  const initData = async () => {
+       let cartId = localStorage.getItem("pos_cart_id") as any;
+    let cartD = await retrieveCart(cartId)
+      const orderData = formatCartToPrintData(cartD)
+      setCartData(orderData)
+  }
+
+
+
+  useEffect(() => {
+      console.log(cart, 'CCAA')
+      setCartData(cart)
+      initData()
+
+  }, [cart, open])
+
+  console.log(cart, "CAAART", cartData)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -167,7 +188,7 @@ export function PrintDialog({ open, onOpenChange, cart }: PrintDialogProps) {
                 Print Order
               </DialogTitle>
               <p className="text-sm text-muted-foreground">
-                Select print options for order #{orderData.orderNumber}
+                Select print options for order #{cartData?.orderNumber}
               </p>
             </DialogHeader>
           </div>
@@ -292,11 +313,11 @@ export function PrintDialog({ open, onOpenChange, cart }: PrintDialogProps) {
               </div>
               <div className="flex justify-between text-sm">
                 <span>Subtotal:</span>
-                <span>{formatCurrency(orderData.subtotal)}</span>
+                <span>{formatCurrency(cartData?.subtotal || 0)}</span>
               </div>
               <div className="flex justify-between text-sm font-bold pt-2 border-t">
                 <span>Total:</span>
-                <span>{formatCurrency(orderData.total)}</span>
+                <span>{formatCurrency(cartData?.total || 0)}</span>
               </div>
             </div>
           </div>

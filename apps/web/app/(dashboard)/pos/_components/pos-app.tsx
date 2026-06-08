@@ -552,6 +552,7 @@ console.log(activeCart, cartData, 'dddaa')
       }
       
       const cartData = activeCart.cart || activeCart;
+      console.log(cartData, 'caataa')
       setCart(cartData);
       setCartId(cartData.id);
       
@@ -598,7 +599,7 @@ console.log(activeCart, cartData, 'dddaa')
     } finally {
       setIsLoadingCart(false);
     }
-  }, [region, customerGroupId, priceListId, selectedCustomer?.id]);
+  }, [region, customerGroupId, priceListId, selectedCustomer?.id, user]);
 
   // Refresh cart with pricing
   const refreshCart = useCallback(async (id: any) => {
@@ -606,6 +607,7 @@ console.log(activeCart, cartData, 'dddaa')
     // setIsLoadingCart(true);
     try {
       const updatedCart = await sdk.store.cart.retrieve(id || cartId);
+      console.log(updatedCart, 'reefgres')
       setCart(updatedCart.cart);
       
       const transformedItems: CartItem[] = updatedCart.cart.items?.map((item: any) => ({
@@ -1011,6 +1013,8 @@ const handlePaymentComplete = async (paymentData: any) => {
     );
   }
 
+  console.log(cart, cartId, 'ccaaaa')
+
   // Desktop Layout
   return (
     <div className="flex h-full overflow-hidden">
@@ -1097,7 +1101,7 @@ const handlePaymentComplete = async (paymentData: any) => {
           onNotesChange={setOrderNotes}
           onCheckout={() => setPaymentDialogOpen(true)}
           onSaveDraft={saveAsDraft}
-          onPrint={() => setPrintOpen(true)}
+          cart={cart}
         />
       </aside>
       
@@ -1117,13 +1121,8 @@ const handlePaymentComplete = async (paymentData: any) => {
         region={region}
         onComplete={handlePaymentComplete}
       />
-      {cart && 
-      <PrintDialog
-          open={printOpen}
-          onOpenChange={setPrintOpen}
-          cart={cart}
-      />
-      }
+
+     
     </div>
   );
 }

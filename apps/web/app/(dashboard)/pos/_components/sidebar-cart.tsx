@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { getAuthHeaders } from "@/lib/data/cookies";
 import { sdk } from "@/lib/config";
 import { SimpleTable } from "./pos-app";
+import { PrintDialog } from "./print-dialog";
 
 // Types
 interface CartItem {
@@ -396,7 +397,7 @@ interface CartSidebarProps {
   onNotesChange: (notes: string) => void;
   onCheckout: () => void;
   onSaveDraft: () => Promise<void>;
-  onPrint?: any
+  cart?:  any
 }
 
 export function CartSidebar({
@@ -415,11 +416,12 @@ export function CartSidebar({
   onNotesChange,
   onCheckout,
   onSaveDraft,
-  onPrint
+  cart
 }: CartSidebarProps) {
   // Get occupied tables to disable them in selection
   const [occupiedTableIds, setOccupiedTableIds] = useState<string[]>([]);
-  
+  const [printOpen, setPrintOpen] = useState(false)
+
   useEffect(() => {
     const loadOccupiedTables = () => {
       const stored = localStorage.getItem("simple-tables");
@@ -439,6 +441,11 @@ export function CartSidebar({
 
   return (
     <>
+      <PrintDialog
+          open={printOpen}
+          onOpenChange={setPrintOpen}
+          cart={cart}
+      />
       <div className="border-b p-3 flex-shrink-0">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -446,7 +453,10 @@ export function CartSidebar({
             <h2 className="font-semibold text-sm">Current Order</h2>
           </div>
           <div className="flex gap-1">
-          <Button variant="ghost" size="sm" className="h-7" onClick={onPrint}>
+          <Button variant="ghost" size="sm" className="h-7" onClick={() => {
+            console.log('eweweww')
+            setPrintOpen(true)
+          }}>
               <Printer className="h-3 w-3" />
             </Button>
             <Button variant="ghost" size="sm" className="h-7" onClick={onSaveDraft}>
