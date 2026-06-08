@@ -44,12 +44,12 @@ const nextConfig = {
     ],
   },
   
-  // Only apply allowedDevOrigins in development
+  // Development-only settings
   ...(process.env.NODE_ENV !== 'production' && {
     allowedDevOrigins: ['192.168.1.140', '192.168.1.120', 'localhost', '127.0.0.1', 'sharewin.pro', 'alayon.store'],
   }),
   
-  // Add rewrites to proxy API requests to your backend
+  // API proxy to backend
   async rewrites() {
     return [
       {
@@ -59,10 +59,10 @@ const nextConfig = {
     ];
   },
   
+  // Headers configuration
   async headers() {
     const isProduction = process.env.NODE_ENV === 'production';
     
-    // CORS headers - production uses specific domains
     const corsHeaders = isProduction 
       ? [
           { key: 'Access-Control-Allow-Credentials', value: 'true' },
@@ -77,7 +77,6 @@ const nextConfig = {
           { key: 'Access-Control-Allow-Headers', value: '*' },
         ];
     
-    // Security headers for production
     const securityHeaders = isProduction ? [
       { key: 'X-Content-Type-Options', value: 'nosniff' },
       { key: 'X-Frame-Options', value: 'DENY' },
@@ -90,50 +89,27 @@ const nextConfig = {
         source: '/:path*',
         headers: [...corsHeaders, ...securityHeaders],
       },
-      {
-        source: '/api/:path*',
-        headers: [
-          { key: 'Access-Control-Allow-Credentials', value: 'true' },
-          { key: 'Access-Control-Allow-Origin', value: 'https://admin.alayon.store' },
-          { key: 'Access-Control-Allow-Methods', value: 'GET,DELETE,PATCH,POST,PUT,OPTIONS' },
-          { key: 'Access-Control-Allow-Headers', value: '*' },
-        ],
-      },
     ];
   },
   
-  // Disable HMR in production to prevent WebSocket errors
-  ...(process.env.NODE_ENV === 'production' && {
-    webpack: (config, { dev, isServer }) => {
-      if (!dev && !isServer) {
-        // Remove React Refresh plugin in production
-        config.plugins = config.plugins.filter(
-          (plugin) => plugin.constructor.name !== 'ReactRefreshWebpackPlugin'
-        );
-      }
-      return config;
-    },
-  }),
+  // CRITICAL FIX: Add empty turbopack config
+  turbopack: {},
+  
+  // Build optimizations
+  swcMinify: true,
+  compress: true,
+  poweredByHeader: false,
+  trailingSlash: false,
+  
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   
   experimental: {
     outputFileTracingExcludes: {
       '*': ['./**/api/**/*'],
     },
   },
-  
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  
-  // Ensure trailing slashes are handled consistently
-  trailingSlash: false,
-  
-  // Optimize production builds
-  swcMinify: true,
-  compress: true,
-  
-  // Disable powered by header
-  poweredByHeader: false,
 }
 
 export default nextConfig
