@@ -61,7 +61,7 @@ importers:
         version: 2.14.1
       '@medusajs/medusa-js':
         specifier: ^6.1.10
-        version: 6.1.10(@medusajs/medusa@1.20.11(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@types/ioredis-mock@8.2.7(ioredis@5.10.1))(@types/node@25.2.3)(medusa-interfaces@1.3.10)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.11.3)))
+        version: 6.1.10(@medusajs/medusa@1.20.11(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@types/ioredis-mock@8.2.7(ioredis@5.10.1))(@types/node@25.2.3)(medusa-interfaces@1.3.10)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0)))
       '@medusajs/types':
         specifier: ^2.14.2
         version: 2.14.2(ioredis@5.10.1)
@@ -137,6 +137,9 @@ importers:
       gsap:
         specifier: ^3.15.0
         version: 3.15.0
+      idb:
+        specifier: ^8.0.3
+        version: 8.0.3
       jose:
         specifier: ^6.2.3
         version: 6.2.3
@@ -169,7 +172,7 @@ importers:
         version: 1.11.0(react@19.2.4)
       medusa-react:
         specifier: ^9.0.18
-        version: 9.0.18(@medusajs/medusa@1.20.11(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@types/ioredis-mock@8.2.7(ioredis@5.10.1))(@types/node@25.2.3)(medusa-interfaces@1.3.10)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.11.3)))(@tanstack/react-query@5.100.5(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        version: 9.0.18(@medusajs/medusa@1.20.11(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@types/ioredis-mock@8.2.7(ioredis@5.10.1))(@types/node@25.2.3)(medusa-interfaces@1.3.10)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0)))(@tanstack/react-query@5.100.5(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       next:
         specifier: 16.1.6
         version: 16.1.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -5225,6 +5228,9 @@ packages:
     resolution: {integrity: sha512-im9DjEDQ55s9fL4EYzOAv0yMqmMBSZp6G0VvFyTMPKWxiSBHUj9NW/qqLmXUwXrrM7AvqSlTCfvqRb0cM8yYqw==}
     engines: {node: '>=0.10.0'}
 
+  idb@8.0.3:
+    resolution: {integrity: sha512-LtwtVyVYO5BqRvcsKuB2iUMnHwPVByPCXFXOpuU96IZPPoPN6xjOGxZQ74pgSVVLQWtUOYgyeL4GE98BY5D3wg==}
+
   ieee754@1.2.1:
     resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
 
@@ -9088,8 +9094,8 @@ snapshots:
       '@medusajs/modules-sdk': 1.12.12(@types/node@25.2.3)
       '@medusajs/types': 1.11.17
       '@medusajs/utils': 1.11.11(@types/node@25.2.3)(pg@8.20.0)
-      '@mikro-orm/core': 5.9.7(@mikro-orm/migrations@5.9.7)(@mikro-orm/postgresql@5.9.7)
-      '@mikro-orm/postgresql': 5.9.7(@mikro-orm/core@5.9.7)(@mikro-orm/migrations@5.9.7)
+      '@mikro-orm/core': 5.9.7(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@mikro-orm/postgresql@5.9.7)
+      '@mikro-orm/postgresql': 5.9.7(@mikro-orm/core@5.9.7)(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))
       awilix: 8.0.1
     transitivePeerDependencies:
       - '@mikro-orm/better-sqlite'
@@ -9162,9 +9168,9 @@ snapshots:
       - supports-color
       - tedious
 
-  '@medusajs/medusa-js@6.1.10(@medusajs/medusa@1.20.11(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@types/ioredis-mock@8.2.7(ioredis@5.10.1))(@types/node@25.2.3)(medusa-interfaces@1.3.10)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.11.3)))':
+  '@medusajs/medusa-js@6.1.10(@medusajs/medusa@1.20.11(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@types/ioredis-mock@8.2.7(ioredis@5.10.1))(@types/node@25.2.3)(medusa-interfaces@1.3.10)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0)))':
     dependencies:
-      '@medusajs/medusa': 1.20.11(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@types/ioredis-mock@8.2.7(ioredis@5.10.1))(@types/node@25.2.3)(medusa-interfaces@1.3.10)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.11.3))
+      '@medusajs/medusa': 1.20.11(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@types/ioredis-mock@8.2.7(ioredis@5.10.1))(@types/node@25.2.3)(medusa-interfaces@1.3.10)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0))
       axios: 0.24.0
       cross-env: 5.2.1
       qs: 6.15.1
@@ -9173,7 +9179,7 @@ snapshots:
     transitivePeerDependencies:
       - debug
 
-  '@medusajs/medusa@1.20.11(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@types/ioredis-mock@8.2.7(ioredis@5.10.1))(@types/node@25.2.3)(medusa-interfaces@1.3.10)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.11.3))':
+  '@medusajs/medusa@1.20.11(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@types/ioredis-mock@8.2.7(ioredis@5.10.1))(@types/node@25.2.3)(medusa-interfaces@1.3.10)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0))':
     dependencies:
       '@medusajs/core-flows': 0.0.10(@types/node@25.2.3)(pg@8.20.0)
       '@medusajs/link-modules': 0.2.12(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@types/node@25.2.3)(pg@8.20.0)
@@ -9223,7 +9229,7 @@ snapshots:
       regenerator-runtime: 0.13.11
       request-ip: 3.3.0
       scrypt-kdf: 2.0.1
-      typeorm: 0.3.28(ioredis@5.10.1)(pg@8.11.3)
+      typeorm: 0.3.28(ioredis@5.10.1)(pg@8.20.0)
       ulid: 2.4.0
       uuid: 9.0.1
       winston: 3.19.0
@@ -9346,9 +9352,9 @@ snapshots:
   '@medusajs/utils@1.11.11(@types/node@25.2.3)(pg@8.20.0)':
     dependencies:
       '@medusajs/types': 1.11.17
-      '@mikro-orm/core': 5.9.7(@mikro-orm/migrations@5.9.7)(@mikro-orm/postgresql@5.9.7)
-      '@mikro-orm/migrations': 5.9.7(@mikro-orm/core@5.9.7(@mikro-orm/migrations@5.9.7)(@mikro-orm/postgresql@5.9.7))(@types/node@25.2.3)(pg@8.11.3)
-      '@mikro-orm/postgresql': 5.9.7(@mikro-orm/core@5.9.7)(@mikro-orm/migrations@5.9.7)
+      '@mikro-orm/core': 5.9.7(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@mikro-orm/postgresql@5.9.7)
+      '@mikro-orm/migrations': 5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0)
+      '@mikro-orm/postgresql': 5.9.7(@mikro-orm/core@5.9.7)(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))
       awilix: 8.0.1
       bignumber.js: 9.3.1
       knex: 2.4.2(pg@8.20.0)
@@ -9400,7 +9406,7 @@ snapshots:
       - supports-color
       - tedious
 
-  '@mikro-orm/core@5.9.7(@mikro-orm/migrations@5.9.7)(@mikro-orm/postgresql@5.9.7)':
+  '@mikro-orm/core@5.9.7(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@mikro-orm/postgresql@5.9.7)':
     dependencies:
       acorn-loose: 8.3.0
       acorn-walk: 8.2.0
@@ -9410,29 +9416,43 @@ snapshots:
       mikro-orm: 5.9.7
       reflect-metadata: 0.1.13
     optionalDependencies:
-      '@mikro-orm/migrations': 5.9.7(@mikro-orm/core@5.9.7(@mikro-orm/migrations@5.9.7)(@mikro-orm/postgresql@5.9.7))(@types/node@25.2.3)(pg@8.11.3)
-      '@mikro-orm/postgresql': 5.9.7(@mikro-orm/core@5.9.7)(@mikro-orm/migrations@5.9.7)
+      '@mikro-orm/migrations': 5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0)
+      '@mikro-orm/postgresql': 5.9.7(@mikro-orm/core@5.9.7)(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))
 
-  '@mikro-orm/knex@5.9.7(@mikro-orm/core@5.9.7)(@mikro-orm/migrations@5.9.7)(pg@8.11.3)':
+  '@mikro-orm/knex@5.9.7(@mikro-orm/core@5.9.7)(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(pg@8.11.3)':
     dependencies:
-      '@mikro-orm/core': 5.9.7(@mikro-orm/migrations@5.9.7)(@mikro-orm/postgresql@5.9.7)
+      '@mikro-orm/core': 5.9.7(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@mikro-orm/postgresql@5.9.7)
       fs-extra: 11.1.1
       knex: 2.5.1(pg@8.11.3)
       sqlstring: 2.3.3
     optionalDependencies:
-      '@mikro-orm/migrations': 5.9.7(@mikro-orm/core@5.9.7(@mikro-orm/migrations@5.9.7)(@mikro-orm/postgresql@5.9.7))(@types/node@25.2.3)(pg@8.11.3)
+      '@mikro-orm/migrations': 5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0)
       pg: 8.11.3
     transitivePeerDependencies:
       - pg-native
       - supports-color
       - tedious
 
-  '@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7(@mikro-orm/migrations@5.9.7)(@mikro-orm/postgresql@5.9.7))(@types/node@25.2.3)(pg@8.11.3)':
+  '@mikro-orm/knex@5.9.7(@mikro-orm/core@5.9.7)(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(pg@8.20.0)':
     dependencies:
-      '@mikro-orm/core': 5.9.7(@mikro-orm/migrations@5.9.7)(@mikro-orm/postgresql@5.9.7)
-      '@mikro-orm/knex': 5.9.7(@mikro-orm/core@5.9.7)(@mikro-orm/migrations@5.9.7)(pg@8.11.3)
+      '@mikro-orm/core': 5.9.7(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@mikro-orm/postgresql@5.9.7)
       fs-extra: 11.1.1
-      knex: 2.5.1(pg@8.11.3)
+      knex: 2.5.1(pg@8.20.0)
+      sqlstring: 2.3.3
+    optionalDependencies:
+      '@mikro-orm/migrations': 5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0)
+      pg: 8.20.0
+    transitivePeerDependencies:
+      - pg-native
+      - supports-color
+      - tedious
+
+  '@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0)':
+    dependencies:
+      '@mikro-orm/core': 5.9.7(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@mikro-orm/postgresql@5.9.7)
+      '@mikro-orm/knex': 5.9.7(@mikro-orm/core@5.9.7)(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(pg@8.20.0)
+      fs-extra: 11.1.1
+      knex: 2.5.1(pg@8.20.0)
       umzug: 3.3.1(@types/node@25.2.3)
     transitivePeerDependencies:
       - '@mikro-orm/entity-generator'
@@ -9447,13 +9467,13 @@ snapshots:
       - supports-color
       - tedious
 
-  '@mikro-orm/postgresql@5.9.7(@mikro-orm/core@5.9.7)(@mikro-orm/migrations@5.9.7)':
+  '@mikro-orm/postgresql@5.9.7(@mikro-orm/core@5.9.7)(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))':
     dependencies:
-      '@mikro-orm/core': 5.9.7(@mikro-orm/migrations@5.9.7)(@mikro-orm/postgresql@5.9.7)
-      '@mikro-orm/knex': 5.9.7(@mikro-orm/core@5.9.7)(@mikro-orm/migrations@5.9.7)(pg@8.11.3)
+      '@mikro-orm/core': 5.9.7(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@mikro-orm/postgresql@5.9.7)
+      '@mikro-orm/knex': 5.9.7(@mikro-orm/core@5.9.7)(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(pg@8.11.3)
       pg: 8.11.3
     optionalDependencies:
-      '@mikro-orm/migrations': 5.9.7(@mikro-orm/core@5.9.7(@mikro-orm/migrations@5.9.7)(@mikro-orm/postgresql@5.9.7))(@types/node@25.2.3)(pg@8.11.3)
+      '@mikro-orm/migrations': 5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0)
     transitivePeerDependencies:
       - better-sqlite3
       - mssql
@@ -13623,6 +13643,8 @@ snapshots:
     dependencies:
       safer-buffer: 2.1.2
 
+  idb@8.0.3: {}
+
   ieee754@1.2.1: {}
 
   ignore@5.3.2: {}
@@ -14097,6 +14119,27 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  knex@2.5.1(pg@8.20.0):
+    dependencies:
+      colorette: 2.0.19
+      commander: 10.0.0
+      debug: 4.3.4
+      escalade: 3.2.0
+      esm: 3.2.25
+      get-package-type: 0.1.0
+      getopts: 2.3.0
+      interpret: 2.2.0
+      lodash: 4.18.1
+      pg-connection-string: 2.6.1
+      rechoir: 0.8.0
+      resolve-from: 5.0.0
+      tarn: 3.0.2
+      tildify: 2.0.0
+    optionalDependencies:
+      pg: 8.20.0
+    transitivePeerDependencies:
+      - supports-color
+
   kuler@2.0.0: {}
 
   leaflet-control-geocoder@3.3.1(leaflet@1.9.4):
@@ -14396,10 +14439,10 @@ snapshots:
 
   medusa-interfaces@1.3.10: {}
 
-  medusa-react@9.0.18(@medusajs/medusa@1.20.11(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@types/ioredis-mock@8.2.7(ioredis@5.10.1))(@types/node@25.2.3)(medusa-interfaces@1.3.10)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.11.3)))(@tanstack/react-query@5.100.5(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+  medusa-react@9.0.18(@medusajs/medusa@1.20.11(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@types/ioredis-mock@8.2.7(ioredis@5.10.1))(@types/node@25.2.3)(medusa-interfaces@1.3.10)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0)))(@tanstack/react-query@5.100.5(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
-      '@medusajs/medusa': 1.20.11(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@types/ioredis-mock@8.2.7(ioredis@5.10.1))(@types/node@25.2.3)(medusa-interfaces@1.3.10)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.11.3))
-      '@medusajs/medusa-js': 6.1.10(@medusajs/medusa@1.20.11(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@types/ioredis-mock@8.2.7(ioredis@5.10.1))(@types/node@25.2.3)(medusa-interfaces@1.3.10)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.11.3)))
+      '@medusajs/medusa': 1.20.11(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@types/ioredis-mock@8.2.7(ioredis@5.10.1))(@types/node@25.2.3)(medusa-interfaces@1.3.10)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0))
+      '@medusajs/medusa-js': 6.1.10(@medusajs/medusa@1.20.11(@mikro-orm/migrations@5.9.7(@mikro-orm/core@5.9.7)(@types/node@25.2.3)(pg@8.20.0))(@types/ioredis-mock@8.2.7(ioredis@5.10.1))(@types/node@25.2.3)(medusa-interfaces@1.3.10)(typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0)))
       '@tanstack/react-query': 5.100.5(react@19.2.4)
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
@@ -16491,7 +16534,7 @@ snapshots:
 
   typedarray@0.0.6: {}
 
-  typeorm@0.3.28(ioredis@5.10.1)(pg@8.11.3):
+  typeorm@0.3.28(ioredis@5.10.1)(pg@8.20.0):
     dependencies:
       '@sqltools/formatter': 1.2.5
       ansis: 4.2.0
@@ -16510,7 +16553,7 @@ snapshots:
       yargs: 17.7.2
     optionalDependencies:
       ioredis: 5.10.1
-      pg: 8.11.3
+      pg: 8.20.0
     transitivePeerDependencies:
       - babel-plugin-macros
       - supports-color

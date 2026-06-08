@@ -66,3 +66,33 @@ export const getRegion = async (
     return null
   }
 }
+
+
+export const listMunicipalities = async (): Promise<HttpTypes.StoreRegion[]> => {
+  const next = {
+    ...(await getCacheOptions("municipalities")),
+  }
+
+  return sdk.client
+    .fetch<{ municipalities: HttpTypes.StoreRegion[] }>(`/dashboard/locations/municipalities`, {
+      method: "GET",
+      next,
+    })
+    .then(({ municipalities }: { municipalities: HttpTypes.StoreRegion[] }) => municipalities)
+    .catch(medusaError)
+}
+
+
+export const listBarangays = async (code: any): Promise<HttpTypes.StoreRegion[]> => {
+  const next = {
+    ...(await getCacheOptions("barangays")),
+  }
+
+  return sdk.client
+    .fetch<{ barangays: HttpTypes.StoreRegion[] }>(`/dashboard/locations/barangays?citymun_code=${code}`, {
+      method: "GET",
+      next,
+    })
+    .then(({ barangays }: { barangays: HttpTypes.StoreRegion[] }) => barangays)
+    .catch(medusaError)
+}

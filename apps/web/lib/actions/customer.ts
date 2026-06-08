@@ -823,25 +823,24 @@ export async function createQuickCustomer(customerData: any) {
   try {
     let groupId = await getCustomerGroupId()
     let newData = {
-      ...customerData,
-      customer_group_id: groupId
+       customer_group_id: groupId,
+      ...customerData
     }
-    const response = await fetch(`${BASE_URL}/dashboard/customers`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(await getAuthHeaders())
-      },
-      body: JSON.stringify(newData),
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to create customer');
-    }
-    
-    const { customer } = await response.json();
-    revalidateTag("customers-list", "max")
-    return customer;
+
+      const response = await sdk.client.fetch<{
+          customer: any;
+        }>(`/dashboard/customers`, {
+          method: "POST",
+          body: newData,
+          headers: {
+            "Content-Type": "application/json",
+            ...(await getAuthHeaders()),
+          },
+        });
+
+
+    revalidateTag("customer", "max")
+    return response?.data;
   } catch (error) {
     console.error('Error creating guest customer:', error);
     return null;

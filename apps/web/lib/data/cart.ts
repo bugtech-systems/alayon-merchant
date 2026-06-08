@@ -341,8 +341,8 @@ export async function getOrSetCart(id: any) {
   return cart
 }
 
-export async function updateCart(data: HttpTypes.StoreUpdateCart) {
-  const cartId = await getCartId()
+export async function updateCart(data: any, id?: any) {
+  const cartId = id ||await getCartId()
 
   if (!cartId) {
     throw new Error("No existing cart found, please create one before updating")
@@ -363,6 +363,7 @@ export async function updateCart(data: HttpTypes.StoreUpdateCart) {
     })
     .catch(medusaError)
 }
+
 
 export async function addToCart({
   variantId,

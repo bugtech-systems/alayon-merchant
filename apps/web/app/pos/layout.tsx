@@ -3,7 +3,6 @@ import { Suspense } from "react";
 import { PosClientProvider } from "./_components/pos-client-provider";
 import { PosLayoutContent } from "./_components/pos-layout-content";
 import { Spinner } from "@/components/ui/spinner";
-import { retrieveUser } from "@/lib/data";
 
 // This is a Server Component by default (no "use client" directive)
 export const metadata = {

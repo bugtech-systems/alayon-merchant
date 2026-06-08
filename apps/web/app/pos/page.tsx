@@ -14,9 +14,6 @@ export default async function PosPage() {
 
   if(!user) return redirect('/login');
 
-      let priceListId = user?.metadata.role == 'company' ? user.employee?.company?.price_list_id : user?.driver?.price_list_id as any;
-
-  let products = await listPriceListProducts({countryCode: 'ph',priceListId: priceListId});
   return (
     <Suspense fallback={<PosSkeleton />}>
       <PosApp region={region} user={user}/>

@@ -42,7 +42,7 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useOffline } from "@/components/medusa-offline-provider";
-import { PosContext, type PosContextType } from "../../../../contexts/pos-context";
+import { PosContext, type PosContextType } from "../../../contexts/pos-context";
 
 // Navigation Items (static, can be moved to separate file)
 const navItems: NavItem[] = [

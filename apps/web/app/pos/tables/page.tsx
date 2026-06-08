@@ -44,11 +44,14 @@ import {
   Circle,
   CreditCard,
   Receipt,
+  Printer,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { capturePayment } from "@/lib/data/cart";
 import { retrieveOrder } from "@/lib/data/orders";
+import { PrintDialog } from "../_components/print-dialog";
 
 // ============================================================================
 // TYPES
@@ -61,6 +64,7 @@ export interface SimpleTable {
   capacity: number;
   status: "available" | "occupied" | "reserved" | "cleaning";
   current_order_ids?: string[];
+  current_order_id?: string;
   customer_name?: string;
   customer_phone?: string;
   reserved_for?: Date;
@@ -73,9 +77,13 @@ export interface SimpleTable {
 interface OrderHistoryItem {
   id: string;
   display_id: number;
+  cart_id: string;
   table_ids: string[];
   customer_name?: string;
+  customer_id?: string;
   total: number;
+  subtotal: number;
+  tax: number;
   payment?: {
     method: string;
     captured: boolean;
@@ -85,10 +93,18 @@ interface OrderHistoryItem {
   };
   created_at: string;
   items: any[];
+  notes?: string;
+  pricing_summary?: {
+    strategy: string;
+    price_list_id?: string;
+    customer_group_id?: string;
+    custom_prices_count: number;
+    total_discount: number;
+  };
 }
 
 // ============================================================================
-// LOCAL STORAGE HOOK
+// LOCAL STORAGE HOOK - FIXED: Initialize 12 tables
 // ============================================================================
 
 function useTableStorage() {
@@ -109,14 +125,20 @@ function useTableStorage() {
           }));
           setTables(withDates);
         } else {
-          const defaultTables: SimpleTable[] = [
-            { id: "1", name: "Table 1", number: "1", capacity: 4, status: "available" },
-            { id: "2", name: "Table 2", number: "2", capacity: 2, status: "available" },
-            { id: "3", name: "Table 3", number: "3", capacity: 6, status: "available" },
-            { id: "4", name: "Table 4", number: "4", capacity: 4, status: "available" },
-            { id: "5", name: "Table 5", number: "5", capacity: 8, status: "available" },
-            { id: "6", name: "Table 6", number: "6", capacity: 4, status: "available" },
-          ];
+          // Generate 12 default tables
+          const defaultTables: SimpleTable[] = [];
+          for (let i = 1; i <= 10; i++) {
+            let capacity = 8;
+
+            
+            defaultTables.push({
+              id: `table-${i}`,
+              name: `Table ${i}`,
+              number: i.toString(),
+              capacity: capacity,
+              status: "available",
+            });
+          }
           setTables(defaultTables);
           localStorage.setItem("simple-tables", JSON.stringify(defaultTables));
         }
@@ -194,6 +216,7 @@ function useTableStorage() {
         ...table,
         status: "occupied",
         current_order_ids: [...(table.current_order_ids || []), orderId],
+        current_order_id: orderId,
         customer_name: customerName || table.reserved_name,
         customer_phone: customerPhone || table.reserved_phone,
         occupied_since: new Date(),
@@ -212,6 +235,7 @@ function useTableStorage() {
           ...table,
           status: "cleaning",
           current_order_ids: [],
+          current_order_id: undefined,
           customer_name: undefined,
           customer_phone: undefined,
           occupied_since: undefined,
@@ -222,6 +246,7 @@ function useTableStorage() {
         ...table,
         status: "cleaning",
         current_order_ids: newOrderIds,
+        current_order_id: newOrderIds[0],
       };
     }));
   };
@@ -249,6 +274,220 @@ function useTableStorage() {
 }
 
 // ============================================================================
+// ORDER SUMMARY DIALOG
+// ============================================================================
+
+interface OrderSummaryDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  order: OrderHistoryItem | null;
+  table: SimpleTable | null;
+  region?: any;
+}
+
+function OrderSummaryDialog({ open, onOpenChange, order, table, region }: OrderSummaryDialogProps) {
+  const [printOpen, setPrintOpen] = useState(false);
+  const [cartData, setCartData] = useState<any>(null);
+
+  useEffect(() => {
+    if (order && open) {
+      // Construct cart-like object for print dialog
+      const cartForPrint = {
+        id: order.cart_id,
+        items: order.items.map(item => ({
+          id: item.id,
+          title: item.title,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          subtotal: item.subtotal || (item.unit_price * item.quantity),
+          variant_title: item.variant_title,
+          is_custom_priced: item.is_custom_priced,
+          original_unit_price: item.original_unit_price,
+        })),
+        subtotal: order.subtotal,
+        tax_total: order.tax,
+        total: order.total,
+        metadata: {
+          table_ids: order.table_ids,
+          customer_name: order.customer_name,
+          notes: order.notes,
+          pricing_strategy: order.pricing_summary?.strategy,
+          price_list_id: order.pricing_summary?.price_list_id,
+          custom_prices: order.pricing_summary?.custom_prices_count ? {} : undefined,
+        },
+        customer: order.customer_id ? {
+          first_name: order.customer_name,
+        } : null,
+      };
+      setCartData(cartForPrint);
+    }
+  }, [order, open]);
+
+  if (!order) return null;
+
+  const receiptData = {
+    order_id: order.id,
+    display_id: order.display_id,
+    customer: order.customer_name ? { first_name: order.customer_name } : null,
+    tables: order.table_ids,
+    items: order.items,
+    totals: {
+      subtotal: order.subtotal,
+      tax: order.tax,
+      total: order.total,
+      currency_code: "PHP",
+    },
+    payment: order.payment || {
+      method: "Pending",
+      amount: order.total,
+      change: 0,
+    },
+    pricing_info: {
+      strategy: order.pricing_summary?.strategy,
+      total_discount: order.pricing_summary?.total_discount || 0,
+      has_custom_prices: (order.pricing_summary?.custom_prices_count || 0) > 0,
+      price_list_applied: !!order.pricing_summary?.price_list_id,
+    },
+    notes: order.notes,
+    timestamp: order.created_at,
+  };
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5" />
+              Order Summary - Table {table?.name || order.table_ids?.join(", ")}
+            </DialogTitle>
+            <DialogDescription>
+              Order #{order.display_id} • {new Date(order.created_at).toLocaleString()}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto space-y-4">
+            {/* Customer Info */}
+            {order.customer_name && (
+              <div className="rounded-lg border p-3">
+                <p className="text-sm font-medium mb-1">Customer</p>
+                <p className="text-sm">{order.customer_name}</p>
+              </div>
+            )}
+
+            {/* Order Items */}
+            <div className="rounded-lg border">
+              <div className="p-3 border-b bg-muted/50">
+                <p className="text-sm font-medium">Order Items</p>
+              </div>
+              <div className="divide-y">
+                {order.items.map((item, idx) => (
+                  <div key={idx} className="p-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-medium text-sm">{item.title}</p>
+                        {item.variant_title && (
+                          <p className="text-xs text-muted-foreground">{item.variant_title}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-1">
+                          ₱{item.unit_price.toFixed(2)} x {item.quantity}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium text-sm">
+                          ₱{(item.unit_price * item.quantity).toFixed(2)}
+                        </p>
+                        {item.is_custom_priced && (
+                          <Badge variant="outline" className="text-[10px] mt-1">
+                            Custom Price
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Order Totals */}
+            <div className="rounded-lg border p-3 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Subtotal:</span>
+                <span>₱{order.subtotal.toFixed(2)}</span>
+              </div>
+              {order.tax > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Tax:</span>
+                  <span>₱{order.tax.toFixed(2)}</span>
+                </div>
+              )}
+              {order.pricing_summary?.total_discount > 0 && (
+                <div className="flex justify-between text-sm text-red-600">
+                  <span>Discount:</span>
+                  <span>-₱{order.pricing_summary.total_discount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-bold pt-2 border-t">
+                <span>Total:</span>
+                <span>₱{order.total.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Payment Status */}
+            <div className="rounded-lg border p-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Payment Status:</span>
+                <Badge variant={order.payment?.captured ? "default" : "secondary"}>
+                  {order.payment?.captured ? "Paid" : "Pending"}
+                </Badge>
+              </div>
+              {order.payment?.captured && order.payment?.method && (
+                <div className="flex justify-between mt-2 text-sm">
+                  <span className="text-muted-foreground">Payment Method:</span>
+                  <span>{order.payment.method}</span>
+                </div>
+              )}
+              {order.payment?.change && order.payment.change > 0 && (
+                <div className="flex justify-between mt-2 text-sm text-green-600">
+                  <span>Change:</span>
+                  <span>₱{order.payment.change.toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Notes */}
+            {order.notes && (
+              <div className="rounded-lg border p-3">
+                <p className="text-sm font-medium mb-1">Notes</p>
+                <p className="text-sm text-muted-foreground">{order.notes}</p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+            <Button onClick={() => setPrintOpen(true)}>
+              <Printer className="mr-2 h-4 w-4" />
+              Print Receipt
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <PrintDialog
+        open={printOpen}
+        onOpenChange={setPrintOpen}
+        cart={cartData}
+        receiptData={receiptData}
+        region={region}
+      />
+    </>
+  );
+}
+
+// ============================================================================
 // PAYMENT DIALOG FOR OCCUPIED TABLES
 // ============================================================================
 
@@ -258,12 +497,13 @@ interface PaymentDialogProps {
   table: SimpleTable | null;
   order: OrderHistoryItem | null;
   onPaymentComplete: (tableId: string, orderId: string, paymentData: any) => Promise<void>;
+  region?: any;
 }
 
-function PaymentDialog({ open, onOpenChange, table, order, onPaymentComplete }: PaymentDialogProps) {
+function PaymentDialog({ open, onOpenChange, table, order, onPaymentComplete, region }: PaymentDialogProps) {
   const { toast } = useToast();
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "other">("cash");
-  const [cashAmount, setCashAmount] = useState<any>(order?.total || null);
+  const [cashAmount, setCashAmount] = useState<number>(order?.total || 0);
   const [isProcessing, setIsProcessing] = useState(false);
 
   if (!order) return null;
@@ -272,7 +512,6 @@ function PaymentDialog({ open, onOpenChange, table, order, onPaymentComplete }: 
   const canComplete = paymentMethod === "cash" ? cashAmount >= order.total : true;
 
   const handlePayment = async () => {
-    console.log(table, order, 'ORDD')
     if (!table || !order) return;
     
     setIsProcessing(true);
@@ -284,24 +523,12 @@ function PaymentDialog({ open, onOpenChange, table, order, onPaymentComplete }: 
         change: paymentMethod === "cash" ? change : 0,
       };
 
-      // Capture payment using the API
-      const captureResult = await capturePayment({
-        order_id: order.id,
-        payment_method: paymentMethod,
-        payment_data: {
-          amount: order.total,
-          change: paymentMethod === "cash" ? change : 0,
-          cash_amount: paymentMethod === "cash" ? cashAmount : undefined,
-        },
+      await onPaymentComplete(table.id, order.id, paymentData);
+      toast({
+        title: "Payment Successful",
+        description: `Payment of ₱${order.total.toFixed(2)} captured for ${table.name}`,
       });
-
-        await onPaymentComplete(table.id, order.id, paymentData);
-        toast({
-          title: "Payment Successful",
-          description: `Payment of ${order.total.toFixed(2)} captured for ${table.name}`,
-        });
-        onOpenChange(false);
-     
+      onOpenChange(false);
     } catch (error: any) {
       console.error("Payment error:", error);
       toast({
@@ -402,7 +629,7 @@ function PaymentDialog({ open, onOpenChange, table, order, onPaymentComplete }: 
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handlePayment} disabled={isProcessing}>
+          <Button onClick={handlePayment} disabled={isProcessing || !canComplete}>
             {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Complete Payment & Release Table
           </Button>
@@ -424,6 +651,7 @@ interface TableCardProps {
   onCancelReservation: (table: SimpleTable) => void;
   onMarkCleaned: (table: SimpleTable) => void;
   onProcessPayment: (table: SimpleTable) => void;
+  onViewOrder: (table: SimpleTable) => void;
 }
 
 function TableCard({ 
@@ -433,7 +661,8 @@ function TableCard({
   onReserve, 
   onCancelReservation, 
   onMarkCleaned,
-  onProcessPayment 
+  onProcessPayment,
+  onViewOrder
 }: TableCardProps) {
   const getStatusConfig = () => {
     switch (table.status) {
@@ -559,11 +788,9 @@ function TableCard({
                 size="sm" 
                 variant="outline" 
                 className="w-full h-8 text-xs"
-                onClick={() => {
-                  window.dispatchEvent(new CustomEvent("view-order", { detail: { tableId: table.id } }));
-                }}
+                onClick={() => onViewOrder(table)}
               >
-                <Receipt className="mr-1 h-3 w-3" />
+                <Eye className="mr-1 h-3 w-3" />
                 View Order
               </Button>
             </>
@@ -772,12 +999,14 @@ interface SimpleTablesManagerProps {
   onTableSelect?: (table: SimpleTable, action: "add" | "remove") => void;
   selectedTableIds?: string[];
   isSelectionMode?: boolean;
+  region?: any;
 }
 
 export default function SimpleTablesManager({ 
   onTableSelect, 
   selectedTableIds = [], 
-  isSelectionMode = false 
+  isSelectionMode = false,
+  region
 }: SimpleTablesManagerProps) {
   const { toast } = useToast();
   const {
@@ -799,6 +1028,7 @@ export default function SimpleTablesManager({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reserveDialogOpen, setReserveDialogOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [orderSummaryOpen, setOrderSummaryOpen] = useState(false);
   const [selectedTable, setSelectedTable] = useState<SimpleTable | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<OrderHistoryItem | null>(null);
 
@@ -822,10 +1052,10 @@ export default function SimpleTablesManager({
   };
 
   // Get order details for a table
-  const getOrderForTable = (table: any): OrderHistoryItem | null => {
-    if (!table.current_order_ids || table.current_order_ids.length === 0) return null;
+  const getOrderForTable = (table: SimpleTable): OrderHistoryItem | null => {
+    const orderId = table.current_order_id || table.current_order_ids?.[0];
+    if (!orderId) return null;
     
-    const orderId = table.current_order_ids[0] || table?.current_order_id;
     const orders = JSON.parse(localStorage.getItem("pos_order_history") || "[]");
     return orders.find((order: any) => order.id === orderId) || null;
   };
@@ -841,7 +1071,9 @@ export default function SimpleTablesManager({
             ...order,
             payment: {
               ...order.payment,
-              ...paymentData,
+              method: paymentData.paymentMethod,
+              amount: paymentData.amount,
+              change: paymentData.change,
               captured: true,
               captured_at: new Date().toISOString(),
             },
@@ -850,13 +1082,13 @@ export default function SimpleTablesManager({
         return order;
       });
       localStorage.setItem("pos_order_history", JSON.stringify(updatedOrders));
-        console.log(tableId, orderId, paymentData, 'AAWRWRW')
+
       // Release the table (set to cleaning)
       releaseTable(tableId, orderId);
       
       toast({
-        title: "Table Released",
-        description: `Table has been released and is now being cleaned`,
+        title: "Payment Successful",
+        description: `Payment completed and table released for cleaning`,
       });
     } catch (error) {
       console.error("Error completing payment:", error);
@@ -865,11 +1097,7 @@ export default function SimpleTablesManager({
   };
 
   const handleProcessPayment = async (table: SimpleTable) => {
-        console.log(table.current_order_id, 'TABBkk')
-
-    const order = await retrieveOrder(table?.current_order_id || table?.current_order_ids[0]);
-
-    console.log(order, table.current_order_id, 'TABB')
+    const order = getOrderForTable(table);
     if (!order) {
       toast({
         title: "No Order Found",
@@ -881,6 +1109,21 @@ export default function SimpleTablesManager({
     setSelectedTable(table);
     setSelectedOrder(order);
     setPaymentDialogOpen(true);
+  };
+
+  const handleViewOrder = (table: SimpleTable) => {
+    const order = getOrderForTable(table);
+    if (!order) {
+      toast({
+        title: "No Order Found",
+        description: "No order found for this table",
+        variant: "destructive",
+      });
+      return;
+    }
+    setSelectedTable(table);
+    setSelectedOrder(order);
+    setOrderSummaryOpen(true);
   };
 
   const handleAddTable = (data: Omit<SimpleTable, "id">) => {
@@ -1048,6 +1291,7 @@ export default function SimpleTablesManager({
                     onCancelReservation={handleCancelReservation}
                     onMarkCleaned={handleMarkCleaned}
                     onProcessPayment={handleProcessPayment}
+                    onViewOrder={handleViewOrder}
                   />
                 </div>
               ))}
@@ -1083,6 +1327,15 @@ export default function SimpleTablesManager({
         table={selectedTable}
         order={selectedOrder}
         onPaymentComplete={handlePaymentComplete}
+        region={region}
+      />
+
+      <OrderSummaryDialog
+        open={orderSummaryOpen}
+        onOpenChange={setOrderSummaryOpen}
+        order={selectedOrder}
+        table={selectedTable}
+        region={region}
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

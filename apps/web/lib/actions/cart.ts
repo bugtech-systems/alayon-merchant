@@ -116,10 +116,10 @@ export async function getOrSetCart(countryCode: string): Promise<B2BCart | null>
       revalidateTag(cartCacheTag, "max")
     } catch (error) {
       // Queue update for later sync
-      await queueCartOperation({
-        type: 'update_cart',
-        payload: { cartId: cart.id, region_id: region.id }
-      })
+      // await queueCartOperation({
+      //   type: 'update_cart',
+      //   payload: { cartId: cart.id, region_id: region.id }
+      // })
     }
   }
 
@@ -225,6 +225,42 @@ export async function updateLineItem({
   }
 }
 
+export async function updateLineItemPrice(lineId: string, data: any) {
+    
+  if (!lineId) {
+    throw new Error("Missing lineItem ID when updating line item")
+  }
+
+  const cartId = (data?.cartId || await getCartId())
+
+  if (!cartId) {
+    throw new Error("Missing cart ID when updating line item")
+  }
+
+  const headers = {
+    ...(await getAuthHeaders()),
+  }
+
+  try {
+    console.log({ unit_price: data.customUnitPrice, custom_price: data.customUnitPrice, variant_id: data.variantId, customer_group_id: data.customerGroupId, price_list_id: data.priceListId, quantity: data.quantity }, 'prricee')
+      await sdk.client.fetch(`/dashboard/carts/${data?.cartId}/line-items/${lineId}/custom`, {
+      method: "POST",
+      headers,
+      body: { unit_price: data.customUnitPrice, custom_price: data.customUnitPrice, variant_id: data.variantId, customer_group_id: data.customerGroupId, price_list_id: data.priceListId, quantity: data.quantity }
+    });
+
+
+  } catch (error) {
+    console.log(error, "ERRR")
+    // await queueCartOperation({
+    //   type: 'update_item',
+    //   payload: { cartId, lineId, quantity: data.quantity }
+    // })
+    // await updateOfflineCartItem(lineId, data.quantity)
+    medusaError(error)
+  }
+}
+
 export async function deleteLineItem(lineId: string) {
   if (!lineId) {
     throw new Error("Missing lineItem ID when deleting line item")
@@ -313,7 +349,7 @@ async function getOfflineCart(): Promise<any> {
 
 async function saveOfflineCart(cart: any): Promise<void> {
   if (typeof window === 'undefined') return
-  localStorage.setItem(LOCAL_CART_KEY, JSON.stringify(cart))
+  // localStorage.setItem(LOCAL_CART_KEY, JSON.stringify(cart))
 }
 
 async function createOfflineCart(regionId: string, companyId?: string): Promise<any> {
@@ -383,7 +419,7 @@ async function queueCartOperation(operation: Omit<QueuedCartOperation, 'id' | 't
     retryCount: 0
   }
   queue.push(newOperation)
-  localStorage.setItem(CART_QUEUE_KEY, JSON.stringify(queue))
+  // localStorage.setItem(CART_QUEUE_KEY, JSON.stringify(queue))
 }
 
 async function removeFromCartQueue(operationId: string): Promise<void> {

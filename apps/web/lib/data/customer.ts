@@ -302,6 +302,36 @@ export async function transferCart() {
   return;
 }
 
+
+export async function assignCustomerToCart(id: any, customer: any) {
+  const cartId = id || await getCartId();
+  if (!cartId || !customer) {
+    return
+  }
+
+
+
+  await sdk.client.fetch(
+      `/dashboard/carts/${cartId}/customer`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await getAuthHeaders()),
+        },
+        body: {
+          customer_id: customer.id,
+        }
+      }
+    );
+    
+
+  const cartCacheTag = await getCacheTag("cart")
+
+  revalidateTag(cartCacheTag, "max")
+  return;
+}
+
 export const addCustomerAddress = async (
   _currentState: unknown,
   formData: FormData
@@ -394,3 +424,20 @@ export const saveCustomerToList = async (phone: any) => {
     console.log(newCustomer, 'CUSTOMER')
     return newCustomer
 }
+
+export const listCustomerGroupCustomers = async (groupId: any) => {
+
+
+  const headers = {
+    ...(await getAuthHeaders()),
+  }
+
+     return await sdk.client.fetch(`/dashboard/customers?customer_group_id=${groupId}`, {
+        method: "GET",
+        headers,
+      });
+}
+
+
+
+    
