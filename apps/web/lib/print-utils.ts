@@ -98,7 +98,7 @@ export const generateMobilePrintUrl = (data: PrintOrderData): string => {
   receiptText += `${DOUBLE_SEPARATOR}\n`;
   receiptText += `\n`;
   receiptText += `${centerText("016 Dadison Street")}\n`;
-  receiptText += `${centerText("San Antonio, Pasig City")}\n`;
+  receiptText += `${centerText("Barangay 56, Tacloban City")}\n`;
   receiptText += `${centerText("Tel: (02) 8123 4567")}\n`;
   receiptText += `\n`;
   receiptText += `${THIN_SEPARATOR}\n`;

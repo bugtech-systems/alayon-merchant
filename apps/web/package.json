@@ -49,6 +49,7 @@
     "framer-motion": "^12.38.0",
     "geist": "^1.7.1",
     "gsap": "^3.15.0",
+    "idb": "^8.0.3",
     "jose": "^6.2.3",
     "leaflet": "^1.9.4",
     "leaflet-control-geocoder": "^3.3.1",

@@ -30,10 +30,96 @@ import { cn } from "@/lib/utils";
 interface PrintDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  orderData: PrintOrderData;
+  cart: any;
 }
 
-export function PrintDialog({ open, onOpenChange, orderData }: PrintDialogProps) {
+function formatCartToPrintData(cart: any): any {
+  // Calculate tax rate and amount if available
+  const taxRate = cart.tax_rate || 0;
+  const taxTotal = cart.tax_total;
+  const subtotal = cart.subtotal ;
+  
+  // Calculate tax rate percentage
+  let calculatedTaxRate = 0;
+  if (subtotal > 0 && taxTotal > 0) {
+    calculatedTaxRate = taxTotal / subtotal;
+  }
+
+  // Format items
+  const items = cart.items.map((item) => ({
+    id: item.id,
+    name: item.title,
+    quantity: item.quantity,
+    price: item.unit_price / 100, // Using 'price' as expected by print function
+    unit_price: item.unit_price / 100,
+    total: item.total / 100,
+    variant: item.variant?.title || item.variant?.sku,
+    notes: item.note,
+    is_giftcard: item.is_giftcard || false,
+  }));
+
+  // Extract customer information
+  const customerName = cart.customer 
+    ? `${cart.customer.first_name || ''} ${cart.customer.last_name || ''}`.trim()
+    : undefined;
+
+  // Determine placement type
+  let placementType: "table" | "takeaway" | "delivery" = "takeaway";
+  let placementName = "Takeaway";
+  
+  if (cart.metadata?.placement_type) {
+    placementType = cart.metadata.placement_type as "table" | "takeaway" | "delivery";
+    placementName = cart.metadata.placement_name as string;
+  } else if (cart.shipping_methods && cart.shipping_methods.length > 0) {
+    placementType = "delivery";
+    placementName = cart.shipping_methods[0].shipping_option?.name || "Delivery";
+  }
+
+  // Get payment method
+  let paymentMethod = "Cash";
+  if (cart.payment_session?.provider_id) {
+    const provider = cart.payment_session.provider_id;
+    if (provider === "cash") paymentMethod = "Cash";
+    else if (provider.includes("stripe")) paymentMethod = "Card";
+    else if (provider === "gcash") paymentMethod = "GCash";
+    else paymentMethod = provider.charAt(0).toUpperCase() + provider.slice(1);
+  }
+
+  return {
+    merchant: {
+      name: "BELLY BYTES",
+      address: "016 Dadison Street, Barangay 56, Tacloban City",
+      phone: "(02) 8123 4567",
+    },
+    orderNumber: cart.id.slice(-8).toUpperCase(),
+    date: new Date(cart.updated_at || cart.created_at),
+    customer: customerName ? {
+      name: customerName,
+      email: cart.customer?.email,
+      phone: cart.customer?.phone,
+    } : undefined,
+    placement: {
+      type: placementType,
+      name: placementName,
+    },
+    items: items,
+    subtotal: subtotal,
+    tax: taxTotal,
+    taxRate: calculatedTaxRate,
+    discount_total: cart.discount_total / 100,
+    shipping_total: cart.shipping_total ? cart.shipping_total / 100 : 0,
+    total: cart.total,
+    paymentMethod: paymentMethod,
+    notes: cart.metadata?.notes as string,
+    autoCut: true, // Auto cut paper after printing
+    copies: 1, // Number of copies to print
+  };
+}
+
+// Example usage:
+
+export function PrintDialog({ open, onOpenChange, cart }: PrintDialogProps) {
+  const orderData = formatCartToPrintData(cart)
   const [printType, setPrintType] = useState<"receipt" | "kitchen">("receipt");
   const [printerSettings, setPrinterSettings] = useState<PrinterSettings>({
     paperSize: "58mm",

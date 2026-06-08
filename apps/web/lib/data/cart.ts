@@ -22,6 +22,7 @@ import {
 import { retrieveCustomer } from "@/lib/data/customer"
 import { getRegion } from "@/lib/data/regions"
 import { DeliveryDTO } from "../types"
+import { retrieveUser } from "./users"
 
 export async function createDelivery(cartId: string, company_id: any) {
   const { delivery } = await sdk.client.fetch<{
@@ -40,7 +41,11 @@ export async function createDelivery(cartId: string, company_id: any) {
   return delivery;
 }
 
-export async function retrieveCart(id?: string) {
+export async function retrieveCart(
+  id?: string, 
+  customerGroupId?: string,
+  priceListId?: string
+) {
   const cartId = (id || (await getCartId()))
   if (!cartId) {
     return null
@@ -54,7 +59,8 @@ export async function retrieveCart(id?: string) {
     ...(await getCacheOptions("carts")),
   }
 
-  return await sdk.client
+  // Fetch the cart first
+  const { cart } = await sdk.client
     .fetch<HttpTypes.StoreCartResponse>(`/store/carts/${cartId}`, {
       credentials: "include",
       method: "GET",
@@ -65,12 +71,152 @@ export async function retrieveCart(id?: string) {
       headers,
       next,
     })
-    .then(({ cart }) => {
-      return cart as B2BCart
-    })
     .catch(() => {
-      return null
+      return { cart: null }
     })
+
+  if (!cart) {
+    return null
+  }
+
+  // If price list ID is provided, fetch variant prices with customer group context
+  if (priceListId && cart.items?.length > 0) {
+    try {
+      // Extract variant IDs from cart items
+      const variantIds = cart.items
+        .map(item => item.variant_id)
+        .filter(Boolean) as string[]
+
+      if (variantIds.length > 0) {
+        // Fetch prices for variants using specific price list and customer group
+        const pricesResponse = await sdk.client.fetch(`/store/price-lists/${priceListId}/variants/prices`, {
+          method: "POST",
+          headers: {
+            ...headers,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            variant_ids: variantIds,
+            customer_group_id: customerGroupId,
+            region_id: cart.region_id,
+            currency_code: cart.currency_code,
+          }),
+        })
+
+        // Create a map of variant prices
+        const variantPriceMap = new Map()
+        if (pricesResponse.prices) {
+          pricesResponse.prices.forEach((price: any) => {
+            variantPriceMap.set(price.variant_id, {
+              amount: price.amount,
+              original_amount: price.original_amount,
+              calculated_price: price.calculated_price,
+              price_list_id: price.price_list_id,
+              price_list_type: price.price_list_type,
+            })
+          })
+        }
+
+        // Update cart items with customer group pricing
+        cart.items = cart.items.map((item: any) => {
+          const variantPrice = variantPriceMap.get(item.variant_id)
+          if (variantPrice) {
+            // Calculate unit price based on quantity if min/max quantity rules apply
+            let unitPrice = variantPrice.amount
+            let originalUnitPrice = variantPrice.original_amount || variantPrice.amount
+
+            // Apply quantity-based pricing if available
+            if (variantPrice.quantity_prices && variantPrice.quantity_prices.length > 0) {
+              const applicablePrice = variantPrice.quantity_prices
+                .sort((a: any, b: any) => b.min_quantity - a.min_quantity)
+                .find((qp: any) => item.quantity >= qp.min_quantity)
+              
+              if (applicablePrice) {
+                unitPrice = applicablePrice.amount
+                originalUnitPrice = applicablePrice.original_amount || applicablePrice.amount
+              }
+            }
+
+            return {
+              ...item,
+              unit_price: unitPrice,
+              original_unit_price: originalUnitPrice,
+              price_list_id: variantPrice.price_list_id,
+              price_list_type: variantPrice.price_list_type,
+              is_customer_group_pricing: true,
+              customer_group_id: customerGroupId,
+            }
+          }
+          return item
+        })
+
+        // Recalculate cart totals with new pricing
+        cart.total = calculateCartTotal(cart.items, cart.shipping_methods, cart.discounts)
+        cart.subtotal = calculateSubtotal(cart.items)
+        cart.tax_total = await calculateTaxTotal(cart)
+        
+        // Add metadata about applied pricing
+        cart.metadata = {
+          ...cart.metadata,
+          applied_price_list_id: priceListId,
+          applied_customer_group_id: customerGroupId,
+          pricing_applied_at: new Date().toISOString(),
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching customer group pricing:", error)
+      // Fall back to regular pricing
+      cart.metadata = {
+        ...cart.metadata,
+        pricing_error: error.message,
+        fallback_to_regular_pricing: true,
+      }
+    }
+  }
+
+  return cart as B2BCart
+}
+
+
+
+
+// Helper function to calculate subtotal
+function calculateSubtotal(items: any[]): number {
+  return items.reduce((total, item) => {
+    return total + (item.unit_price * item.quantity)
+  }, 0)
+}
+
+// Helper function to calculate cart total
+function calculateCartTotal(items: any[], shippingMethods: any[] = [], discounts: any[] = []): number {
+  let subtotal = calculateSubtotal(items)
+  
+  // Add shipping costs
+  const shippingTotal = shippingMethods.reduce((total, method) => {
+    return total + (method.amount || 0)
+  }, 0)
+  
+  // Apply discounts
+  const discountTotal = discounts.reduce((total, discount) => {
+    if (discount.type === 'percentage') {
+      return total + (subtotal * (discount.value / 100))
+    } else if (discount.type === 'fixed') {
+      return total + discount.value
+    }
+    return total
+  }, 0)
+  
+  return subtotal + shippingTotal - discountTotal
+}
+
+// Helper function to calculate tax total (simplified)
+async function calculateTaxTotal(cart: any): Promise<number> {
+  // Implement your tax calculation logic here
+  // This could call your tax provider or use region tax rates
+  if (!cart.region?.tax_rate) return 0
+  
+  const subtotal = calculateSubtotal(cart.items)
+  return subtotal * (cart.region.tax_rate / 100)
 }
 
 export async function retrieveCompanyCart(id?: string) {
@@ -110,23 +256,67 @@ export async function retrieveCompanyCart(id?: string) {
     return company
 }
 
-export async function getOrSetCart(countryCode: string = 'ph', companyId?: string) {
-  let cart = await companyId ? await retrieveCompanyCart(companyId) : await retrieveCart() as any;
-  const region = await getRegion(countryCode)
-  const session_id = await getCachedId()
-  if (!region) {
-    throw new Error(`Region not found for country code: ${countryCode}`)
-  }
+export async function capturePayment(data: any) {
+
 
   const headers = {
     ...(await getAuthHeaders()),
   }
 
+  const next = {
+    ...(await getCacheOptions("order")),
+  }
+
+  let order = await sdk.client
+    .fetch<any>(`/dashboard/capture-payment`, {
+      credentials: "include",
+      method: "POST",
+      body: data,
+      headers,
+      next,
+    })
+    .then(({ order }) => {
+      return order as any
+    })
+    .catch(() => {
+      return null
+    })
+
+
+    return order
+}
+
+export async function getOrSetCart(id: any) {
+  let user = await retrieveUser();
+
+  const region = await getRegion('ph')
+  const session_id = (user?.id || await getCachedId())
+
+
+  if (!region) {
+    throw new Error(`Region not found for country code: ${region?.county_code}`)
+  }
+
+    let priceListId = user?.metadata?.role === 'company' 
+        ? user.employee?.company?.price_list_id 
+        : user?.driver?.price_list_id;
+    let customerGroupId = user?.metadata?.role === 'company' 
+        ? user.employee?.company?.customer_group_id 
+        : user?.driver?.customer_group_id;
+  
+  let cart = await retrieveCart(id, customerGroupId, priceListId) as any;
+
+  const headers = {
+    ...(await getAuthHeaders()),
+  }
+
+
+  console.log(user, "USER")
   if (!cart) {
     const body = {
       region_id: region.id,
       metadata: {
-        company_id: companyId,
+        seller_id: user?.id,
         session_id
       },
     }
@@ -174,46 +364,46 @@ export async function updateCart(data: HttpTypes.StoreUpdateCart) {
     .catch(medusaError)
 }
 
-// export async function addToCart({
-//   variantId,
-//   quantity,
-//   countryCode = 'ph',
-// }: {
-//   variantId: string
-//   quantity: number
-//   countryCode: string
-// }) {
-//   if (!variantId) {
-//     throw new Error("Missing variant ID when adding to cart")
-//   }
+export async function addToCart({
+  variantId,
+  quantity,
+  countryCode = 'ph',
+}: {
+  variantId: string
+  quantity: number
+  countryCode: string
+}) {
+  if (!variantId) {
+    throw new Error("Missing variant ID when adding to cart")
+  }
   
-//   const cart = await getOrSetCart(countryCode)
-//   if (!cart) {
-//     throw new Error("Error retrieving or creating cart")
-//   }
+  const cart = await getOrSetCart(countryCode)
+  if (!cart) {
+    throw new Error("Error retrieving or creating cart")
+  }
 
-//   const headers = {
-//     ...(await getAuthHeaders()),
-//   }
+  const headers = {
+    ...(await getAuthHeaders()),
+  }
 
-//   await sdk.store.cart
-//     .createLineItem(
-//       cart.id,
-//       {
-//         variant_id: variantId,
-//         quantity,
-//       },
-//       {},
-//       headers
-//     )
-//     .then(async () => {
-//       const fullfillmentCacheTag = await getCacheTag("fulfillment")
-//       revalidateTag(fullfillmentCacheTag, "max")
-//       const cartCacheTag = await getCacheTag("carts")
-//       revalidateTag(cartCacheTag, "max")
-//     })
-//     .catch(medusaError)
-// }
+  await sdk.store.cart
+    .createLineItem(
+      cart.id,
+      {
+        variant_id: variantId,
+        quantity,
+      },
+      {},
+      headers
+    )
+    .then(async () => {
+      const fullfillmentCacheTag = await getCacheTag("fulfillment")
+      revalidateTag(fullfillmentCacheTag, "max")
+      const cartCacheTag = await getCacheTag("carts")
+      revalidateTag(cartCacheTag, "max")
+    })
+    .catch(medusaError)
+}
 
 export async function addToCartBulk({
   lineItems,
@@ -265,23 +455,20 @@ export async function addToCartBulk({
 
 export async function updateLineItem({
   lineId,
-  data,
-  company
+  data
 }: {
   lineId: string
   data: HttpTypes.StoreUpdateCartLineItem
-  company?: any
 }) {
 
-  console.log(company,'UPDADATE LINE')
   if (!lineId) {
     throw new Error("Missing lineItem ID when updating line item")
   }
+  let user = await retrieveUser();
 
 
-
-  const cart = await getOrSetCart('ph', company?.id)
-  console.log(cart, company, 'compaaanyyy iddd')
+  const cart = await getOrSetCart('ph', user?.id)
+  console.log(cart, user, 'compaaanyyy iddd')
 
   if (!cart?.id) {
     throw new Error("Missing cart ID when updating line item")
@@ -292,7 +479,6 @@ export async function updateLineItem({
   }
 
   await setCartId(cart?.id)
-  await setCompanyId(company?.id)
   await sdk.store.cart
     .updateLineItem(cart?.id, lineId, data, {}, headers)
     .then(async () => {
@@ -365,26 +551,41 @@ export async function setShippingMethod({
     .catch(medusaError)
 }
 
-export async function initiatePaymentSession(
-  cart: B2BCart,
-  data: {
-    provider_id: string
-    context?: Record<string, unknown>
-  }
-) {
-  const headers = {
-    ...(await getAuthHeaders()),
-  }
 
-  return sdk.store.payment
-    .initiatePaymentSession(cart as StoreCart, data, {}, headers)
-    .then(async (resp) => {
-      const cartCacheTag = await getCacheTag("carts")
-      revalidateTag(cartCacheTag, "max")
-      return resp
-    })
-    .catch(medusaError)
+
+export async function initiatePaymentSession(
+  cart: any,
+  data: {
+    provider_id: string;
+    context?: Record<string, unknown>;
+  }
+): Promise<any> {
+  const headers = await getAuthHeaders();
+  
+  try {
+    const response = await sdk.store.payment.initiatePaymentSession(
+      cart,
+      data,
+      {},
+      headers
+    );
+    
+    // Revalidate cart cache if needed
+    const cartCacheTag = `cart-${cart?.id}`;
+    revalidateTag(cartCacheTag, "max");
+    
+    return response;
+  } catch (error) {
+    console.error("Failed to initiate payment session:", error);
+    throw medusaError(error);
+  }
 }
+
+
+
+
+
+
 
 export async function applyPromotions(codes: string[]) {
   const cartId = await getCartId()

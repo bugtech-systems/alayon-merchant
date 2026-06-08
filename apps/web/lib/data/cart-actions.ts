@@ -1,12 +1,14 @@
+'use server'
 // app/lib/data/cart-actions.ts
 
-import { getAuthHeaders, getCacheOptions, getCartId, setCartId } from "@/lib/data/cookies"
+import { getAuthHeaders, getCacheOptions, getCacheTag, getCartId, setCartId } from "@/lib/data/cookies"
 import { getRegion } from "@/lib/data/regions"
 import { sdk } from "@/lib/config"
-import { getCacheTag } from "../data/cookies"
-import { revalidateTag } from "next/cache"
-import medusaError from "../util/medusa-error copy"
+import { getLocale } from "./locale-actions"
 import { HttpTypes } from "@medusajs/types"
+import medusaError from "../util/medusa-error"
+import { revalidateTag } from "next/cache"
+import { listRegions, retrieveRegion } from "../actions/regions"
 
 export interface AddToCartWithPricingParams {
   variantId: string
@@ -18,6 +20,7 @@ export interface AddToCartWithPricingParams {
   customPrice?: number
   metadata?: Record<string, any>
   applyQuantityPricing?: boolean
+  regionId?: any
 }
 
 export interface UpdateLineItemWithPricingParams {
@@ -28,16 +31,15 @@ export interface UpdateLineItemWithPricingParams {
 }
 
 // Enhanced retrieve cart that includes custom pricing info
-export async function retrieveCart(
-  cartId?: string, 
-  fields?: string,
-  customerGroupId?: string
-) {
-  const id = cartId || (await getCartId())
-  fields ??=
-    "*items, *region, *items.product, *items.variant, *items.thumbnail, *items.metadata, +items.total, *promotions, +shipping_methods.name, *metadata"
+// lib/data/cart.ts (updated retrieveCart function)
 
-  if (!id) {
+export async function retrieveCart(
+  id?: string, 
+  customerGroupId?: string,
+  priceListId?: string
+) {
+  const cartId = (id || (await getCartId()))
+  if (!cartId) {
     return null
   }
 
@@ -49,28 +51,73 @@ export async function retrieveCart(
     ...(await getCacheOptions("carts")),
   }
 
-  try {
-    const { cart } = await sdk.client.fetch<HttpTypes.StoreCartResponse>(
-      `/store/carts/${id}`,
-      {
-        method: "GET",
-        query: {
-          fields,
-        },
-        headers,
-        next,
-        cache: "force-cache",
-      }
-    )
+  // Fetch the cart first
+  const { cart } = await sdk.client
+    .fetch<HttpTypes.StoreCartResponse>(`/store/carts/${cartId}`, {
+      credentials: "include",
+      method: "GET",
+      query: {
+        fields:
+          "*items, *region, *items.product, *items.variant, +items.thumbnail, +items.metadata, *promotions, *company, *company.approval_settings, *customer, *approvals, +completed_at, *approval_status",
+      },
+      headers,
+      next,
+    })
+    .catch(() => {
+      return { cart: null }
+    })
+console.log(cart)
+  if (!cart) {
+    return null
+  }
 
-    // If customer group is provided and cart has items, fetch custom pricing
+  // Fetch custom pricing for cart items
     if (customerGroupId && cart?.items?.length) {
       const enrichedCart = await enrichCartWithCustomPricing(cart, customerGroupId)
       return enrichedCart
     }
 
-    return cart
-  } catch {
+  return cart as B2BCart
+}
+
+// Function to fetch pricing for a single variant (for product cards)
+export async function fetchVariantPricing(
+  variantId: string,
+  quantity: number = 1,
+  customerGroupId?: string,
+  priceListId?: string,
+  currencyCode: string = "PHP"
+) {
+  try {
+    const headers = await getAuthHeaders()
+    
+    // Use the same custom pricing endpoint
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL}/api/store/carts/custom-pricing`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...headers,
+        },
+        body: JSON.stringify({
+          items: [{ variant_id: variantId, quantity }],
+          customer_group_id: customerGroupId,
+          price_list_id: priceListId,
+          currency_code: currencyCode,
+        }),
+      }
+    )
+
+    const data = await response.json()
+    
+    if (data.success && data.prices && data.prices[0]) {
+      return data.prices[0]
+    }
+    
+    return null
+  } catch (error) {
+    console.error("Error fetching variant pricing:", error)
     return null
   }
 }
@@ -88,21 +135,13 @@ async function enrichCartWithCustomPricing(
   try {
     // Fetch custom pricing for all items in cart
     const response = await sdk.client.fetch(
-      `/store/carts/${cart.id}/custom-pricing`,
+      `/dashboard/carts/${cart.id}/pricing-details`,
       {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          customer_group_id: customerGroupId,
-          price_list_id: priceListId,
-          items: cart.items.map(item => ({
-            variant_id: item.variant_id,
-            quantity: item.quantity,
-          })),
-        }),
+        method: "GET",
+        headers
       }
     )
-
+    console.log(response, 'ressp')
     // Create price map for quick lookup
     const priceMap = new Map()
     response.prices.forEach((price: any) => {
@@ -195,7 +234,7 @@ export async function getOrSetCart(
     await setCartId(cart.id)
 
     const cartCacheTag = await getCacheTag("carts")
-    revalidateTag(cartCacheTag)
+    revalidateTag(cartCacheTag, "max")
   }
 
   if (cart && cart?.region_id !== region.id) {
@@ -213,7 +252,7 @@ export async function getOrSetCart(
       headers
     )
     const cartCacheTag = await getCacheTag("carts")
-    revalidateTag(cartCacheTag)
+    revalidateTag(cartCacheTag, "max")
   }
 
   // If customer group is provided but not in cart metadata, update it
@@ -231,7 +270,7 @@ export async function getOrSetCart(
       headers
     )
     const cartCacheTag = await getCacheTag("carts")
-    revalidateTag(cartCacheTag)
+    revalidateTag(cartCacheTag, "max")
   }
 
   return cart
@@ -249,6 +288,7 @@ export async function addToCartWithPricing(params: AddToCartWithPricingParams) {
     customPrice,
     metadata = {},
     applyQuantityPricing = true,
+    regionId
   } = params
 
   if (!variantId) {
@@ -257,7 +297,6 @@ export async function addToCartWithPricing(params: AddToCartWithPricingParams) {
 
   // Get or create cart with customer group context
   const cart = await getOrSetCart(countryCode, customerGroupId, priceListId)
-
   if (!cart) {
     throw new Error("Error retrieving or creating cart")
   }
@@ -265,18 +304,18 @@ export async function addToCartWithPricing(params: AddToCartWithPricingParams) {
   const headers = {
     ...(await getAuthHeaders()),
   }
-
   try {
     // If custom pricing is needed, use the enhanced endpoint
     if (customerGroupId || priceListId || customPrice) {
       const response = await sdk.client.fetch(
-        `/store/carts/${cart.id}/line-items/custom`,
+        `/dashboard/carts/${cart.id}/line-items/custom`,
         {
           method: "POST",
           headers,
-          body: JSON.stringify({
+          body: {
             variant_id: variantId,
             quantity,
+            region_id: regionId,
             customer_group_id: customerGroupId,
             price_list_id: priceListId,
             custom_price: customPrice,
@@ -286,16 +325,15 @@ export async function addToCartWithPricing(params: AddToCartWithPricingParams) {
               ...metadata,
               added_with_custom_pricing: true,
             },
-          }),
+          },
         }
       )
 
       // Invalidate cache
       const cartCacheTag = await getCacheTag("carts")
-      revalidateTag(cartCacheTag)
+      revalidateTag(cartCacheTag, "max")
       const fulfillmentCacheTag = await getCacheTag("fulfillment")
-      revalidateTag(fulfillmentCacheTag)
-
+      revalidateTag(fulfillmentCacheTag, "max")
       return {
         success: true,
         cart: response.cart,
@@ -308,7 +346,7 @@ export async function addToCartWithPricing(params: AddToCartWithPricingParams) {
         {
           variant_id: variantId,
           quantity,
-          metadata,
+          ...{region_id: regionId, ...metadata},
         },
         {},
         headers
@@ -316,9 +354,9 @@ export async function addToCartWithPricing(params: AddToCartWithPricingParams) {
 
       // Invalidate cache
       const cartCacheTag = await getCacheTag("carts")
-      revalidateTag(cartCacheTag)
+      revalidateTag(cartCacheTag, "max")
       const fulfillmentCacheTag = await getCacheTag("fulfillment")
-      revalidateTag(fulfillmentCacheTag)
+      revalidateTag(fulfillmentCacheTag, "max")
 
       return {
         success: true,
@@ -357,24 +395,23 @@ export async function updateLineItemWithPricing(params: UpdateLineItemWithPricin
 
     // Use enhanced endpoint to update with pricing re-evaluation
     const response = await sdk.client.fetch(
-      `/store/carts/${cartId}/line-items/${lineId}/custom`,
+      `/dashboard/carts/${cartId}/line-items/${lineId}/custom`,
       {
         method: "PUT",
         headers,
-        body: JSON.stringify({
+        body: {
           quantity,
           customer_group_id: effectiveCustomerGroupId,
           price_list_id: effectivePriceListId,
           recalculate_price: true,
-        }),
+        },
       }
     )
-
     // Invalidate cache
     const cartCacheTag = await getCacheTag("carts")
-    revalidateTag(cartCacheTag)
+    revalidateTag(cartCacheTag, "max")
     const fulfillmentCacheTag = await getCacheTag("fulfillment")
-    revalidateTag(fulfillmentCacheTag)
+    revalidateTag(fulfillmentCacheTag, "max")
 
     return {
       success: true,
@@ -420,11 +457,11 @@ export async function addMultipleItemsToCartWithPricing(
 
   try {
     const response = await sdk.client.fetch(
-      `/store/carts/${cart.id}/line-items/bulk`,
+      `/dashboard/carts/${cart.id}/line-items/bulk`,
       {
         method: "POST",
         headers,
-        body: JSON.stringify({
+        body: {
           items: items.map(item => ({
             variant_id: item.variantId,
             quantity: item.quantity,
@@ -435,15 +472,15 @@ export async function addMultipleItemsToCartWithPricing(
           company_id: companyId,
           price_list_id: priceListId,
           apply_bulk_pricing: applyBulkPricing,
-        }),
+        },
       }
     )
 
     // Invalidate cache
     const cartCacheTag = await getCacheTag("carts")
-    revalidateTag(cartCacheTag)
+    revalidateTag(cartCacheTag, "max")
     const fulfillmentCacheTag = await getCacheTag("fulfillment")
-    revalidateTag(fulfillmentCacheTag)
+    revalidateTag(fulfillmentCacheTag, "max")
 
     return {
       success: true,
@@ -499,7 +536,7 @@ export async function applyCustomPricingToCart(
 
   try {
     const response = await sdk.client.fetch(
-      `/store/carts/${cartId}/apply-custom-pricing`,
+      `/dashboard/carts/${cartId}/apply-custom-pricing`,
       {
         method: "POST",
         headers,
@@ -540,7 +577,7 @@ export async function getCartWithPricingDetails(
 
   try {
     const response = await sdk.client.fetch(
-      `/store/carts/${id}/pricing-details`,
+      `/dashboard/carts/${id}/pricing-details`,
       {
         method: "GET",
         headers,
@@ -573,7 +610,7 @@ export async function updateCartMetadata(metadata: Record<string, any>) {
     .update(cartId, { metadata }, {}, headers)
     .then(async ({ cart }) => {
       const cartCacheTag = await getCacheTag("carts")
-      revalidateTag(cartCacheTag)
+      revalidateTag(cartCacheTag, "max")
       return cart
     })
     .catch(medusaError)

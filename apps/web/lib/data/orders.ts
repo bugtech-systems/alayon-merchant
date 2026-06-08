@@ -339,7 +339,7 @@ export const retrieveOrder = async (id: string): Promise<DashboardOrder | null> 
     const next = await getCacheOptions("orders");
 
     const response = await sdk.client.fetch<any>(
-      `/dashboard/orders/${id}`,
+      `/store/orders/${id}`,
       {
         method: "GET",
         headers,

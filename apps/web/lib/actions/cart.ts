@@ -1,13 +1,11 @@
+// lib/actions/cart.ts
 "use server"
 
-import { sdk } from "@/lib/medusa/config"
+import { sdk } from "@/lib/config"
 import medusaError from "@/lib/medusa/util/medusa-error"
-import { StoreApprovalResponse } from "@/types/approval"
 import { B2BCart } from "@/types/global"
-import { HttpTypes, StoreCart } from "@medusajs/types"
-import { track } from "@vercel/analytics/server"
+import { HttpTypes } from "@medusajs/types"
 import { revalidateTag } from "next/cache"
-import { redirect } from "next/navigation"
 import {
   getAuthHeaders,
   getCacheOptions,
@@ -19,14 +17,28 @@ import {
 import { retrieveCustomer } from "./customer"
 import { getRegion } from "./regions"
 import { getCachedId } from "../data/cookies"
-import { updateCart } from "../medusa/data/cart"
 
-export async function retrieveCart(id?: string) {
+// Offline queue for cart operations
+interface QueuedCartOperation {
+  id: string
+  type: 'add_item' | 'update_item' | 'remove_item' | 'update_cart'
+  payload: any
+  timestamp: number
+  retryCount: number
+}
+
+const CART_QUEUE_KEY = 'offline_cart_queue'
+const LOCAL_CART_KEY = 'offline_cart'
+
+export async function retrieveCart(id?: string): Promise<B2BCart | null> {
   const cartId = id || (await getCartId())
   
-
-
   if (!cartId) {
+    // Try to load from offline storage
+    const offlineCart = await getOfflineCart()
+    if (offlineCart) {
+      return offlineCart as B2BCart
+    }
     return null
   }
 
@@ -38,26 +50,29 @@ export async function retrieveCart(id?: string) {
     ...(await getCacheOptions("carts")),
   }
 
-  return await sdk.client
-    .fetch<HttpTypes.StoreCartResponse>(`/store/carts/${cartId}`, {
+  try {
+    const { cart } = await sdk.client.fetch<HttpTypes.StoreCartResponse>(`/store/carts/${cartId}`, {
       credentials: "include",
       method: "GET",
       query: {
-        fields:
-          "*items, *region, *items.product, *items.variant, +items.thumbnail, +items.metadata, *promotions, *company, *company.approval_settings, *customer, *approvals, +completed_at, *approval_status, +shipping_address.metadata",
+        fields: "*items, *region, *items.product, *items.variant, +items.thumbnail, +items.metadata, *promotions, *company, *company.approval_settings, *customer, *approvals, +completed_at, *approval_status, +shipping_address.metadata",
       },
       headers,
       next,
     })
-    .then(({ cart }) => {
-      return cart as B2BCart
-    })
-    .catch(() => {
-      return null
-    })
+    
+    // Sync offline cart if exists
+    await syncOfflineCartToServer(cart as B2BCart)
+    
+    return cart as B2BCart
+  } catch (error) {
+    // Return cached offline cart if available
+    const offlineCart = await getOfflineCart()
+    return offlineCart as B2BCart || null
+  }
 }
 
-export async function getOrSetCart(countryCode: string) {
+export async function getOrSetCart(countryCode: string): Promise<B2BCart | null> {
   let cart = await retrieveCart()
   const region = await getRegion(countryCode)
   const customer = await retrieveCustomer()
@@ -71,95 +86,45 @@ export async function getOrSetCart(countryCode: string) {
   }
 
   if (!cart) {
-    const body = {
-      region_id: region.id,
-      metadata: {
-        company_id: customer?.employee?.company_id,
-      },
+    try {
+      const body = {
+        region_id: region.id,
+        metadata: {
+          company_id: customer?.employee?.company_id,
+        },
+      }
+
+      const cartResp = await sdk.store.cart.create(body, {}, headers)
+      setCartId(cartResp.cart.id)
+
+      const cartCacheTag = await getCacheTag("carts")
+      revalidateTag(cartCacheTag, "max")
+
+      cart = await retrieveCart()
+    } catch (error) {
+      // Create offline cart when offline
+      const offlineCart = await createOfflineCart(region.id, customer?.employee?.company_id)
+      await saveOfflineCart(offlineCart)
+      return offlineCart as B2BCart
     }
-
-    const cartResp = await sdk.store.cart.create(body, {}, headers)
-
-    setCartId(cartResp.cart.id)
-
-    const cartCacheTag = await getCacheTag("carts")
-    revalidateTag(cartCacheTag, "max")
-
-    cart = await retrieveCart()
   }
 
   if (cart && cart?.region_id !== region.id) {
-    await sdk.store.cart.update(cart.id, { region_id: region.id }, {}, headers)
-    const cartCacheTag = await getCacheTag("carts")
-    revalidateTag(cartCacheTag, "max")
+    try {
+      await sdk.store.cart.update(cart.id, { region_id: region.id }, {}, headers)
+      const cartCacheTag = await getCacheTag("carts")
+      revalidateTag(cartCacheTag, "max")
+    } catch (error) {
+      // Queue update for later sync
+      await queueCartOperation({
+        type: 'update_cart',
+        payload: { cartId: cart.id, region_id: region.id }
+      })
+    }
   }
 
   return cart
 }
-
-// export async function updateCart(data: HttpTypes.StoreUpdateCart) {
-//   const cartId = await getCartId()
-
-//   if (!cartId) {
-//     throw new Error("No existing cart found, please create one before updating")
-//   }
-
-//   const headers = {
-//     ...(await getAuthHeaders()),
-//   }
-
-//   return sdk.store.cart
-//     .update(cartId, data, {}, headers)
-//     .then(async ({ cart }) => {
-//       const fullfillmentCacheTag = await getCacheTag("fulfillment")
-//       revalidateTag(fullfillmentCacheTag, "max")
-//       const cartCacheTag = await getCacheTag("carts")
-//       revalidateTag(cartCacheTag, "max")
-//       return cart
-//     })
-//     .catch(medusaError)
-// }
-
-// export async function addToCart({
-//   variantId,
-//   quantity,
-//   countryCode,
-// }: {
-//   variantId: string
-//   quantity: number
-//   countryCode: string
-// }) {
-//   if (!variantId) {
-//     throw new Error("Missing variant ID when adding to cart")
-//   }
-
-//   const cart = await getOrSetCart(countryCode)
-//   if (!cart) {
-//     throw new Error("Error retrieving or creating cart")
-//   }
-
-//   const headers = {
-//     ...(await getAuthHeaders()),
-//   }
-
-//   await sdk.store.cart
-//     .createLineItem(
-//       cart.id,
-//       {
-//         variant_id: variantId,
-//         quantity,
-//       },
-//       {},
-//       headers
-//     )
-//     .then(async () => {
-//       const fullfillmentCacheTag = await getCacheTag("fulfillment")
-//       revalidateTag(fullfillmentCacheTag, "max")
-//       const cartCacheTag = await getCacheTag("carts")
-//       revalidateTag(cartCacheTag, "max")
-//     })
-//     .catch(medusaError)
-// }
 
 export async function addToCartBulk({
   lineItems,
@@ -183,25 +148,40 @@ export async function addToCartBulk({
   } as Record<string, any>
 
   if (process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY) {
-    headers["x-publishable-api-key"] =
-      process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY
+    headers["x-publishable-api-key"] = process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY
   }
 
-  await fetch(
-    `${process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL}/store/carts/${cart.id}/line-items/bulk`,
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ line_items: lineItems, companyId, session_id }),
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL}/store/carts/${cart.id}/line-items/bulk`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ line_items: lineItems, companyId, session_id }),
+      }
+    )
+
+    if (!response.ok) throw new Error("Failed to add items")
+
+    const fullfillmentCacheTag = await getCacheTag("fulfillment")
+    revalidateTag(fullfillmentCacheTag, "max")
+    const cartCacheTag = await getCacheTag("carts")
+    revalidateTag(cartCacheTag, "max")
+    
+    // Update offline cart
+    await updateOfflineCartWithItems(lineItems, 'add')
+  } catch (error) {
+    // Queue operation for offline
+    for (const item of lineItems) {
+      await queueCartOperation({
+        type: 'add_item',
+        payload: { cartId: cart.id, variantId: item.variant_id, quantity: item.quantity }
+      })
     }
-  )
-    .then(async () => {
-      const fullfillmentCacheTag = await getCacheTag("fulfillment")
-      revalidateTag(fullfillmentCacheTag, "max")
-      const cartCacheTag = await getCacheTag("carts")
-      revalidateTag(cartCacheTag, "max")
-    })
-    .catch(medusaError)
+    // Update local offline cart
+    await updateOfflineCartWithItems(lineItems, 'add')
+    medusaError(error)
+  }
 }
 
 export async function updateLineItem({
@@ -225,15 +205,24 @@ export async function updateLineItem({
     ...(await getAuthHeaders()),
   }
 
-  await sdk.store.cart
-    .updateLineItem(cartId, lineId, data, {}, headers)
-    .then(async () => {
-      const fullfillmentCacheTag = await getCacheTag("fulfillment")
-      revalidateTag(fullfillmentCacheTag, "max")
-      const cartCacheTag = await getCacheTag("carts")
-      revalidateTag(cartCacheTag, "max")
+  try {
+    await sdk.store.cart.updateLineItem(cartId, lineId, data, {}, headers)
+    
+    const fullfillmentCacheTag = await getCacheTag("fulfillment")
+    revalidateTag(fullfillmentCacheTag, "max")
+    const cartCacheTag = await getCacheTag("carts")
+    revalidateTag(cartCacheTag, "max")
+    
+    // Update offline cart
+    await updateOfflineCartItem(lineId, data.quantity)
+  } catch (error) {
+    await queueCartOperation({
+      type: 'update_item',
+      payload: { cartId, lineId, quantity: data.quantity }
     })
-    .catch(medusaError)
+    await updateOfflineCartItem(lineId, data.quantity)
+    medusaError(error)
+  }
 }
 
 export async function deleteLineItem(lineId: string) {
@@ -250,328 +239,190 @@ export async function deleteLineItem(lineId: string) {
     ...(await getAuthHeaders()),
   }
 
-  await sdk.store.cart
-    .deleteLineItem(cartId, lineId, {}, headers)
-    .then(async () => {
-      const fullfillmentCacheTag = await getCacheTag("fulfillment")
-      revalidateTag(fullfillmentCacheTag, "max")
-      const cartCacheTag = await getCacheTag("carts")
-      revalidateTag(cartCacheTag, "max")
-    })
-    .catch(medusaError)
-}
-
-export async function emptyCart() {
-  const cart = await retrieveCart()
-  if (!cart) {
-    throw new Error("No existing cart found when emptying cart")
-  }
-
-  for (const item of cart.items || []) {
-    await deleteLineItem(item.id)
-  }
-
-  const cartCacheTag = await getCacheTag("carts")
-  revalidateTag(cartCacheTag, "max")
-}
-
-export async function setShippingMethod({
-  cartId,
-  shippingMethodId,
-}: {
-  cartId: string
-  shippingMethodId: string
-}) {
-  const headers = {
-    ...(await getAuthHeaders()),
-  }
-
-  return sdk.store.cart
-    .addShippingMethod(cartId, { option_id: shippingMethodId }, {}, headers)
-    .then(async () => {
-      const cartCacheTag = await getCacheTag("carts")
-      revalidateTag(cartCacheTag, "max")
-    })
-    .catch(medusaError)
-}
-
-// export async function initiatePaymentSession(
-//   cart: B2BCart,
-//   data: {
-//     provider_id: string
-//     context?: Record<string, unknown>
-//   }
-// ) {
-//   const headers = {
-//     ...(await getAuthHeaders()),
-//   }
-
-//   return sdk.store.payment
-//     .initiatePaymentSession(cart as StoreCart, data, {}, headers)
-//     .then(async (resp) => {
-//       const cartCacheTag = await getCacheTag("carts")
-//       revalidateTag(cartCacheTag, "max")
-//       return resp
-//     })
-//     .catch(medusaError)
-// }
-
-export async function applyPromotions(codes: string[]) {
-  const cartId = await getCartId()
-  if (!cartId) {
-    throw new Error("No existing cart found")
-  }
-
-  await updateCart({ promo_codes: codes })
-    .then(async () => {
-      const cartCacheTag = await getCacheTag("carts")
-      revalidateTag(cartCacheTag, "max")
-      const fullfillmentCacheTag = await getCacheTag("fulfillment")
-      revalidateTag(fullfillmentCacheTag, "max")
-    })
-    .catch(medusaError)
-}
-
-export async function applyGiftCard(code: string) {
-  //   const cartId = getCartId()
-  //   if (!cartId) return "No cartId cookie found"
-  //   try {
-  //     await updateCart(cartId, { gift_cards: [{ code }] }).then(() => {
-  //       revalidateTag(getCacheTag("carts"))
-  //     })
-  //   } catch (error: any) {
-  //     throw error
-  //   }
-}
-
-export async function removeDiscount(code: string) {
-  // const cartId = getCartId()
-  // if (!cartId) return "No cartId cookie found"
-  // try {
-  //   await deleteDiscount(cartId, code)
-  //   revalidateTag(getCacheTag("carts"))
-  // } catch (error: any) {
-  //   throw error
-  // }
-}
-
-export async function removeGiftCard(
-  codeToRemove: string,
-  giftCards: any[]
-  // giftCards: GiftCard[]
-) {
-  //   const cartId = getCartId()
-  //   if (!cartId) return "No cartId cookie found"
-  //   try {
-  //     await updateCart(cartId, {
-  //       gift_cards: [...giftCards]
-  //         .filter((gc) => gc.code !== codeToRemove)
-  //         .map((gc) => ({ code: gc.code })),
-  //     }).then(() => {
-  //       revalidateTag(getCacheTag("carts"))
-  //     })
-  //   } catch (error: any) {
-  //     throw error
-  //   }
-}
-
-export async function submitPromotionForm(
-  currentState: unknown,
-  formData: FormData
-) {
-  const code = formData.get("code") as string
   try {
-    await applyPromotions([code])
-  } catch (e: any) {
-    return e.message
-  }
-}
-
-// TODO: Pass a POJO instead of a form entity here
-export async function setShippingAddress(formData: FormData) {
-  try {
-    if (!formData) {
-      throw new Error("No form data found when setting addresses")
-    }
-
-    const cartId = await getCartId()
-    const customer = await retrieveCustomer()
-
-    if (!cartId) {
-      throw new Error("No existing cart found when setting addresses")
-    }
-
-    const data = {
-      shipping_address: {
-        first_name: formData.get("shipping_address.first_name"),
-        last_name: formData.get("shipping_address.last_name"),
-        address_1: formData.get("shipping_address.address_1"),
-        address_2: "",
-        company: formData.get("shipping_address.company"),
-        postal_code: formData.get("shipping_address.postal_code"),
-        city: formData.get("shipping_address.city"),
-        country_code: formData.get("shipping_address.country_code"),
-        province: formData.get("shipping_address.province"),
-        phone: formData.get("shipping_address.phone"),
-      },
-      // customer_id: customer?.id,
-      email: customer?.email || formData.get("email"),
-    } as any
-    await updateCart(data)
-  } catch (e: any) {
-    throw new Error(e)
-  }
-}
-
-export async function setBillingAddress(formData: FormData) {
-  try {
-    const cartId = getCartId()
-    if (!cartId) {
-      throw new Error("No existing cart found when setting billing address")
-    }
-
-    const data = {
-      billing_address: {
-        first_name: formData.get("billing_address.first_name"),
-        last_name: formData.get("billing_address.last_name"),
-        address_1: formData.get("billing_address.address_1"),
-        address_2: "",
-        company: formData.get("billing_address.company"),
-        postal_code: formData.get("billing_address.postal_code"),
-        city: formData.get("billing_address.city"),
-        country_code: formData.get("billing_address.country_code"),
-        province: formData.get("billing_address.province"),
-        phone: formData.get("billing_address.phone"),
-      },
-    } as any
-
-    await updateCart(data)
-  } catch (e: any) {
-    return e.message
-  }
-}
-
-export async function setContactDetails(
-  currentState: unknown,
-  formData: FormData
-) {
-  try {
-    const cartId = getCartId()
-    if (!cartId) {
-      throw new Error("No existing cart found when setting contact details")
-    }
-    const data = {
-      email: formData.get("email") as string,
-      metadata: {
-        invoice_recipient: formData.get("invoice_recipient"),
-        cost_center: formData.get("cost_center"),
-        requisition_number: formData.get("requisition_number"),
-        door_code: formData.get("door_code"),
-        notes: formData.get("notes"),
-      },
-    }
-    await updateCart(data)
-  } catch (e: any) {
-    return e.message
-  }
-}
-
-// export async function placeOrder(
-//   cartId?: string
-// ): Promise<HttpTypes.StoreCompleteCartResponse> {
-//   const id = cartId || (await getCartId())
-
-//   if (!id) {
-//     throw new Error("No existing cart found when placing an order")
-//   }
-
-//   const headers = {
-//     ...(await getAuthHeaders()),
-//   }
-
-//   const cartsTag = await getCacheTag("carts")
-//   const ordersTag = await getCacheTag("orders")
-//   const approvalsTag = await getCacheTag("approvals")
-
-//   const response = await sdk.store.cart
-//     .complete(id, {}, headers)
-//     .catch(medusaError)
-
-//   if (response.type === "cart") {
-//     return response
-//   }
-
-//   track("order_completed", {
-//     order_id: response.order.id,
-//   })
-
-//   revalidateTag(cartsTag, "max")
-//   revalidateTag(ordersTag, "max")
-//   revalidateTag(approvalsTag, "max")
-
-//   await removeCartId()
-
-//   redirect(
-//     `/${response.order.shipping_address?.country_code?.toLowerCase()}/order/confirmed/${
-//       response.order.id
-//     }`
-//   )
-// }
-
-/**
- * Updates the countrycode param and revalidates the regions cache
- * @param regionId
- * @param countryCode
- */
-export async function updateRegion(countryCode: string, currentPath: string) {
-  const cartId = await getCartId()
-  const region = await getRegion(countryCode)
-
-  if (!region) {
-    throw new Error(`Region not found for country code: ${countryCode}`)
-  }
-
-  if (cartId) {
-    await updateCart({ region_id: region.id })
+    await sdk.store.cart.deleteLineItem(cartId, lineId, {}, headers)
+    
+    const fullfillmentCacheTag = await getCacheTag("fulfillment")
+    revalidateTag(fullfillmentCacheTag, "max")
     const cartCacheTag = await getCacheTag("carts")
     revalidateTag(cartCacheTag, "max")
+    
+    // Update offline cart
+    await removeOfflineCartItem(lineId)
+  } catch (error) {
+    await queueCartOperation({
+      type: 'remove_item',
+      payload: { cartId, lineId }
+    })
+    await removeOfflineCartItem(lineId)
+    medusaError(error)
   }
-
-  const regionCacheTag = await getCacheTag("regions")
-  revalidateTag(regionCacheTag, "max")
-
-  const productsCacheTag = await getCacheTag("products")
-  revalidateTag(productsCacheTag, "max")
-
-  redirect(`/${countryCode}${currentPath}`)
 }
 
-export async function createCartApproval(cartId: string, createdBy: string) {
-  const headers = {
-    "Content-Type": "application/json",
-    ...(await getAuthHeaders()),
-  }
+export async function syncOfflineCartOperations() {
+  const queue = await getCartQueue()
+  if (queue.length === 0) return
 
-  const { approval } = await sdk.client
-    .fetch<StoreApprovalResponse>(`/store/carts/${cartId}/approvals`, {
-      method: "POST",
-      headers,
-      credentials: "include",
-    })
-    .catch((err) => {
-      if (err.response?.json) {
-        return err.response.json().then((body: any) => {
-          throw new Error(body.message || err.message)
-        })
+  const headers = await getAuthHeaders()
+  const cartId = await getCartId()
+  
+  if (!cartId) return
+
+  for (const operation of queue) {
+    try {
+      switch (operation.type) {
+        case 'add_item':
+          await sdk.store.cart.createLineItem(
+            cartId,
+            { variant_id: operation.payload.variantId, quantity: operation.payload.quantity },
+            {},
+            headers
+          )
+          break
+        case 'update_item':
+          await sdk.store.cart.updateLineItem(
+            cartId,
+            operation.payload.lineId,
+            { quantity: operation.payload.quantity },
+            {},
+            headers
+          )
+          break
+        case 'remove_item':
+          await sdk.store.cart.deleteLineItem(cartId, operation.payload.lineId, {}, headers)
+          break
+        case 'update_cart':
+          await sdk.store.cart.update(cartId, operation.payload, {}, headers)
+          break
       }
-      throw err
-    })
+      
+      // Remove successful operation from queue
+      await removeFromCartQueue(operation.id)
+    } catch (error) {
+      console.error(`Failed to sync operation ${operation.id}:`, error)
+    }
+  }
+}
 
-  const cartCacheTag = await getCacheTag("carts")
-  revalidateTag(cartCacheTag, "max")
+// Helper functions for offline cart management
+async function getOfflineCart(): Promise<any> {
+  if (typeof window === 'undefined') return null
+  const cart = localStorage.getItem(LOCAL_CART_KEY)
+  return cart ? JSON.parse(cart) : null
+}
 
-  const approvalsCacheTag = await getCacheTag("approvals")
-  revalidateTag(approvalsCacheTag, "max")
+async function saveOfflineCart(cart: any): Promise<void> {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(LOCAL_CART_KEY, JSON.stringify(cart))
+}
 
-  return approval
+async function createOfflineCart(regionId: string, companyId?: string): Promise<any> {
+  return {
+    id: `offline_${Date.now()}`,
+    region_id: regionId,
+    items: [],
+    metadata: { company_id: companyId, is_offline: true },
+    created_at: new Date(),
+    updated_at: new Date()
+  }
+}
+
+async function updateOfflineCartWithItems(lineItems: any[], action: 'add' | 'remove'): Promise<void> {
+  const offlineCart = await getOfflineCart()
+  if (!offlineCart) return
+
+  for (const item of lineItems) {
+    const existingItem = offlineCart.items?.find((i: any) => i.variant_id === item.variant_id)
+    
+    if (existingItem) {
+      existingItem.quantity += item.quantity
+    } else {
+      offlineCart.items.push({
+        id: `item_${Date.now()}_${Math.random()}`,
+        variant_id: item.variant_id,
+        quantity: item.quantity,
+        ...item
+      })
+    }
+  }
+  
+  await saveOfflineCart(offlineCart)
+}
+
+async function updateOfflineCartItem(lineId: string, quantity: number): Promise<void> {
+  const offlineCart = await getOfflineCart()
+  if (!offlineCart) return
+
+  const item = offlineCart.items?.find((i: any) => i.id === lineId)
+  if (item) {
+    item.quantity = quantity
+    await saveOfflineCart(offlineCart)
+  }
+}
+
+async function removeOfflineCartItem(lineId: string): Promise<void> {
+  const offlineCart = await getOfflineCart()
+  if (!offlineCart) return
+
+  offlineCart.items = offlineCart.items?.filter((i: any) => i.id !== lineId) || []
+  await saveOfflineCart(offlineCart)
+}
+
+async function getCartQueue(): Promise<QueuedCartOperation[]> {
+  if (typeof window === 'undefined') return []
+  const queue = localStorage.getItem(CART_QUEUE_KEY)
+  return queue ? JSON.parse(queue) : []
+}
+
+async function queueCartOperation(operation: Omit<QueuedCartOperation, 'id' | 'timestamp' | 'retryCount'>): Promise<void> {
+  const queue = await getCartQueue()
+  const newOperation: QueuedCartOperation = {
+    id: `op_${Date.now()}_${Math.random()}`,
+    ...operation,
+    timestamp: Date.now(),
+    retryCount: 0
+  }
+  queue.push(newOperation)
+  localStorage.setItem(CART_QUEUE_KEY, JSON.stringify(queue))
+}
+
+async function removeFromCartQueue(operationId: string): Promise<void> {
+  const queue = await getCartQueue()
+  const updatedQueue = queue.filter(op => op.id !== operationId)
+  localStorage.setItem(CART_QUEUE_KEY, JSON.stringify(updatedQueue))
+}
+
+async function syncOfflineCartToServer(serverCart: B2BCart): Promise<void> {
+  const offlineCart = await getOfflineCart()
+  if (!offlineCart || !offlineCart.is_offline) return
+
+  // Merge offline items with server cart
+  const headers = await getAuthHeaders()
+  
+  for (const offlineItem of offlineCart.items || []) {
+    const existingItem = serverCart.items?.find(
+      (item: any) => item.variant_id === offlineItem.variant_id
+    )
+    
+    if (existingItem) {
+      const newQuantity = existingItem.quantity + offlineItem.quantity
+      await sdk.store.cart.updateLineItem(
+        serverCart.id,
+        existingItem.id,
+        { quantity: newQuantity },
+        {},
+        headers
+      )
+    } else {
+      await sdk.store.cart.createLineItem(
+        serverCart.id,
+        { variant_id: offlineItem.variant_id, quantity: offlineItem.quantity },
+        {},
+        headers
+      )
+    }
+  }
+  
+  // Clear offline cart after sync
+  localStorage.removeItem(LOCAL_CART_KEY)
 }

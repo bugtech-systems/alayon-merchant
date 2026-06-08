@@ -9,8 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { CreateCustomerModal } from './modals/create-customer-modal';
 import { CreateTeamMemberModal } from './modals/create-team-member-modal';
-import { CreateDraftOrderModal } from './modals/create-draft-order-modal';
-import { CreateTransactionModal } from './modals/create-transaction-modal';
+// import { CreateDraftOrderModal } from './modals/create-draft-order-modal';
 
 type ModalType = 'customer' | 'team' | 'draft' | 'transaction' | null;
 
@@ -47,7 +46,7 @@ export const QuickCreateDropdown: React.FC = () => {
 
       <CreateCustomerModal open={activeModal === 'customer'} onOpenChange={closeModal} />
       <CreateTeamMemberModal open={activeModal === 'team'} onOpenChange={closeModal} />
-      <CreateDraftOrderModal open={activeModal === 'draft'} onOpenChange={closeModal} />
+      {/* <CreateDraftOrderModal open={activeModal === 'draft'} onOpenChange={closeModal} /> */}
       {/* <CreateTransactionModal open={activeModal === 'transaction'} onOpenChange={closeModal} /> */}
     </>
   );

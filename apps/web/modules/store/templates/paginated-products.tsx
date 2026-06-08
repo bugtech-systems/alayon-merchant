@@ -34,7 +34,6 @@ export default async function PaginatedProducts({
   countryCode: string
   customer?: B2BCustomer | null
 }) {
-  console.log( 'PROOODS')
 
   const queryParams: PaginatedProductsParams = {
     limit: 12,
@@ -55,7 +54,6 @@ export default async function PaginatedProducts({
   }
 
   const region = await getRegion(countryCode)
-  console.log( 'PROOODS')
 
   if (!region) {
     return null
@@ -71,7 +69,6 @@ export default async function PaginatedProducts({
   })
 
   const totalPages = Math.ceil(count / PRODUCT_LIMIT)
-console.log(products, 'PROOODS')
   return (
     <>
       <ul

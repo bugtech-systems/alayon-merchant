@@ -130,6 +130,66 @@ export const listProducts = async ({
     })
 }
 
+export const listPriceListProducts = async ({
+  pageParam = 1,
+  queryParams,
+  countryCode = 'ph',
+  priceListId
+}: {
+  pageParam?: number
+  queryParams?: HttpTypes.FindParams & HttpTypes.StoreProductParams
+  countryCode: string
+  priceListId?: any
+}): Promise<{
+  response: { products: HttpTypes.StoreProduct[]; count: number }
+  nextPage: number | null
+  queryParams?: HttpTypes.FindParams & HttpTypes.StoreProductParams
+}> => {
+  const limit = queryParams?.limit || 12
+  const _pageParam = Math.max(pageParam, 1)
+  const offset = (_pageParam - 1) * limit
+  const region = await getRegion(countryCode)
+
+  if (!region) {
+    return {
+      response: { products: [], count: 0 },
+      nextPage: null,
+    }
+  }
+
+  const headers = {
+    ...(await getAuthHeaders()),
+  }
+
+  const next = {
+    ...(await getCacheOptions("price-list-products")),
+  }
+
+  return sdk.client
+    .fetch<{ products: HttpTypes.StoreProduct[]; count: number }>(
+      `/dashboard/price-lists/${priceListId}/products`,
+      {
+        credentials: "include",
+        method: "GET",
+        query: {
+          limit,
+          offset,
+          region_id: region.id,
+          fields: "*variants.calculated_price",
+          ...queryParams,
+        },
+        headers,
+        next,
+      }
+    )
+    .then(({ products, count }) => {
+      const nextPage = count > offset + limit ? pageParam + 1 : null
+      return  {
+          products,
+          count,
+        }
+    })
+}
 
 
 /**

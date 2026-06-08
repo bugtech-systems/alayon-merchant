@@ -13,21 +13,21 @@ import {
 } from "@/components/ui/select";
 import { Plus, Package } from "lucide-react";
 import Image from "next/image";
-import { cn } from "@/lib/utils";
-import type { MedusaProduct, MedusaProductVariant } from "@/lib/pos-actions";
 
 interface ProductCardProps {
-  product: MedusaProduct;
-  onAddToCart: (variant: MedusaProductVariant) => void;
+  product: any;
+  onAddToCart: (variant: any) => void;
   isLoading?: boolean;
   region?: { currency_code: string } | null;
 }
 
 export function ProductCard({ product, onAddToCart, isLoading = false, region }: ProductCardProps) {
-  const [selectedVariant, setSelectedVariant] = useState<MedusaProductVariant | null>(
+  const [selectedVariant, setSelectedVariant] = useState<any | null>(
     product.variants?.[0] || null
   );
   
+
+  console.log(product, 'prroo', selectedVariant)
   const getPrice = () => {
     if (selectedVariant?.calculated_price) {
       return selectedVariant.calculated_price.calculated_amount;

@@ -1,7 +1,7 @@
+// app/(pos)/components/pos-app.tsx
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { useInfiniteQuery, useQuery, useMutation } from "@tanstack/react-query";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -32,38 +32,32 @@ import {
   Search,
   Plus,
   Trash2,
-  CreditCard,
-  QrCode,
   ShoppingCart,
-  Minus,
-  DollarSign,
   Package,
-  AlertCircle,
   RefreshCw,
   X,
   Loader2,
   MapPin,
   UserPlus,
   User,
-  Printer,
+  CreditCard,
   Save,
   History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { listCategories, listProducts, type MedusaProduct, type MedusaProductVariant, type MedusaProductCategory, type MedusaCustomer } from "@/lib/actions/pos";
-
-// Import local components
-import { ProductCard } from "./product-card";
-import { CartItemComponent } from "./cart-item";
-import { CategoryCard } from "./category-card";
-import { TableGrid } from "./table-grid";
-import { CustomerSearch } from "./customer-search";
+import { Card, CardContent } from "@/components/ui/card";
+import Image from "next/image";
+import { sdk } from "@/lib/config";
+import { getAuthHeaders, removeCartId } from "@/lib/data/cookies";
+import { listPriceListProducts } from "@/lib/data/products";
+import { CartSidebar } from "./sidebar-cart";
+import { initiatePaymentSession } from "@/lib/data/cart";
+import { useLocalStorage } from "@/hooks/use-local-storage";
 import { PrintDialog } from "./print-dialog";
-import { type PrintOrderData } from "@/lib/print-utils";
 
 // Types
-interface CartItem {
+export interface CartItem {
   id: string;
   product_id: string;
   variant_id: string;
@@ -73,1214 +67,1063 @@ interface CartItem {
   unit_price: number;
   variant_title?: string;
   subtotal: number;
-  total: number;
-  notes?: string;
 }
 
-interface DraftOrder {
+export interface SimpleTable {
   id: string;
-  draft_number: number;
-  items: CartItem[];
-  created_at: Date;
-  updated_at: Date;
-  status: "draft" | "active" | "completed" | "cancelled";
-  customer_id?: string;
-  customer?: MedusaCustomer;
-  placement?: Placement;
-  notes?: string;
-}
-
-interface Placement {
-  id: string;
-  type: "table" | "section";
-  reference_id: string;
   name: string;
-  status: "active" | "completed";
+  capacity: number;
+  status: "available" | "occupied";
 }
 
-interface Region {
+export interface Region {
   id: string;
   name: string;
   currency_code: string;
   tax_rate: number;
 }
 
-// Mock sections data
-const mockSections = [
-  {
-    id: "sec_1",
-    name: "Main Dining",
-    type: "dining" as const,
-    color: "bg-blue-500",
-    icon: "🍽️",
-    tables: [
-      { id: "tbl_1", number: "1", section_id: "sec_1", capacity: 4, status: "available" as const },
-      { id: "tbl_2", number: "2", section_id: "sec_1", capacity: 2, status: "occupied" as const },
-      { id: "tbl_3", number: "3", section_id: "sec_1", capacity: 6, status: "reserved" as const },
-      { id: "tbl_4", number: "4", section_id: "sec_1", capacity: 4, status: "available" as const },
-    ],
-  },
-  {
-    id: "sec_2",
-    name: "Bar Area",
-    type: "bar" as const,
-    color: "bg-amber-500",
-    icon: "🍺",
-    tables: [
-      { id: "tbl_5", number: "5", section_id: "sec_2", capacity: 2, status: "available" as const },
-      { id: "tbl_6", number: "6", section_id: "sec_2", capacity: 2, status: "occupied" as const },
-    ],
-  },
-];
+export interface MedusaProduct {
+  id: string;
+  title: string;
+  thumbnail: string | null;
+  variants: MedusaProductVariant[];
+  categories?: { id: string; name: string }[];
+}
 
-// Custom hook for localStorage
-const useLocalStorage = <T,>(key: string, initialValue: T): [T, (value: T | ((val: T) => T)) => void] => {
-  const [storedValue, setStoredValue] = useState<T>(initialValue);
+export interface MedusaProductVariant {
+  id: string;
+  title: string;
+  prices: { amount: number; currency_code: string }[];
+  inventory_quantity: number;
+  calculated_price?: {
+    calculated_amount: number;
+    original_amount: number;
+    currency_code: string;
+  };
+}
 
-  useEffect(() => {
+export interface Customer {
+  id: string;
+  first_name: string;
+  last_name?: string;
+  email: string;
+  phone?: string;
+}
+
+export interface DraftOrder {
+  id: string;
+  cart_id: string;
+  created_at: Date;
+  updated_at: Date;
+  items: CartItem[];
+  total: number;
+  customer_id?: string;
+  customer_name?: string;
+  table_ids?: string[];
+  notes?: string;
+}
+
+// Simplified Product Card - Add only button (1 each tap)
+const ProductCard = ({ product, onAddToCart, region, isLoading, selectedVariantId, onVariantChange }: any) => {
+  const [isAdding, setIsAdding] = useState(false);
+  const hasVariants = product.variants && product.variants.length > 1;
+  const selectedVariant = product.variants?.find((v: any) => v.id === selectedVariantId) || product.variants?.[0];
+  
+  const getPrice = () => {
+    if (selectedVariant?.calculated_price) return selectedVariant.calculated_price.calculated_amount;
+    if (selectedVariant?.prices?.[0]) return selectedVariant.prices[0].amount;
+    return 0;
+  };
+
+  const price = getPrice();
+
+  const handleAddToCart = async () => {
+    if (!selectedVariant) return;
+    // setIsAdding(true);
     try {
-      const item = window.localStorage.getItem(key);
-      if (item) {
-        setStoredValue(JSON.parse(item));
-      }
-    } catch (error) {
-      console.error("Error reading from localStorage:", error);
-    }
-  }, [key]);
-
-  const setValue = (value: T | ((val: T) => T)) => {
-    try {
-      const valueToStore = value instanceof Function ? value(storedValue) : value;
-      setStoredValue(valueToStore);
-      window.localStorage.setItem(key, JSON.stringify(valueToStore));
-    } catch (error) {
-      console.error("Error writing to localStorage:", error);
+      await onAddToCart({
+        variantId: selectedVariant.id,
+        quantity: 1, // Always add 1
+      });
+    } finally {
+      setIsAdding(false);
     }
   };
 
-  return [storedValue, setValue];
-};
-
-// Mobile Draft Card Component
-const MobileDraftCard = ({ draft, onLoad, onDelete, currencyCode }: any) => (
-  <div className="flex items-center justify-between p-3 rounded-lg border bg-card mb-2">
-    <div className="flex-1">
-      <div className="flex items-center gap-2 mb-1">
-        <Badge variant="outline" className="text-xs">
-          Draft #{draft.draft_number}
-        </Badge>
-        {draft.placement && (
-          <Badge variant="secondary" className="text-xs gap-1">
-            <MapPin className="h-3 w-3" />
-            {draft.placement.name}
-          </Badge>
-        )}
-      </div>
-      {draft.customer && (
-        <p className="text-xs text-muted-foreground">
-          {draft.customer.first_name} {draft.customer.last_name}
-        </p>
-      )}
-      <div className="flex items-center justify-between mt-2">
-        <p className="text-xs text-muted-foreground">
-          {draft.items.length} items
-        </p>
-        <p className="text-sm font-semibold">
-          {currencyCode} {draft.total.toFixed(2)}
-        </p>
-      </div>
-    </div>
-    <div className="flex gap-1 ml-2">
-      <Button size="sm" variant="ghost" onClick={onLoad}>
-        <ShoppingCart className="h-4 w-4" />
-      </Button>
-      <Button size="sm" variant="ghost" onClick={onDelete} className="text-destructive">
-        <Trash2 className="h-4 w-4" />
-      </Button>
-    </div>
-  </div>
-);
-
-// Mobile Drafts Sheet Component
-const MobileDraftsSheet = ({ open, onOpenChange, drafts, onLoadDraft, onDeleteDraft, currencyCode }: any) => (
-  <Sheet open={open} onOpenChange={onOpenChange}>
-    <SheetContent side="bottom" className="h-[70vh] rounded-t-xl">
-      <SheetHeader>
-        <SheetTitle className="flex items-center gap-2">
-          <History className="h-5 w-5" />
-          Saved Drafts
-        </SheetTitle>
-      </SheetHeader>
-      <ScrollArea className="h-[calc(70vh-80px)] mt-4">
-        <div className="space-y-3">
-          {drafts.length === 0 ? (
-            <div className="text-center py-8">
-              <History className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">No saved drafts</p>
-              <p className="text-xs text-muted-foreground">Save your cart to continue later</p>
-            </div>
+  return (
+    <Card className="group overflow-hidden transition-all hover:shadow-lg cursor-pointer" onClick={handleAddToCart}>
+      <CardContent className="p-0">
+        <div className="relative aspect-square overflow-hidden bg-muted">
+          {product.thumbnail ? (
+            <Image src={product.thumbnail} alt={product.title} fill className="object-cover" />
           ) : (
-            drafts.map((draft: DraftOrder) => (
-              <MobileDraftCard
-                key={draft.id}
-                draft={draft}
-                onLoad={() => {
-                  onLoadDraft(draft);
-                  onOpenChange(false);
-                }}
-                onDelete={() => onDeleteDraft(draft.id)}
-                currencyCode={currencyCode}
-              />
-            ))
+            <div className="flex h-full items-center justify-center">
+              <Package className="h-12 w-12 text-muted-foreground" />
+            </div>
           )}
         </div>
-      </ScrollArea>
-    </SheetContent>
-  </Sheet>
-);
-
-// Mobile Cart Sheet Component
-const MobileCartSheet = ({ 
-  open, 
-  onOpenChange, 
-  cartItems, 
-  updateQuantity, 
-  removeFromCart,
-  subtotal,
-  tax,
-  total,
-  region,
-  clearCart,
-  saveDraft,
-  onCheckout,
-  onPrint,
-  onAssignTable,
-  onAssignCustomer,
-  currentPlacement,
-  selectedCustomer,
-  orderNotes,
-  setOrderNotes,
-  releaseTable,
-  clearCustomer,
-  activeDraft,
-  taxRate,
-  addItemNote,
-}: any) => (
-  <Sheet open={open} onOpenChange={onOpenChange}>
-    <SheetContent side="bottom" className="rounded-t-xl p-0">
-      <SheetHeader className="border-b p-4">
-        <SheetTitle className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ShoppingCart className="h-5 w-5" />
-            <span>Your Order</span>
-            {activeDraft && <Badge variant="outline">Draft #{activeDraft.draft_number}</Badge>}
-          </div>
-          <Button variant="ghost" size="sm" onClick={clearCart} className="text-destructive">
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </SheetTitle>
-      </SheetHeader>
-      
-      <div className="flex flex-col h-[calc(85vh-60px)]">
-        <div className="p-2">
-          <div className="flex gap-2 mb-3">
-            {!currentPlacement ? (
-              <Button variant="outline" size="sm" className="flex-1" onClick={onAssignTable}>
-                <MapPin className="mr-1 h-3 w-3" />
-                Assign Table
-              </Button>
-            ) : (
-              <Badge variant="secondary" className="flex-1 gap-1 py-2 justify-center">
-                <MapPin className="h-3 w-3" />
-                {currentPlacement.name}
-                <button onClick={releaseTable} className="ml-1 hover:text-destructive">
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            )}
-            
-            {!selectedCustomer ? (
-              <Button variant="outline" size="sm" className="flex-1" onClick={onAssignCustomer}>
-                <UserPlus className="mr-1 h-3 w-3" />
-                Add Customer
-              </Button>
-            ) : (
-              <Badge variant="secondary" className="flex-1 gap-1 py-2 justify-center">
-                <User className="h-3 w-3" />
-                {selectedCustomer.first_name} {selectedCustomer.last_name}
-                <button onClick={clearCustomer} className="ml-1 hover:text-destructive">
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            )}
-          </div>
+        <div className="p-3">
+          <h3 className="font-semibold text-sm line-clamp-1">{product.title}</h3>
           
-          <Input
-            placeholder="Add order notes..."
-            value={orderNotes}
-            onChange={(e) => setOrderNotes(e.target.value)}
-            className="text-sm mb-3"
-          />
+          {hasVariants && (
+            <div onClick={(e) => e.stopPropagation()}>
+              <Select value={selectedVariantId} onValueChange={(value) => onVariantChange(product.id, value)}>
+                <SelectTrigger className="mt-2 h-7 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {product.variants.map((variant: any) => (
+                    <SelectItem key={variant.id} value={variant.id}>
+                      {variant.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           
-          <ScrollArea className="h-[35vh] overflow-auto">
-            <div className="space-y-2">
-              {cartItems.length === 0 ? (
-                <div className="text-center py-8">
-                  <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">Your cart is empty</p>
-                  <p className="text-xs text-muted-foreground">Add items to get started</p>
-                </div>
-              ) : (
-                cartItems.map((item: CartItem) => (
-                  <CartItemComponent
-                    key={item.id}
-                    item={item}
-                    onUpdateQuantity={updateQuantity}
-                    onRemove={removeFromCart}
-                    region={region}
-                    onAddNote={addItemNote}
-                  />
-                ))
-              )}
-            </div>
-          </ScrollArea>
-          
-          <div className="space-y-2 border-t pt-2 mt-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span>{region?.currency_code?.toUpperCase() || "PHP"} {subtotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Tax ({(taxRate * 100).toFixed(0)}%)</span>
-              <span>{region?.currency_code?.toUpperCase() || "PHP"} {tax.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between font-bold text-lg">
-              <span>Total</span>
-              <span>{region?.currency_code?.toUpperCase() || "PHP"} {total.toFixed(2)}</span>
-            </div>
-          </div>
-        </div>
-        
-        <div className="border-t p-2 space-y-2">
-          <div className="grid grid-cols-3 gap-2">
-            <Button variant="outline" size="sm" className="flex-col h-auto py-2 gap-1">
-              <DollarSign className="h-4 w-4 text-green-600" />
-              <span className="text-xs">Cash</span>
-            </Button>
-            <Button variant="outline" size="sm" className="flex-col h-auto py-2 gap-1">
-              <CreditCard className="h-4 w-4 text-blue-600" />
-              <span className="text-xs">Card</span>
-            </Button>
-            <Button variant="outline" size="sm" className="flex-col h-auto py-2 gap-1">
-              <QrCode className="h-4 w-4 text-purple-600" />
-              <span className="text-xs">QR Code</span>
-            </Button>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={saveDraft} disabled={cartItems.length === 0}>
-              <Save className="mr-2 h-4 w-4" />
-              Save Draft
-            </Button>
-            <Button variant="outline" className="flex-1" onClick={onPrint} disabled={cartItems.length === 0}>
-              <Printer className="mr-2 h-4 w-4" />
-              Print
-            </Button>
+          <div className="mt-2 flex items-center justify-between">
+            <span className="text-sm font-bold text-primary">
+              {region?.currency_code?.toUpperCase() || "PHP"} {price.toFixed(2)}
+            </span>
             <Button 
-              className="flex-1 bg-primary hover:bg-primary/90" 
-              onClick={() => {
-                onOpenChange(false);
-                onCheckout();
-              }} 
-              disabled={cartItems.length === 0}
+              size="sm" 
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAddToCart();
+              }}
+              disabled={isAdding || isLoading}
+              className="h-8 w-8 rounded-full"
             >
-              Checkout
+              {isAdding ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
             </Button>
           </div>
         </div>
-      </div>
-    </SheetContent>
-  </Sheet>
-);
+      </CardContent>
+    </Card>
+  );
+};
 
-interface PosAppProps {
-  region?: Region | any;
+
+// Drafts Dialog Component
+function DraftsDialog({ open, onOpenChange, drafts, onLoadDraft, onDeleteDraft, region }: any) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Saved Drafts</DialogTitle>
+          <DialogDescription>Load or delete saved draft orders</DialogDescription>
+        </DialogHeader>
+        <ScrollArea className="h-96">
+          <div className="space-y-2">
+            {drafts.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">No saved drafts</div>
+            ) : (
+              drafts.map((draft: DraftOrder) => (
+                <div key={draft.id} className="p-3 rounded-lg border">
+                  <div className="flex items-center justify-between mb-2">
+                    <Badge variant="outline" className="text-xs">
+                      {new Date(draft.created_at).toLocaleString()}
+                    </Badge>
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => onLoadDraft(draft)}>
+                        Load
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive" onClick={() => onDeleteDraft(draft.id)}>
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                  {draft.table_id && (
+                    <div className="text-xs text-muted-foreground mb-1">Table: {draft.table_id}</div>
+                  )}
+                  {draft.customer_name && (
+                    <div className="text-xs text-muted-foreground mb-1">Customer: {draft.customer_name}</div>
+                  )}
+                  <div className="flex justify-between text-xs">
+                    <span>{draft.items.length} items</span>
+                    <span className="font-semibold">
+                      {region?.currency_code?.toUpperCase() || "PHP"} {draft.total.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </ScrollArea>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
-export default function PosApp({ region }: PosAppProps) {
+// Payment Dialog Component
+function PaymentDialog({ open, onOpenChange, cartTotal, region, onComplete }: any) {
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "other">("cash");
+  const [cashAmount, setCashAmount] = useState<number>(cartTotal);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Reset cash amount when dialog opens or cartTotal changes
+  useEffect(() => {
+    if (open) {
+      setCashAmount(cartTotal);
+    }
+  }, [open, cartTotal]);
+
+  const handlePayment = async () => {
+    setIsProcessing(true);
+    try {
+      // Simulate payment processing
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      onComplete({ 
+        paymentMethod, 
+        amount: cartTotal, 
+        change: paymentMethod === "cash" ? cashAmount - cartTotal : 0 
+      });
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Payment error:", error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const change = cashAmount - cartTotal;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Payment Collection</DialogTitle>
+          <DialogDescription>Complete the payment for this order</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="flex justify-between text-lg font-bold">
+            <span>Total Amount:</span>
+            <span>{region?.currency_code?.toUpperCase() || "PHP"} {cartTotal.toFixed(2)}</span>
+          </div>
+          
+          <Separator />
+          
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Payment Method</label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={paymentMethod === "cash" ? "default" : "outline"}
+                className="flex-1"
+                onClick={() => setPaymentMethod("cash")}
+              >
+                Cash
+              </Button>
+              <Button
+                type="button"
+                disabled
+                variant={paymentMethod === "card" ? "default" : "outline"}
+                className="flex-1"
+                onClick={() => setPaymentMethod("card")}
+              >
+                Card
+              </Button>
+              <Button
+                type="button"
+                disabled
+                variant={paymentMethod === "other" ? "default" : "outline"}
+                className="flex-1"
+                onClick={() => setPaymentMethod("other")}
+              >
+                Other
+              </Button>
+            </div>
+          </div>
+          
+          {paymentMethod === "cash" && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Cash Amount</label>
+              <Input
+                type="number"
+                value={cashAmount}
+                onChange={(e) => setCashAmount(parseFloat(e.target.value) || 0)}
+                className="text-lg"
+                step="0.01"
+                min="0"
+              />
+              {change >= 0 && (
+                <div className="text-sm text-green-600">
+                  Change: {region?.currency_code?.toUpperCase() || "PHP"} {change.toFixed(2)}
+                </div>
+              )}
+              {change < 0 && (
+                <div className="text-sm text-red-600">
+                  Insufficient: Need {region?.currency_code?.toUpperCase() || "PHP"} {Math.abs(change).toFixed(2)} more
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button 
+            onClick={handlePayment} 
+            disabled={isProcessing || (paymentMethod === "cash" && cashAmount < cartTotal)}
+          >
+            {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Complete Order
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Main POS Component
+interface PosAppProps {
+  region?: Region;
+  user?: any;
+  countryCode?: string;
+}
+
+export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps) {
   const { toast } = useToast();
   const [isMobile, setIsMobile] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [cartItems, setCartItems] = useLocalStorage<CartItem[]>("pos-cart", []);
-  const [draftOrders, setDraftOrders] = useLocalStorage<DraftOrder[]>("pos-drafts", []);
-  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<"created_at" | "title" | "price">("created_at");
-  const [checkoutDialogOpen, setCheckoutDialogOpen] = useState(false);
-  const [assignTableDialogOpen, setAssignTableDialogOpen] = useState(false);
-  const [assignCustomerDialogOpen, setAssignCustomerDialogOpen] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<MedusaCustomer | null>(null);
-  const [currentPlacement, setCurrentPlacement] = useState<Placement | null>(null);
+  
+  // Cart state
+  const [cart, setCart] = useState<any>(null);
+  const [cartId, setCartId] = useState<string | null>(null);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [cartTotal, setCartTotal] = useState(0);
+  const [isLoadingCart, setIsLoadingCart] = useState(false);
+  
+  // Order assignment
+  const [selectedTableIds, setSelectedTableIds] = useLocalStorage<string[]>("current_order_table_ids", []);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [orderNotes, setOrderNotes] = useState("");
+  
+  // Draft state
+  const [drafts, setDrafts] = useState<DraftOrder[]>([]);
+  const [draftsDialogOpen, setDraftsDialogOpen] = useState(false);
+  
+  // Payment state
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
-  const [sections] = useState(mockSections);
-  const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false)
+  // UI state
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
-  const [mobileDraftsOpen, setMobileDraftsOpen] = useState(false);
+  
+  // Products state
+  const [categories, setCategories] = useState<any[]>([]);
+  const [products, setProducts] = useState<MedusaProduct[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const [productVariants, setProductVariants] = useState<Record<string, string>>({});
+  
+  // Get customer group and price list from user
+  const customerGroupId = user?.metadata?.role === 'company' 
+    ? user.employee?.company?.customer_group_id 
+    : user?.driver?.customer_group_id;
+    
+  const priceListId = user?.metadata?.role === 'company' 
+    ? user.employee?.company?.price_list_id 
+    : user?.driver?.price_list_id;
 
-  // Check if mobile
+  // Load drafts from localStorage
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
+    const stored = localStorage.getItem("pos-drafts");
+    if (stored) {
+      setDrafts(JSON.parse(stored));
+    }
+  }, []);
+
+  // Save drafts to localStorage
+  const saveDrafts = useCallback((newDrafts: DraftOrder[]) => {
+    setDrafts(newDrafts);
+    localStorage.setItem("pos-drafts", JSON.stringify(newDrafts));
+  }, []);
+
+  // Save current cart as draft
+  const saveAsDraft = useCallback(async () => {
+    if (cartItems.length === 0 && selectedTableIds.length == 0 && !selectedCustomer) {
+      toast({ title: "Cannot save", description: "Add items or assign table/customer first", variant: "destructive" });
+      return;
+    }
+
+    const draftData: any = {
+      id: cartId,
+      cart_id: cartId!,
+      created_at: new Date(),
+      updated_at: new Date(),
+      items: [...cartItems],
+      total: cartTotal,
+      customer_id: selectedCustomer?.id,
+      customer_name: selectedCustomer?.first_name,
+      table_ids: selectedTableIds || [],
+      notes: orderNotes,
     };
+
+    // Update cart metadata with draft ID
+    if (cartId) {
+      try {
+        await sdk.store.cart.update(cartId, {
+          metadata: {
+            ...cart?.metadata,
+            is_draft: true,
+          },
+        });
+        localStorage.removeItem("pos_cart_id");
+       setCart(null)
+       setCartId(null)
+       setCartItems([])
+       setCartTotal(0)
+      } catch (error) {
+        console.error("Error saving draft to cart metadata:", error);
+      }
+    }
+
+
+    
+
+        const index = drafts.findIndex(draft => draft.id === draftData.id);
+        console.log(index, drafts, draftData, 'draaft')
+        if (index !== -1) {
+          // Update existing
+          const updatedDrafts = [...drafts];
+          updatedDrafts[index] = draftData;
+          saveDrafts(updatedDrafts);
+        } else {
+          // Add new
+          saveDrafts([draftData, ...drafts]);
+        }
+    initCart()
+    toast({ title: "Draft saved", description: "Order saved as draft" });
+  }, [cartItems, selectedTableIds, selectedCustomer, orderNotes, cartTotal, cartId, cart?.metadata, drafts, saveDrafts, toast]);
+
+  // Load a draft
+  const loadDraft = useCallback(async (draft: DraftOrder) => {
+    console.log(draft, 'DRAFT')
+    
+    let activeCart = await sdk.store.cart.retrieve(draft?.id);
+    const cartData = activeCart.cart || activeCart;
+console.log(activeCart, cartData, 'dddaa')
+
+    setCartId(draft?.id)
+    localStorage.setItem('pos_cart_id', draft?.id)
+
+    toast({ title: "Draft loaded", description: `Draft from ${new Date(draft.created_at).toLocaleString()}` });
+    setDraftsDialogOpen(false);
+    refreshCart(draft?.id)
+
+  }, [cartId, cartItems]);
+
+  // Delete a draft
+  const deleteDraft = useCallback((draftId: string) => {
+    saveDrafts(drafts.filter(d => d.id !== draftId));
+    toast({ title: "Draft deleted", description: "Draft removed" });
+  }, [drafts, saveDrafts, toast]);
+
+  // Initialize or get cart
+  const initCart = useCallback(async () => {
+    setIsLoadingCart(true);
+    try {
+      const storedCartId = localStorage.getItem("pos_cart_id");
+      
+      let activeCart;
+      if (storedCartId) {
+        try {
+          activeCart = await sdk.store.cart.retrieve(storedCartId);
+          if (activeCart.cart.metadata?.is_draft) {
+            // If it's a draft, treat as new cart
+            activeCart = null;
+          }
+        } catch {
+          activeCart = null;
+        }
+      }
+      
+      if (!activeCart) {
+        activeCart = await sdk.store.cart.create({
+          currency_code: region?.currency_code || "php",
+          customer_id: selectedCustomer?.id,
+        });
+        localStorage.setItem("pos_cart_id", activeCart.cart.id);
+      }
+      
+      const cartData = activeCart.cart || activeCart;
+      setCart(cartData);
+      setCartId(cartData.id);
+      
+      // Apply customer group pricing if available
+      if (customerGroupId && cartData.id) {
+        await sdk.store.cart.update(cartData.id, {
+          customer_id: selectedCustomer?.id,
+          metadata: {
+            ...cartData.metadata,
+            customer_group_id: customerGroupId,
+            price_list_id: priceListId,
+          },
+        });
+      }
+      
+      const transformedItems: CartItem[] = cartData.items?.map((item: any) => ({
+        id: item.id,
+        product_id: item.product_id,
+        variant_id: item.variant_id,
+        title: item.title,
+        thumbnail: item.thumbnail,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        variant_title: item.variant_title,
+        subtotal: item.subtotal || (item.unit_price * item.quantity),
+      })) || [];
+      
+      setCartItems(transformedItems);
+      setCartTotal(cartData.total || 0);
+      
+      if (cartData.metadata) {
+        if (cartData.metadata.table_id) setSelectedTableIds(cartData.metadata.table_ids);
+        if (cartData.metadata.customer_id && cartData.metadata.customer_name) {
+          setSelectedCustomer({
+            id: cartData.metadata.customer_id,
+            first_name: cartData.metadata.customer_name,
+            email: cartData.metadata.customer_email || "",
+          });
+        }
+        if (cartData.metadata.notes) setOrderNotes(cartData.metadata.notes);
+      }
+    } catch (error) {
+      console.error("Error initializing cart:", error);
+    } finally {
+      setIsLoadingCart(false);
+    }
+  }, [region, customerGroupId, priceListId, selectedCustomer?.id]);
+
+  // Refresh cart with pricing
+  const refreshCart = useCallback(async (id: any) => {
+    if (!cartId && !id) return;
+    // setIsLoadingCart(true);
+    try {
+      const updatedCart = await sdk.store.cart.retrieve(id || cartId);
+      setCart(updatedCart.cart);
+      
+      const transformedItems: CartItem[] = updatedCart.cart.items?.map((item: any) => ({
+        id: item.id,
+        product_id: item.product_id,
+        variant_id: item.variant_id,
+        title: item.title,
+        thumbnail: item.thumbnail,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        variant_title: item.variant_title,
+        subtotal: item.subtotal || (item.unit_price * item.quantity),
+      })) || [];
+      
+      setCartItems(transformedItems);
+      setCartTotal(updatedCart.cart.total || 0);
+    } catch (error) {
+      console.error("Error refreshing cart:", error);
+    } finally {
+      setIsLoadingCart(false);
+    }
+  }, [cartId]);
+
+  useEffect(() => {
+    initCart();
+  }, [initCart]);
+
+  // Check mobile
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
   // Fetch categories
-  const { 
-    data: categoriesData, 
-    isLoading: categoriesLoading,
-    error: categoriesError,
-  } = useQuery({
-    queryKey: ["categories"],
-    queryFn: listCategories,
-    staleTime: 5 * 60 * 1000,
-  });
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const headers = await getAuthHeaders();
+        const response = await sdk.client.fetch("/store/product-categories", {
+          method: "GET",
+          headers,
+        });
+        setCategories(response.product_categories || []);
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+      }
+    };
+    fetchCategories();
+  }, []);
 
-  // Fetch products with infinite loading
-  const {
-    data: productsData,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading: productsLoading,
-    refetch: refetchProducts,
-  } = useInfiniteQuery({
-    queryKey: ["products", selectedCategoryId, searchQuery, sortBy, region?.id],
-    queryFn: async ({ pageParam = 1 }) => {
-      const result = await listProducts({
-        page: pageParam,
-        limit: isMobile ? 12 : 24,
-        categoryId: selectedCategoryId !== "all" ? selectedCategoryId : undefined,
-        search: searchQuery || undefined,
-        sortBy,
-        regionId: region?.id,
+  // Fetch products with price list
+  const fetchProducts = useCallback(async () => {
+    if (isLoadingProducts || !priceListId) return;
+    
+    setIsLoadingProducts(true);
+    try {
+      const response = await listPriceListProducts({ countryCode, priceListId });
+      setProducts(response.products || []);
+      
+      const initialVariants: Record<string, string> = {};
+      (response.products || []).forEach((product: MedusaProduct) => {
+        if (product.variants?.[0]) {
+          initialVariants[product.id] = product.variants[0].id;
+        }
       });
-      
-      return {
-        products: result.products,
-        count: result.count,
-        nextPage: result.hasMore ? pageParam + 1 : null,
-      };
-    },
-    getNextPageParam: (lastPage) => lastPage.nextPage,
-    initialPageParam: 1,
-    staleTime: 2 * 60 * 1000,
-    enabled: !!region,
+      setProductVariants(initialVariants);
+    } catch (error) {
+      console.error("Error fetching products:", error);
+      toast({ title: "Error", description: "Failed to load products", variant: "destructive" });
+    } finally {
+      setIsLoadingProducts(false);
+    }
+  }, [priceListId, countryCode]);
+
+  useEffect(() => {
+    if (priceListId) {
+      fetchProducts();
+    }
+  }, [selectedCategoryId, searchQuery, priceListId]);
+
+  // Filter products
+  const filteredProducts = products.filter(product => {
+    const matchesCategory = selectedCategoryId === "all" || 
+      product.categories?.some(cat => cat.id === selectedCategoryId);
+    const matchesSearch = searchQuery === "" || 
+      product.title.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
   });
 
-  // Flatten products
-  const products = useMemo(() => {
-    if (!productsData?.pages) return [];
-    return productsData.pages.flatMap(page => page.products);
-  }, [productsData]);
-
-  const totalProductsCount = productsData?.pages[0]?.count || 0;
-
-  // Add to cart mutation
-  const addToCartMutation = useMutation({
-    mutationFn: async ({ product, variant }: { product: MedusaProduct; variant: MedusaProductVariant }) => {
-      const price = variant.calculated_price?.calculated_amount || variant.prices[0]?.amount || 0;
-      return {
-        id: crypto.randomUUID(),
-        product_id: product.id,
-        variant_id: variant.id,
-        title: product.title,
-        thumbnail: product.thumbnail,
-        quantity: 1,
-        unit_price: price,
-        variant_title: variant.title,
-        subtotal: price,
-        total: price,
-      } as CartItem;
-    },
-    onSuccess: (newItem, variables) => {
-      const existingIndex = cartItems.findIndex(
-        item => item.product_id === variables.product.id && item.variant_id === variables.variant.id
-      );
+  // Add to cart (always quantity 1)
+  const addToCart = async ({ variantId, quantity }: { variantId: string; quantity: number }) => {
+    if (!cartId) return;
+    
+    try {
+      const existingItem = cartItems.find(item => item.variant_id === variantId);
       
-      if (existingIndex !== -1) {
-        const updatedCart = [...cartItems];
-        updatedCart[existingIndex] = {
-          ...updatedCart[existingIndex],
-          quantity: updatedCart[existingIndex].quantity + 1,
-          total: updatedCart[existingIndex].unit_price * (updatedCart[existingIndex].quantity + 1),
-        };
-        setCartItems(updatedCart);
+      if (existingItem) {
+        await sdk.store.cart.updateLineItem(cartId, existingItem.id, {
+          quantity: existingItem.quantity + quantity,
+        });
       } else {
-        setCartItems(prev => [...prev, newItem]);
+        await sdk.store.cart.createLineItem(cartId, {
+          variant_id: variantId,
+          quantity,
+        });
       }
       
-      toast({ title: "Added to cart", description: "Item has been added to your order" });
-    },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to add item to cart", variant: "destructive" });
-    },
-  });
-
-  const addToCart = (product: MedusaProduct, variant: MedusaProductVariant) => {
-    addToCartMutation.mutate({ product, variant });
-  };
-  
-  const updateQuantity = (id: string, quantity: number) => {
-    if (quantity <= 0) {
-      setCartItems(prev => prev.filter(item => item.id !== id));
-    } else {
-      setCartItems(prev =>
-        prev.map(item =>
-          item.id === id ? { ...item, quantity, total: quantity * item.unit_price } : item
-        )
-      );
+      await refreshCart();
+      toast({ title: "Added", description: "Item added to cart" });
+      // if (isMobile) setMobileCartOpen(true);
+    } catch (error) {
+      console.error("Error adding to cart:", error);
+      toast({ title: "Error", description: "Failed to add item", variant: "destructive" });
     }
-    window.dispatchEvent(new Event("cart-updated"));
   };
   
-  const removeFromCart = (id: string) => {
-    setCartItems(prev => prev.filter(item => item.id !== id));
-    window.dispatchEvent(new Event("cart-updated"));
+  // Update quantity
+  const updateQuantity = async (lineId: string, quantity: number) => {
+    if (!cartId) return;
+    try {
+      if (quantity <= 0) {
+        await sdk.store.cart.deleteLineItem(cartId, lineId);
+      } else {
+        await sdk.store.cart.updateLineItem(cartId, lineId, { quantity });
+      }
+      await refreshCart();
+    } catch (error) {
+      console.error("Error updating quantity:", error);
+      toast({ title: "Error", description: "Failed to update", variant: "destructive" });
+    }
   };
   
-  const addItemNote = (id: string, note: string) => {
-    setCartItems(prev => prev.map(item => item.id === id ? { ...item, notes: note } : item));
+  // Remove from cart
+  const removeFromCart = async (lineId: string) => {
+    if (!cartId) return;
+    try {
+      await sdk.store.cart.deleteLineItem(cartId, lineId);
+      await refreshCart();
+      toast({ title: "Removed", description: "Item removed" });
+    } catch (error) {
+      console.error("Error removing item:", error);
+      toast({ title: "Error", description: "Failed to remove", variant: "destructive" });
+    }
   };
   
-  const saveDraft = () => {
-    if (cartItems.length === 0 && !currentPlacement) {
-      toast({ title: "Cannot save draft", description: "Add items or assign a table first", variant: "destructive" });
-      return;
+  // Update cart metadata
+  const updateCartMetadata = useCallback(async () => {
+    if (!cartId) return;
+    try {
+      await sdk.store.cart.update(cartId, {
+        customer_id: selectedCustomer?.id,
+        metadata: {
+          ...cart?.metadata,
+          table_ids: selectedTableIds,
+          customer_name: selectedCustomer?.first_name,
+          customer_email: selectedCustomer?.email,
+          notes: orderNotes,
+        },
+      });
+    } catch (error) {
+      console.error("Error updating cart metadata:", error);
+    }
+  }, [cartId, selectedTableIds, selectedCustomer, orderNotes, cart?.metadata]);
+  
+  useEffect(() => {
+    if (cartId) {
+      updateCartMetadata();
+    }
+  }, [selectedTableIds, selectedCustomer, orderNotes, updateCartMetadata]);
+  
+  // Clear cart
+  const clearCart = async () => {
+    if (!cartId) return;
+    try {
+      for (const item of cartItems) {
+        await sdk.store.cart.deleteLineItem(cartId, item.id);
+      }
+  
+      removeCartId()
+      localStorage.removeItem('pos_cart_id')
+      await refreshCart();
+      setSelectedTableIds([]);
+      setSelectedCustomer(null);
+      setOrderNotes("");
+      toast({ title: "Cleared", description: "Cart cleared" });
+    } catch (error) {
+      console.error("Error clearing cart:", error);
+    }
+  };
+  
+  // Handle payment and checkout
+// app/(pos)/components/pos-app.tsx - Updated handlePaymentComplete
+
+const handlePaymentComplete = async (paymentData: any) => {
+  if (!cartId) return;
+  
+  setIsCheckingOut(true);
+  try {
+    // Initialize payment session
+    let paymentProviderId = "pp_system_default";
+    switch (paymentData.paymentMethod) {
+      case "cash": paymentProviderId = "pp_system_default"; break;
+      case "card": paymentProviderId = "pp_stripe_stripe"; break;
+      default: paymentProviderId = "pp_system_default";
     }
     
-    const newDraft: DraftOrder = {
-      id: currentDraftId || crypto.randomUUID(),
-      draft_number: currentDraftId ? (draftOrders.find(d => d.id === currentDraftId)?.draft_number || draftOrders.length + 1) : draftOrders.length + 1,
-      items: [...cartItems],
-      created_at: currentDraftId ? (draftOrders.find(d => d.id === currentDraftId)?.created_at || new Date()) : new Date(),
-      updated_at: new Date(),
-      status: "active",
+   let order = await initiatePaymentSession(cart, {
+      provider_id: paymentProviderId,
+      // context: { amount: cartTotal, currency: region?.currency_code || "php", ...paymentData },
+    }).then(() => {
+      return sdk.store.cart.complete(cartId);;
+    })
+    .catch(err => err)
+    
+
+    
+    if (!order.order) throw new Error("Failed to create order");
+    
+    // Occupy tables in localStorage
+    if (selectedTableIds.length > 0) {
+      const tables = JSON.parse(localStorage.getItem("simple-tables") || "[]");
+      const updatedTables = tables.map((table: any) => {
+        if (selectedTableIds.includes(table.id)) {
+          return {
+            ...table,
+            status: "occupied",
+            current_order_ids: [...(table.current_order_ids || []), order.order.id],
+            customer_name: selectedCustomer?.first_name || table.customer_name,
+            occupied_since: new Date(),
+          };
+        }
+        return table;
+      });
+      localStorage.setItem("simple-tables", JSON.stringify(updatedTables));
+    }
+    
+    // Save order history
+    const orders = JSON.parse(localStorage.getItem("pos_order_history") || "[]");
+    orders.unshift({
+      id: order.order.id,
+      cart_id: cartId,
+      table_ids: selectedTableIds,
       customer_id: selectedCustomer?.id,
-      customer: selectedCustomer || undefined,
-      placement: currentPlacement || undefined,
+      customer_name: selectedCustomer?.first_name,
       notes: orderNotes,
-    };
+      total: cartTotal,
+      payment: paymentData,
+      items: cartItems,
+      created_at: new Date().toISOString(),
+    });
+    localStorage.setItem("pos_order_history", JSON.stringify(orders.slice(0, 100)));
     
-    const existingIndex = draftOrders.findIndex(d => d.id === newDraft.id);
-    let updatedDrafts;
-    if (existingIndex !== -1) {
-      updatedDrafts = [...draftOrders];
-      updatedDrafts[existingIndex] = newDraft;
-    } else {
-      updatedDrafts = [...draftOrders, newDraft];
-    }
-    setDraftOrders(updatedDrafts);
-    setCurrentDraftId(newDraft.id);
-    localStorage.setItem("current_draft_id", newDraft.id);
-    
-    toast({ title: "Draft saved", description: `Order saved${currentPlacement ? ` for ${currentPlacement.name}` : ""}` });
-    if (isMobile) setMobileCartOpen(false);
-  };
-  
-  const loadDraft = (draft: DraftOrder) => {
-    setCartItems(draft.items);
-    setCurrentDraftId(draft.id);
-    setSelectedCustomer(draft.customer || null);
-    setCurrentPlacement(draft.placement || null);
-    setOrderNotes(draft.notes || "");
-    localStorage.setItem("current_draft_id", draft.id);
-    toast({ title: "Draft loaded", description: `Loaded order #${draft.draft_number}` });
-    window.dispatchEvent(new Event("cart-updated"));
-  };
-  
-  const deleteDraft = (draftId: string) => {
-    setDraftOrders(prev => prev.filter(d => d.id !== draftId));
-    if (currentDraftId === draftId) {
-      setCurrentDraftId(null);
-      localStorage.removeItem("current_draft_id");
-    }
-    toast({ title: "Draft deleted", description: "Draft order has been removed" });
-  };
-  
-  const clearCart = () => {
-    if (cartItems.length === 0) return;
-    setCartItems([]);
-    setCurrentDraftId(null);
-    setSelectedCustomer(null);
-    setCurrentPlacement(null);
-    setOrderNotes("");
-    localStorage.removeItem("current_draft_id");
-    toast({ title: "Cart cleared", description: "All items have been removed" });
-    if (isMobile) setMobileCartOpen(false);
-    window.dispatchEvent(new Event("cart-updated"));
-  };
-  
-  const assignTable = (table: any, section: any) => {
-    const placement: Placement = {
-      id: crypto.randomUUID(),
-      type: "table",
-      reference_id: table.id,
-      name: `Table ${table.number} - ${section.name}`,
-      status: "active",
-    };
-    setCurrentPlacement(placement);
-    setAssignTableDialogOpen(false);
-    toast({ title: "Table assigned", description: `Table ${table.number} has been assigned to this order` });
-  };
-  
-  const assignCustomer = (customer: MedusaCustomer) => {
-    setSelectedCustomer(customer);
-    setAssignCustomerDialogOpen(false);
-    toast({ title: "Customer assigned", description: `${customer.first_name} ${customer.last_name} has been assigned` });
-  };
-  
-  const releaseTable = () => {
-    setCurrentPlacement(null);
-    toast({ title: "Table released", description: "Table has been unassigned" });
-  };
-  
-  const clearCustomer = () => {
-    setSelectedCustomer(null);
-    toast({ title: "Customer removed", description: "Customer has been unassigned" });
-  };
-  
-  const handleCheckout = async () => {
-    setIsCheckingOut(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    if (currentDraftId) {
-      setDraftOrders(prev => prev.map(d => d.id === currentDraftId ? { ...d, status: "completed" } : d));
-    }
-    
+    toast({ title: "Order Complete", description: `Order #${order.order.display_id} completed. Tables assigned.` });
+    removeCartId()
+    localStorage.removeItem("pos_cart_id");
+    setDrafts(drafts.filter(a => a.id != cartId))
+    setSelectedTableIds([])
+    setPaymentDialogOpen(false);
+    setMobileCartOpen(false);
+    setOrderNotes('')
+    setPrintOpen(true)
+  } catch (error) {
+    console.error("Error completing order:", error);
+    toast({ title: "Error", description: "Failed to complete order", variant: "destructive" });
+  } finally {
     setIsCheckingOut(false);
-    setCheckoutDialogOpen(false);
-    setPrintDialogOpen(true);
-  };
-  
-  // Calculate totals
-  const subtotal = cartItems.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
-  const taxRate = region?.tax_rate || 0.12;
-  const tax = subtotal * taxRate;
-  const total = subtotal + tax;
-  const itemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
-  
-  const activeDraft = draftOrders.find(d => d.id === currentDraftId);
-  const activeDrafts = draftOrders.filter(d => d.status === "active");
-
-  const preparePrintData = useCallback((): PrintOrderData => {
-    return {
-      orderNumber: activeDraft ? `DRAFT-${activeDraft.draft_number}` : `ORD-${Date.now()}`,
-      date: new Date(),
-      customer: selectedCustomer ? {
-        name: `${selectedCustomer.first_name} ${selectedCustomer.last_name}`,
-        email: selectedCustomer.email,
-        phone: selectedCustomer.phone || undefined,
-      } : undefined,
-      placement: currentPlacement || undefined,
-      items: cartItems.map(item => ({
-        name: item.title,
-        quantity: item.quantity,
-        price: item.unit_price,
-        total: item.unit_price * item.quantity,
-        notes: item.notes,
-        variant: item.variant_title,
-      })),
-      subtotal,
-      tax,
-      taxRate: taxRate,
-      total,
-      paymentMethod: "Cash",
-      notes: orderNotes || undefined,
-    };
-  }, [cartItems, selectedCustomer, currentPlacement, subtotal, tax, total, orderNotes, activeDraft]);
-
-  if (categoriesError) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center">
-          <AlertCircle className="mx-auto h-12 w-12 text-destructive" />
-          <h2 className="mt-4 text-lg font-semibold">Failed to load data</h2>
-          <Button className="mt-4" onClick={() => window.location.reload()}>Retry</Button>
-        </div>
-      </div>
-    );
   }
+};
+
+
+  
+  const handleVariantChange = (productId: string, variantId: string) => {
+    setProductVariants(prev => ({ ...prev, [productId]: variantId }));
+  };
 
   // Mobile Layout
   if (isMobile) {
     return (
-      <div className="flex flex-col h-full overflow-hidden pb-16">
-        {/* Search and Categories */}
-        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b">
-          <div className="flex flex-col gap-3 p-3">
-            <div className="flex gap-2">
+      <div className="flex flex-col h-full overflow-hidden pb-14">
+        <div className="sticky top-0 z-10 bg-background border-b">
+          <div className="p-2">
+            <div className="flex gap-2 mb-2">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search products..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 h-10"
+                <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                <Input 
+                  placeholder="Search products..." 
+                  value={searchQuery} 
+                  onChange={(e) => setSearchQuery(e.target.value)} 
+                  className="pl-7 h-8 text-sm" 
                 />
               </div>
-              <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
-                <SelectTrigger className="w-[100px] h-10">
-                  <SelectValue placeholder="Sort" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="created_at">Newest</SelectItem>
-                  <SelectItem value="title">Name</SelectItem>
-                  <SelectItem value="price">Price</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => refetchProducts()}>
-                <RefreshCw className="h-4 w-4" />
+              <Button size="sm" variant="outline" className="h-8 px-2" onClick={fetchProducts}>
+                <RefreshCw className="h-3 w-3" />
+              </Button>
+              <Button size="sm" variant="outline" className="h-8 px-2" onClick={() => setDraftsDialogOpen(true)}>
+                <History className="h-3 w-3" />
               </Button>
             </div>
             
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              <button
-                onClick={() => setSelectedCategoryId("all")}
-                className={cn(
-                  "flex flex-col items-center gap-1 rounded-lg px-3 py-1.5 transition-all flex-shrink-0",
-                  selectedCategoryId === "all"
-                    ? "bg-primary text-primary-foreground shadow-md"
-                    : "bg-card hover:bg-accent"
+            <div className="flex gap-1 overflow-x-auto pb-1">
+              <button 
+                onClick={() => setSelectedCategoryId("all")} 
+                className={cn("px-2 py-1 rounded text-xs whitespace-nowrap", 
+                  selectedCategoryId === "all" ? "bg-primary text-primary-foreground" : "bg-muted"
                 )}
               >
-                <span className="text-sm">📋</span>
-                <span className="text-xs">All</span>
+                All
               </button>
-              {!categoriesLoading && categoriesData?.slice(0, 8).map((category) => (
-                <CategoryCard
-                  key={category.id}
-                  category={category}
-                  isSelected={selectedCategoryId === category.id}
-                  onClick={() => setSelectedCategoryId(category.id)}
-                />
+              {categories.map((cat) => (
+                <button 
+                  key={cat.id} 
+                  onClick={() => setSelectedCategoryId(cat.id)} 
+                  className={cn("px-2 py-1 rounded text-xs whitespace-nowrap", 
+                    selectedCategoryId === cat.id ? "bg-primary text-primary-foreground" : "bg-muted"
+                  )}
+                >
+                  {cat.name}
+                </button>
               ))}
             </div>
           </div>
         </div>
         
-        {/* Products Grid */}
-        <div className="flex-1 overflow-y-auto p-3">
-          {productsLoading && !productsData ? (
-            <div className="grid grid-cols-2 gap-3">
-              {[...Array(8)].map((_, i) => (
-                <div key={i} className="aspect-square rounded-lg bg-muted animate-pulse" />
-              ))}
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                {products.slice(0, 20).map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    onAddToCart={(variant) => addToCart(product, variant)}
-                    isLoading={addToCartMutation.isPending}
-                    region={region}
-                  />
-                ))}
-              </div>
-              
-              {hasNextPage && (
-                <div className="mt-4 flex justify-center">
-                  <Button variant="outline" size="sm" onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
-                    {isFetchingNextPage ? <Loader2 className="h-4 w-4 animate-spin" /> : "Load More"}
-                  </Button>
-                </div>
-              )}
-            </>
+        <div className="flex-1 overflow-y-auto p-2">
+          <div className="grid grid-cols-2 gap-2">
+            {filteredProducts.map((product) => (
+              <ProductCard 
+                key={product.id} 
+                product={product} 
+                onAddToCart={addToCart} 
+                region={region}
+                isLoading={isLoadingProducts}
+                selectedVariantId={productVariants[product.id]}
+                onVariantChange={handleVariantChange}
+              />
+            ))}
+          </div>
+          {isLoadingProducts && <Loader2 className="h-6 w-6 animate-spin mx-auto my-4" />}
+          {!isLoadingProducts && filteredProducts.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">No products found</div>
           )}
         </div>
 
-        {/* Mobile Bottom Bar */}
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-card p-3">
+        <div className="fixed bottom-0 left-0 right-0 border-t bg-card p-2">
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              className="flex-1" 
-              onClick={() => setMobileDraftsOpen(true)}
-            >
-              <History className="mr-2 h-4 w-4" />
-              Drafts {activeDrafts.length > 0 && `(${activeDrafts.length})`}
+            <Button variant="outline" size="sm" onClick={saveAsDraft} className="flex-1">
+              <Save className="mr-1 h-3 w-3" />
+              Draft
             </Button>
-            <Button 
-              className="flex-1 bg-primary hover:bg-primary/90" 
-              onClick={() => setMobileCartOpen(true)}
-            >
-              <ShoppingCart className="mr-2 h-4 w-4" />
-              Cart • {region?.currency_code?.toUpperCase() || "PHP"} {total.toFixed(2)}
+            <Button variant="default" className="flex-1" onClick={() => setMobileCartOpen(true)}>
+              <ShoppingCart className="mr-1 h-3 w-3" />
+              Cart • {cartTotal.toFixed(2)}
             </Button>
           </div>
         </div>
 
-        {/* Mobile Drafts Sheet */}
-        <MobileDraftsSheet
-          open={mobileDraftsOpen}
-          onOpenChange={setMobileDraftsOpen}
-          drafts={activeDrafts}
+        <Sheet open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
+          <SheetContent side="bottom" className="rounded-t-xl p-0 h-[85vh]">
+            <SheetHeader className="border-b p-3">
+              <SheetTitle className="text-sm">Your Order</SheetTitle>
+            </SheetHeader>
+            <div className="flex-1 overflow-auto">
+              <CartSidebar
+                cartItems={cartItems}
+                cartTotal={cartTotal}
+                isLoading={isLoadingCart}
+                region={region}
+                selectedTableIds={selectedTableIds}
+                selectedCustomer={selectedCustomer}
+                orderNotes={orderNotes}
+                onUpdateQuantity={updateQuantity}
+                onRemoveFromCart={removeFromCart}
+                onClearCart={clearCart}
+                onTablesChange={setSelectedTableIds}
+                onCustomerChange={setSelectedCustomer}
+                onNotesChange={setOrderNotes}
+                onCheckout={() => setPaymentDialogOpen(true)}
+                onSaveDraft={saveAsDraft}
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
+        
+        <DraftsDialog
+          open={draftsDialogOpen}
+          onOpenChange={setDraftsDialogOpen}
+          drafts={drafts}
           onLoadDraft={loadDraft}
           onDeleteDraft={deleteDraft}
-          currencyCode={region?.currency_code?.toUpperCase() || "PHP"}
-        />
-
-        {/* Mobile Cart Sheet */}
-        <MobileCartSheet
-          open={mobileCartOpen}
-          onOpenChange={setMobileCartOpen}
-          cartItems={cartItems}
-          updateQuantity={updateQuantity}
-          removeFromCart={removeFromCart}
-          addItemNote={addItemNote}
-          subtotal={subtotal}
-          tax={tax}
-          total={total}
           region={region}
-          taxRate={taxRate}
-          clearCart={clearCart}
-          saveDraft={saveDraft}
-          onCheckout={() => setCheckoutDialogOpen(true)}
-          onPrint={() => setPrintDialogOpen(true)}
-          onAssignTable={() => setAssignTableDialogOpen(true)}
-          onAssignCustomer={() => setAssignCustomerDialogOpen(true)}
-          currentPlacement={currentPlacement}
-          selectedCustomer={selectedCustomer}
-          orderNotes={orderNotes}
-          setOrderNotes={setOrderNotes}
-          releaseTable={releaseTable}
-          clearCustomer={clearCustomer}
-          activeDraft={activeDraft}
         />
-
-        {/* Dialogs */}
-        <Dialog open={assignTableDialogOpen} onOpenChange={setAssignTableDialogOpen}>
-          <DialogContent className="max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Assign Table</DialogTitle>
-              <DialogDescription>Select a table for this order</DialogDescription>
-            </DialogHeader>
-            <TableGrid sections={sections} onSelectTable={(table, section) => { assignTable(table, section); }} />
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setAssignTableDialogOpen(false)}>Cancel</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
         
-        <Dialog open={assignCustomerDialogOpen} onOpenChange={setAssignCustomerDialogOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Assign Customer</DialogTitle>
-              <DialogDescription>Search for an existing customer or create a new one</DialogDescription>
-            </DialogHeader>
-            <CustomerSearch onSelectCustomer={assignCustomer} />
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setAssignCustomerDialogOpen(false)}>Close</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-        
-        <Dialog open={checkoutDialogOpen} onOpenChange={setCheckoutDialogOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Complete Order</DialogTitle>
-              <DialogDescription>Review and confirm the order</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              {currentPlacement && (
-                <div className="flex items-center gap-2 text-sm bg-muted p-2 rounded">
-                  <MapPin className="h-4 w-4" />
-                  <span>{currentPlacement.name}</span>
-                </div>
-              )}
-              {selectedCustomer && (
-                <div className="flex items-center gap-2 text-sm bg-muted p-2 rounded">
-                  <User className="h-4 w-4" />
-                  <span>{selectedCustomer.first_name} {selectedCustomer.last_name}</span>
-                </div>
-              )}
-              <Separator />
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span>{region?.currency_code?.toUpperCase() || "PHP"} {subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tax</span>
-                  <span>{region?.currency_code?.toUpperCase() || "PHP"} {tax.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-lg font-bold">
-                  <span>Total</span>
-                  <span>{region?.currency_code?.toUpperCase() || "PHP"} {total.toFixed(2)}</span>
-                </div>
-              </div>
-            </div>
-            <DialogFooter className="gap-2 flex-col sm:flex-row">
-              <Button variant="outline" onClick={() => setCheckoutDialogOpen(false)}>Cancel</Button>
-              <Button variant="outline" onClick={() => setPrintDialogOpen(true)}>Print</Button>
-              <Button onClick={handleCheckout} disabled={isCheckingOut}>
-                {isCheckingOut && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Confirm Order
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        <PrintDialog
-          open={printDialogOpen}
-          onOpenChange={setPrintDialogOpen}
-          orderData={preparePrintData()}
+        <PaymentDialog
+          open={paymentDialogOpen}
+          onOpenChange={setPaymentDialogOpen}
+          cartTotal={cartTotal}
+          region={region}
+          onComplete={handlePaymentComplete}
         />
       </div>
     );
   }
 
-  // Desktop Layout - With Fixed Cart Sidebar Header/Footer and Scrollable Items
+  // Desktop Layout
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Main Content - Scrollable Products Grid */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Search and Categories - Sticky Header */}
-        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b flex-shrink-0">
-          <div className="flex flex-col gap-4 p-4">
-            <div className="flex gap-2">
+        <div className="sticky top-0 z-10 bg-background border-b flex-shrink-0">
+          <div className="p-3">
+            <div className="flex gap-2 mb-3">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search products..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
+                <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                <Input 
+                  placeholder="Search products..." 
+                  value={searchQuery} 
+                  onChange={(e) => setSearchQuery(e.target.value)} 
+                  className="pl-7 h-8 text-sm" 
                 />
               </div>
-              <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
-                <SelectTrigger className="w-[130px]">
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="created_at">Newest</SelectItem>
-                  <SelectItem value="title">Name</SelectItem>
-                  <SelectItem value="price">Price</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button variant="outline" size="icon" onClick={() => refetchProducts()}>
-                <RefreshCw className="h-4 w-4" />
+              <Button variant="outline" size="sm" className="h-8 px-2" onClick={fetchProducts}>
+                <RefreshCw className="h-3 w-3" />
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => setDraftsDialogOpen(true)}>
+                <History className="h-3 w-3" />
               </Button>
             </div>
             
-            {/* Categories Scroll */}
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              <button
-                onClick={() => setSelectedCategoryId("all")}
-                className={cn(
-                  "flex flex-col items-center gap-1 rounded-lg px-4 py-2 transition-all flex-shrink-0",
-                  selectedCategoryId === "all"
-                    ? "bg-primary text-primary-foreground shadow-md"
-                    : "bg-card hover:bg-accent"
+            <div className="flex gap-1 overflow-x-auto pb-1">
+              <button 
+                onClick={() => setSelectedCategoryId("all")} 
+                className={cn("px-3 py-1 rounded text-xs whitespace-nowrap", 
+                  selectedCategoryId === "all" ? "bg-primary text-primary-foreground" : "bg-muted"
                 )}
               >
-                <span className="text-xl">📋</span>
-                <span className="text-xs font-medium">All</span>
+                All
               </button>
-              {!categoriesLoading && categoriesData?.map((category) => (
-                <CategoryCard
-                  key={category.id}
-                  category={category}
-                  isSelected={selectedCategoryId === category.id}
-                  onClick={() => setSelectedCategoryId(category.id)}
-                />
+              {categories.map((cat) => (
+                <button 
+                  key={cat.id} 
+                  onClick={() => setSelectedCategoryId(cat.id)} 
+                  className={cn("px-3 py-1 rounded text-xs whitespace-nowrap", 
+                    selectedCategoryId === cat.id ? "bg-primary text-primary-foreground" : "bg-muted"
+                  )}
+                >
+                  {cat.name}
+                </button>
               ))}
             </div>
           </div>
         </div>
         
-        {/* Products Grid - Scrollable Area */}
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">
-              {selectedCategoryId === "all" ? "All Items" : categoriesData?.find(c => c.id === selectedCategoryId)?.name || "Products"}
-            </h2>
-            <p className="text-sm text-muted-foreground">{totalProductsCount} items</p>
+        <div className="flex-1 overflow-y-auto p-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {filteredProducts.map((product) => (
+              <ProductCard 
+                key={product.id} 
+                product={product} 
+                onAddToCart={addToCart} 
+                region={region}
+                isLoading={isLoadingProducts}
+                selectedVariantId={productVariants[product.id]}
+                onVariantChange={handleVariantChange}
+              />
+            ))}
           </div>
-          
-          {productsLoading && !productsData ? (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5">
-              {[...Array(12)].map((_, i) => (
-                <div key={i} className="aspect-square rounded-lg bg-muted animate-pulse" />
-              ))}
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5">
-                {products.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    onAddToCart={(variant) => addToCart(product, variant)}
-                    isLoading={addToCartMutation.isPending}
-                    region={region}
-                  />
-                ))}
-              </div>
-              
-              {hasNextPage && (
-                <div className="mt-8 flex justify-center">
-                  <Button variant="outline" onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
-                    {isFetchingNextPage ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading...</> : "Load More"}
-                  </Button>
-                </div>
-              )}
-              
-              {products.length === 0 && !productsLoading && (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
-                  <Package className="h-16 w-16 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold">No products found</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Try adjusting your search or category filter
-                  </p>
-                  <Button
-                    variant="outline"
-                    className="mt-4"
-                    onClick={() => {
-                      setSearchQuery("");
-                      setSelectedCategoryId("all");
-                    }}
-                  >
-                    Clear filters
-                  </Button>
-                </div>
-              )}
-            </>
+          {isLoadingProducts && <Loader2 className="h-8 w-8 animate-spin mx-auto my-8" />}
+          {!isLoadingProducts && filteredProducts.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">No products found</div>
           )}
         </div>
       </div>
       
-      {/* Cart Sidebar - Desktop with Fixed Header and Footer */}
-      <aside className="hidden w-96 flex-col border-l bg-card lg:flex">
-        {/* Fixed Header */}
-        <div className="border-b p-4 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ShoppingCart className="h-5 w-5" />
-              <h2 className="font-semibold">Current Order</h2>
-              {activeDraft && <Badge variant="outline">Draft #{activeDraft.draft_number}</Badge>}
-            </div>
-            <Button variant="ghost" size="sm" onClick={clearCart} className="text-destructive">
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-          
-          <div className="mt-2 flex flex-wrap gap-2">
-            {!currentPlacement ? (
-              <Button variant="outline" size="sm" onClick={() => setAssignTableDialogOpen(true)}>
-                <MapPin className="mr-1 h-3 w-3" />Assign Table
-              </Button>
-            ) : (
-              <Badge variant="secondary" className="gap-1">
-                <MapPin className="h-3 w-3" />{currentPlacement.name}
-                <button onClick={releaseTable} className="ml-1 hover:text-destructive"><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            {!selectedCustomer ? (
-              <Button variant="outline" size="sm" onClick={() => setAssignCustomerDialogOpen(true)}>
-                <UserPlus className="mr-1 h-3 w-3" />Assign Customer
-              </Button>
-            ) : (
-              <Badge variant="secondary" className="gap-1">
-                <User className="h-3 w-3" />{selectedCustomer.first_name} {selectedCustomer.last_name}
-                <button onClick={() => setSelectedCustomer(null)} className="ml-1 hover:text-destructive"><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-          </div>
-        </div>
-        
-        {/* Scrollable Items Area */}
-        <div className="flex-1 overflow-hidden">
-          <ScrollArea className="max-h-[50vh]">
-            <div className="space-y-3 p-4">
-              {cartItems.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <ShoppingCart className="h-12 w-12 text-muted-foreground mb-3" />
-                  <p className="text-sm text-muted-foreground">Your cart is empty</p>
-                  <p className="text-xs text-muted-foreground">Add items to get started</p>
-                </div>
-              ) : (
-                cartItems.map((item) => (
-                  <CartItemComponent
-                    key={item.id}
-                    item={item}
-                    onUpdateQuantity={updateQuantity}
-                    onRemove={removeFromCart}
-                    region={region}
-                    onAddNote={addItemNote}
-                  />
-                ))
-              )}
-            </div>
-          </ScrollArea>
-        </div>
-        
-        {/* Fixed Footer with Actions */}
-        <div className="border-t p-4 flex-shrink-0">
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span>{region?.currency_code?.toUpperCase() || "PHP"} {subtotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Tax ({(taxRate * 100).toFixed(0)}%)</span>
-              <span>{region?.currency_code?.toUpperCase() || "PHP"} {tax.toFixed(2)}</span>
-            </div>
-            <Separator />
-            <div className="flex justify-between text-lg font-bold">
-              <span>Total</span>
-              <span>{region?.currency_code?.toUpperCase() || "PHP"} {total.toFixed(2)}</span>
-            </div>
-          </div>
-          
-          <div className="mt-2">
-            <Input
-              placeholder="Order notes..."
-              value={orderNotes}
-              onChange={(e) => setOrderNotes(e.target.value)}
-              className="text-sm"
-            />
-          </div>
-          
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <Button variant="outline" className="flex flex-col items-center py-2 h-auto gap-1">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100">
-                <DollarSign className="h-4 w-4 text-green-600" />
-              </div>
-              <span className="text-xs">Cash</span>
-            </Button>
-            <Button variant="outline" className="flex flex-col items-center py-2 h-auto gap-1">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100">
-                <CreditCard className="h-4 w-4 text-blue-600" />
-              </div>
-              <span className="text-xs">Card</span>
-            </Button>
-            <Button variant="outline" className="flex flex-col items-center py-2 h-auto gap-1">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100">
-                <QrCode className="h-4 w-4 text-purple-600" />
-              </div>
-              <span className="text-xs">QR Code</span>
-            </Button>
-          </div>
-          
-          <div className="mt-4 flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={saveDraft} disabled={cartItems.length === 0 && !currentPlacement}>
-              <Save className="mr-2 h-4 w-4" />
-              Save Draft
-            </Button>
-            <Button 
-              variant="outline" 
-              className="flex-1" 
-              onClick={() => setPrintDialogOpen(true)} 
-              disabled={cartItems.length === 0}
-            >
-              <Printer className="mr-2 h-4 w-4" />
-              Print
-            </Button>
-            <Button 
-              className="flex-1 bg-primary hover:bg-primary/90" 
-              onClick={() => setCheckoutDialogOpen(true)} 
-              disabled={cartItems.length === 0}
-            >
-              Checkout
-            </Button>
-          </div>
-        </div>
+      <aside className="hidden w-80 flex-col border-l bg-card lg:flex">
+        <CartSidebar
+          cartItems={cartItems}
+          cartTotal={cartTotal}
+          isLoading={isLoadingCart}
+          region={region}
+          selectedTableIds={selectedTableIds}
+          selectedCustomer={selectedCustomer}
+          orderNotes={orderNotes}
+          onUpdateQuantity={updateQuantity}
+          onRemoveFromCart={removeFromCart}
+          onClearCart={clearCart}
+          onTablesChange={setSelectedTableIds}
+          onCustomerChange={setSelectedCustomer}
+          onNotesChange={setOrderNotes}
+          onCheckout={() => setPaymentDialogOpen(true)}
+          onSaveDraft={saveAsDraft}
+          onPrint={() => setPrintOpen(true)}
+        />
       </aside>
       
-      {/* Dialogs - Desktop */}
-      <Dialog open={assignTableDialogOpen} onOpenChange={setAssignTableDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Assign Table</DialogTitle>
-            <DialogDescription>Select a table for this order</DialogDescription>
-          </DialogHeader>
-          <TableGrid sections={sections} onSelectTable={(table, section) => { assignTable(table, section); }} />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAssignTableDialogOpen(false)}>Cancel</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      <Dialog open={assignCustomerDialogOpen} onOpenChange={setAssignCustomerDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Assign Customer</DialogTitle>
-            <DialogDescription>Search for an existing customer or create a new one</DialogDescription>
-          </DialogHeader>
-          <CustomerSearch onSelectCustomer={assignCustomer} />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAssignCustomerDialogOpen(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      <Dialog open={checkoutDialogOpen} onOpenChange={setCheckoutDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Complete Order</DialogTitle>
-            <DialogDescription>Review and confirm the order</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {currentPlacement && (
-              <div className="flex items-center gap-2 text-sm bg-muted p-2 rounded">
-                <MapPin className="h-4 w-4" />
-                <span>{currentPlacement.name}</span>
-              </div>
-            )}
-            {selectedCustomer && (
-              <div className="flex items-center gap-2 text-sm bg-muted p-2 rounded">
-                <User className="h-4 w-4" />
-                <span>{selectedCustomer.first_name} {selectedCustomer.last_name}</span>
-              </div>
-            )}
-            <Separator />
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>{region?.currency_code?.toUpperCase() || "PHP"} {subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Tax</span>
-                <span>{region?.currency_code?.toUpperCase() || "PHP"} {tax.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-lg font-bold">
-                <span>Total</span>
-                <span>{region?.currency_code?.toUpperCase() || "PHP"} {total.toFixed(2)}</span>
-              </div>
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setCheckoutDialogOpen(false)}>Cancel</Button>
-            <Button variant="outline" onClick={() => setPrintDialogOpen(true)}>Print</Button>
-            <Button onClick={handleCheckout} disabled={isCheckingOut}>
-              {isCheckingOut && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Confirm Order
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      <PrintDialog
-        open={printDialogOpen}
-        onOpenChange={setPrintDialogOpen}
-        orderData={preparePrintData()}
+      <DraftsDialog
+        open={draftsDialogOpen}
+        onOpenChange={setDraftsDialogOpen}
+        drafts={drafts}
+        onLoadDraft={loadDraft}
+        onDeleteDraft={deleteDraft}
+        region={region}
       />
+      
+      <PaymentDialog
+        open={paymentDialogOpen}
+        onOpenChange={setPaymentDialogOpen}
+        cartTotal={cartTotal}
+        region={region}
+        onComplete={handlePaymentComplete}
+      />
+      {cart && 
+      <PrintDialog
+          open={printOpen}
+          onOpenChange={setPrintOpen}
+          cart={cart}
+      />
+      }
     </div>
   );
 }

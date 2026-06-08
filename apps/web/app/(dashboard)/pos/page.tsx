@@ -2,15 +2,24 @@ import { Suspense } from "react";
 import { getRegion } from "@/lib/actions/regions";
 import PosApp from "./_components/pos-app";
 import { Skeleton } from "@/components/ui/skeleton";
+import { retrieveUser } from "@/lib/data";
+import { listPriceListProducts } from "@/lib/data/products";
+import { redirect } from "next/navigation";
 
 export const dynamic = 'force-dynamic';
 
 export default async function PosPage() {
   const region = await getRegion('ph');
-  
+  const user = await retrieveUser();
+
+  if(!user) return redirect('/login');
+
+      let priceListId = user?.metadata.role == 'company' ? user.employee?.company?.price_list_id : user?.driver?.price_list_id as any;
+
+  let products = await listPriceListProducts({countryCode: 'ph',priceListId: priceListId});
   return (
     <Suspense fallback={<PosSkeleton />}>
-      <PosApp region={region} />
+      <PosApp region={region} user={user}/>
     </Suspense>
   );
 }
