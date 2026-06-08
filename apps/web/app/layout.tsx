@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { MedusaAuthProvider } from "@/providers/MedusaAuthProvider";
 import { Providers } from "@/providers/queryProvider";
 import { ThemeProvider } from "@/components/theme-provider";
-import { Analytics } from "@vercel/analytics/next";
 import { LocationProvider } from '@/lib/context/LocationContext';
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { APP_CONFIG } from "@/config/app-config";
@@ -66,7 +65,6 @@ export default function RootLayout({
         </MedusaAuthProvider>
 </LocationProvider>
 </PreferencesStoreProvider>
-        <Analytics />
         </TooltipProvider>
 
       </body>
