@@ -145,6 +145,9 @@ export const removeSession = async () => {
     cookies.set("medusa_region_id", "", {
     maxAge: -1,
   })
+     cookies.set("_medusa_jwt", "", {
+    maxAge: -1,
+  })
 
 }
 

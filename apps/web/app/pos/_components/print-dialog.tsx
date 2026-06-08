@@ -24,7 +24,6 @@ import { printOrder } from "@/lib/print-utils";
 import { PrintOrderData, PrinterSettings } from "@/lib/types";
 import { formatCurrency } from "@/lib/print-utils";
 import { cn } from "@/lib/utils";
-import { retrieveCart } from "@/lib/actions";
 
 interface PrintDialogProps {
   open: boolean;

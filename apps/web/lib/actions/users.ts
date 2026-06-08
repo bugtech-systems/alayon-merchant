@@ -5,7 +5,7 @@ import { revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { createSession, destroySession } from "../../lib/data/sessions";
 import { sdk } from "../medusa/config";
-import { getAuthHeaders, getCacheHeaders, getCacheTag, removeAuthToken } from "../medusa/data/cookies";
+import { getAuthHeaders, getCacheHeaders, getCacheTag, removeAuthToken } from "../data/cookies";
 import { track } from "@vercel/analytics/server";
 import { n8nFetcher } from "@/hooks/useN8nQuery";
 import { retrieveCustomer, transferCart } from "./customer";

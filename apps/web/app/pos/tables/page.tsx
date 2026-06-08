@@ -288,6 +288,7 @@ interface OrderSummaryDialogProps {
 function OrderSummaryDialog({ open, onOpenChange, order, table, region }: OrderSummaryDialogProps) {
   const [printOpen, setPrintOpen] = useState(false);
   const [cartData, setCartData] = useState<any>(null);
+  const orderTotal = order?.total ?? order?.totals?.total
 
   useEffect(() => {
     if (order && open) {
@@ -306,7 +307,7 @@ function OrderSummaryDialog({ open, onOpenChange, order, table, region }: OrderS
         })),
         subtotal: order.subtotal,
         tax_total: order.tax,
-        total: order.total,
+        total: orderTotal,
         metadata: {
           table_ids: order.table_ids,
           customer_name: order.customer_name,
@@ -334,12 +335,12 @@ function OrderSummaryDialog({ open, onOpenChange, order, table, region }: OrderS
     totals: {
       subtotal: order.subtotal,
       tax: order.tax,
-      total: order.total,
+      total: orderTotal,
       currency_code: "PHP",
     },
     payment: order.payment || {
       method: "Pending",
-      amount: order.total,
+      amount: orderTotal,
       change: 0,
     },
     pricing_info: {
@@ -413,7 +414,7 @@ function OrderSummaryDialog({ open, onOpenChange, order, table, region }: OrderS
             <div className="rounded-lg border p-3 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Subtotal:</span>
-                <span>₱{order.subtotal.toFixed(2)}</span>
+                <span>₱{orderTotal.toFixed(2)}</span>
               </div>
               {order.tax > 0 && (
                 <div className="flex justify-between text-sm">
@@ -429,7 +430,7 @@ function OrderSummaryDialog({ open, onOpenChange, order, table, region }: OrderS
               )}
               <div className="flex justify-between font-bold pt-2 border-t">
                 <span>Total:</span>
-                <span>₱{order.total.toFixed(2)}</span>
+                <span>₱{orderTotal.toFixed(2)}</span>
               </div>
             </div>
 
@@ -503,13 +504,18 @@ interface PaymentDialogProps {
 function PaymentDialog({ open, onOpenChange, table, order, onPaymentComplete, region }: PaymentDialogProps) {
   const { toast } = useToast();
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "other">("cash");
-  const [cashAmount, setCashAmount] = useState<number>(order?.total || 0);
+  const [cashAmount, setCashAmount] = useState<number>(order?.total ?? order?.totals?.total);
   const [isProcessing, setIsProcessing] = useState(false);
+  console.log(order, 'ereereer')
+  const orderTotal = order?.total || order?.totals?.total || 0
 
-  if (!order) return null;
-
-  const change = cashAmount - order.total;
-  const canComplete = paymentMethod === "cash" ? cashAmount >= order.total : true;
+  useEffect(() => {
+      setCashAmount(orderTotal)
+  }, [order])
+  
+  
+  const change = cashAmount - orderTotal;
+  const canComplete = paymentMethod === "cash" ? cashAmount >= orderTotal : true;
 
   const handlePayment = async () => {
     if (!table || !order) return;
@@ -518,7 +524,7 @@ function PaymentDialog({ open, onOpenChange, table, order, onPaymentComplete, re
     try {
       const paymentData = {
         paymentMethod,
-        amount: order.total,
+        amount: orderTotal,
         cash_amount: paymentMethod === "cash" ? cashAmount : undefined,
         change: paymentMethod === "cash" ? change : 0,
       };
@@ -526,7 +532,7 @@ function PaymentDialog({ open, onOpenChange, table, order, onPaymentComplete, re
       await onPaymentComplete(table.id, order.id, paymentData);
       toast({
         title: "Payment Successful",
-        description: `Payment of ₱${order.total.toFixed(2)} captured for ${table.name}`,
+        description: `Payment of ₱${orderTotal.toFixed(2)} captured for ${table.name}`,
       });
       onOpenChange(false);
     } catch (error: any) {
@@ -541,6 +547,9 @@ function PaymentDialog({ open, onOpenChange, table, order, onPaymentComplete, re
     }
   };
 
+
+
+console.log(order, 'ORDERR')
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -556,7 +565,7 @@ function PaymentDialog({ open, onOpenChange, table, order, onPaymentComplete, re
           <div className="p-3 rounded-lg bg-muted">
             <div className="flex justify-between text-sm mb-2">
               <span className="text-muted-foreground">Order #:</span>
-              <span className="font-medium">{order.display_id}</span>
+              <span className="font-medium">• {order?.order_number} </span>
             </div>
             <div className="flex justify-between text-sm mb-2">
               <span className="text-muted-foreground">Customer:</span>
@@ -564,7 +573,7 @@ function PaymentDialog({ open, onOpenChange, table, order, onPaymentComplete, re
             </div>
             <div className="flex justify-between text-sm font-bold pt-2 border-t">
               <span>Total Amount:</span>
-              <span>₱{order.total.toFixed(2)}</span>
+              <span>₱{orderTotal.toFixed(2)}</span>
             </div>
           </div>
 
@@ -1082,7 +1091,13 @@ export default function SimpleTablesManager({
         return order;
       });
       localStorage.setItem("pos_order_history", JSON.stringify(updatedOrders));
+      
 
+      await capturePayment({
+          order_id: orderId,
+          payment_data: paymentData,
+          payment_method: paymentData.paymentMethod
+      })
       // Release the table (set to cleaning)
       releaseTable(tableId, orderId);
       

@@ -39,6 +39,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { logout } from "@/lib/actions";
 
 interface NavItem {
   title: string;
@@ -88,6 +89,12 @@ export function PosSidebar() {
       </SidebarMenuItem>
     );
   };
+
+
+  const handleLogout = async () => {
+    console.log('clidd')
+          await logout()
+  }
 
   return (
     <Sidebar collapsible="icon" className="border-r">
@@ -185,7 +192,7 @@ export function PosSidebar() {
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Logout">
-              <button className="w-full text-destructive hover:text-destructive">
+              <button className="w-full text-destructive hover:text-destructive" onClick={() => handleLogout()}>
                 <LogOut className="h-4 w-4" />
                 <span>Logout</span>
               </button>

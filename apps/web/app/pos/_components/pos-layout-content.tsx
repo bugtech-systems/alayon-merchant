@@ -43,6 +43,8 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { useOffline } from "@/components/medusa-offline-provider";
 import { PosContext, type PosContextType } from "../../../contexts/pos-context";
+import { logout } from "@/lib/actions";
+import { useToast } from "@/hooks/use-toast";
 
 // Navigation Items (static, can be moved to separate file)
 const navItems: NavItem[] = [
@@ -174,7 +176,82 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
   const pathname = usePathname();
   const { pendingSyncCount, isOnline } = useOffline();
   const [draftCount, setDraftCount] = useState(0);
+  const router = useRouter();
+  const {toast} = useToast()
+
+
+  const handleLogout = async () => {
+    try {
+      // 1. Clear all localStorage items related to POS/cart
+      const localStorageKeys = [
+        'pos_cart_id',
+        'pos-drafts',
+        'pos_order_history',
+        'simple-tables',
+        'current_order_table_ids',
+        'pos-settings',
+        'userLocation',
+        'pos_last_sync',
+        'pos_pending_orders'
+      ];
+      
+      localStorageKeys.forEach(key => {
+        localStorage.removeItem(key);
+      });
+
+      // 2. Clear sessionStorage if used
+      sessionStorage.clear();
+
+      // 3. Clear all cookies
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i] as any;
+        const eqPos = cookie.indexOf('=');
+        const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
+        // Delete cookie by setting expiration to past date
+        document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      }
+
+      // 4. Clear IndexedDB if used (for offline storage)
+      if (window.indexedDB) {
+        const databases = await window.indexedDB.databases();
+        databases.forEach(db => {
+          if (db.name) {
+            window.indexedDB.deleteDatabase(db.name);
+          }
+        });
+      }
+
+      // 5. Clear any cached data
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(
+          cacheNames.map(cacheName => caches.delete(cacheName))
+        );
+      }
+
+      // 6. Call the logout function from your auth system
+      await logout();
+      
   
+
+      // 8. Redirect to login page
+      router.push('/login');
+      
+    } catch (error) {
+      console.error('Logout error:', error);
+      
+      // Even if logout API fails, still clear local data and redirect
+      toast({
+        title: "Logged out",
+        description: "You have been logged out successfully",
+      });
+      
+      router.push('/login');
+    }
+  };
+
+
   const getActiveNav = () => {
     if (pathname?.includes("/pos/tables")) return "Tables";
     if (pathname?.includes("/pos/customers")) return "Customers";
@@ -298,7 +375,7 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
 
       {/* Footer */}
       <div className="border-t p-4">
-        <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+        <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground" onClick={() => handleLogout()}>
           <LogOut className="h-4 w-4 flex-shrink-0" />
           <span>Logout</span>
         </button>
