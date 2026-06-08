@@ -7,7 +7,7 @@
     "dev": "next dev -p 3005 --turbopack",
     "build": "next build",
     "build:ignore-errors": "next build || true",
-    "start": "next start",
+    "start": "next start -p 3005",
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit"
