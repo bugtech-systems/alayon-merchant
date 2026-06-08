@@ -223,6 +223,7 @@ const ProductCard = ({
   onVariantChange, 
   showCustomPrice 
 }: any) => {
+  const {toast} = useToast()
   const [isAdding, setIsAdding] = useState(false);
   const [showVariantDialog, setShowVariantDialog] = useState(false);
   const [quantity, setQuantity] = useState(1);
@@ -237,12 +238,11 @@ const ProductCard = ({
   // Get inventory quantity
   const getInventoryQuantity = () => {
     if (!selectedVariant) return 0;
-    // Check various possible inventory fields
     return selectedVariant.inventory_quantity || 
            selectedVariant.manage_inventory?.quantity || 
            selectedVariant.inventory?.quantity || 
            selectedVariant.stock_quantity ||
-           999; // Default if not specified
+           999;
   };
   
   const inventoryQuantity = getInventoryQuantity();
@@ -253,12 +253,10 @@ const ProductCard = ({
   const getPrice = () => {
     if (!selectedVariant) return 0;
     
-    // Check for calculated price (from price lists)
     if (selectedVariant.calculated_price) {
       return selectedVariant.calculated_price.calculated_amount;
     }
     
-    // Check for variant prices array
     if (selectedVariant.prices && selectedVariant.prices.length > 0) {
       const variantPrice = selectedVariant.prices.find(
         (p: any) => p.currency_code === region?.currency_code || p.currency_code === 'php'
@@ -267,10 +265,7 @@ const ProductCard = ({
       return selectedVariant.prices[0].amount;
     }
     
-    // Check for unit_price
     if (selectedVariant.unit_price) return selectedVariant.unit_price;
-    
-    // Check product level price
     if (product.unit_price) return product.unit_price;
     
     return 0;
@@ -290,13 +285,19 @@ const ProductCard = ({
     if (onVariantChange) {
       onVariantChange(product.id, variantId);
     }
-    setQuantity(1); // Reset quantity when variant changes
+    setQuantity(1);
   };
   
-  // Handle add to cart with variant selection
-  const handleAddToCart = async () => {
+  // Handle add to cart - only called from button click
+  const handleAddToCart = async (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent event bubbling
+    
     if (!selectedVariant) {
-      console.error('No variant selected');
+      toast({
+        title: "Error",
+        description: "Please select a variant",
+        variant: "destructive",
+      });
       return;
     }
     
@@ -329,13 +330,12 @@ const ProductCard = ({
         originalPrice: originalPrice,
       });
       
-      // Show success feedback
       toast({
         title: "Added to Cart",
         description: `${quantity}x ${product.title}${hasVariants ? ` (${selectedVariant.title})` : ''} added`,
       });
       
-      setQuantity(1); // Reset quantity after adding
+      setQuantity(1);
     } catch (error) {
       console.error('Error adding to cart:', error);
       toast({
@@ -348,46 +348,13 @@ const ProductCard = ({
     }
   };
   
-  // Handle quick add (single item)
-  const handleQuickAdd = async (e: React.MouseEvent) => {
+  // Open variant dialog - only called from button click
+  const handleOpenVariantDialog = (e: React.MouseEvent) => {
     e.stopPropagation();
-    
-    if (hasMultipleVariants && !localSelectedVariantId) {
-      setShowVariantDialog(true);
-      return;
-    }
-    
-    if (quantity > 1) {
-      await handleAddToCart();
-    } else {
-      setIsAdding(true);
-      try {
-        await onAddToCart({
-          variantId: selectedVariant.id,
-          quantity: 1,
-          variantTitle: selectedVariant.title,
-          productTitle: product.title,
-          unitPrice: price,
-          originalPrice: originalPrice,
-        });
-        toast({
-          title: "Added to Cart",
-          description: `${product.title}${hasVariants ? ` (${selectedVariant.title})` : ''} added`,
-        });
-      } catch (error) {
-        console.error('Error adding to cart:', error);
-        toast({
-          title: "Error",
-          description: "Failed to add item to cart",
-          variant: "destructive",
-        });
-      } finally {
-        setIsAdding(false);
-      }
-    }
+    setShowVariantDialog(true);
   };
   
-  // Variant selection dialog for products with multiple variants
+  // Variant selection dialog
   const VariantSelectionDialog = () => (
     <Dialog open={showVariantDialog} onOpenChange={setShowVariantDialog}>
       <DialogContent className="sm:max-w-md">
@@ -397,65 +364,59 @@ const ProductCard = ({
             Choose the variant you want to add to cart
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
-          <ScrollArea className="h-80">
-            <div className="space-y-2">
-              {product.variants.map((variant: any) => {
-                const variantPrice = variant.calculated_price?.calculated_amount || 
-                                    variant.prices?.[0]?.amount || 
-                                    variant.unit_price || 0;
-                const variantInventory = variant.inventory_quantity || 999;
-                const isVariantOutOfStock = variantInventory <= 0;
-                
-                return (
-                  <button
-                    key={variant.id}
-                    onClick={() => {
-                      handleVariantChange(variant.id);
-                      setShowVariantDialog(false);
-                      setTimeout(() => handleQuickAdd({ stopPropagation: () => {} } as any), 100);
-                    }}
-                    disabled={isVariantOutOfStock}
-                    className={cn(
-                      "w-full p-3 rounded-lg border text-left transition-all",
-                      localSelectedVariantId === variant.id && "border-primary bg-primary/5",
-                      isVariantOutOfStock && "opacity-50 cursor-not-allowed bg-muted"
-                    )}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-medium">{variant.title}</p>
-                        {variant.sku && (
-                          <p className="text-xs text-muted-foreground">SKU: {variant.sku}</p>
-                        )}
-                        {isVariantOutOfStock && (
-                          <Badge variant="destructive" className="mt-1 text-[10px]">
-                            Out of Stock
-                          </Badge>
-                        )}
-                        {!isVariantOutOfStock && variantInventory <= 5 && (
-                          <Badge variant="secondary" className="mt-1 text-[10px] bg-yellow-100 text-yellow-800">
-                            Only {variantInventory} left
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-primary">
-                          {region?.currency_code?.toUpperCase() || "PHP"} {variantPrice.toFixed(2)}
-                        </p>
-                        {variant.calculated_price?.original_amount > variantPrice && (
-                          <p className="text-xs text-muted-foreground line-through">
-                            {region?.currency_code?.toUpperCase() || "PHP"} {variant.calculated_price.original_amount.toFixed(2)}
-                          </p>
-                        )}
-                      </div>
+        <ScrollArea className="h-96 pr-4">
+          <div className="space-y-2">
+            {product.variants.map((variant: any) => {
+              const variantPrice = variant.calculated_price?.calculated_amount || 
+                                  variant.prices?.[0]?.amount || 
+                                  variant.unit_price || 0;
+              const variantInventory = variant.inventory_quantity || 999;
+              const isVariantOutOfStock = variantInventory <= 0;
+              
+              return (
+                <button
+                  key={variant.id}
+                  onClick={() => {
+                    handleVariantChange(variant.id);
+                    setShowVariantDialog(false);
+                  }}
+                  disabled={isVariantOutOfStock}
+                  className={cn(
+                    "w-full p-4 rounded-lg border text-left transition-all",
+                    localSelectedVariantId === variant.id && "border-primary bg-primary/5",
+                    isVariantOutOfStock && "opacity-50 cursor-not-allowed bg-muted"
+                  )}
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <p className="font-medium">{variant.title}</p>
+                      {variant.sku && (
+                        <p className="text-xs text-muted-foreground mt-1">SKU: {variant.sku}</p>
+                      )}
+                      {isVariantOutOfStock ? (
+                        <Badge variant="destructive" className="mt-2">Out of Stock</Badge>
+                      ) : variantInventory <= 5 && (
+                        <Badge variant="secondary" className="mt-2 bg-yellow-100 text-yellow-800">
+                          Only {variantInventory} left
+                        </Badge>
+                      )}
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-          </ScrollArea>
-        </div>
+                    <div className="text-right ml-4">
+                      <p className="text-lg font-bold text-primary">
+                        {region?.currency_code?.toUpperCase() || "PHP"} {variantPrice.toFixed(2)}
+                      </p>
+                      {variant.calculated_price?.original_amount > variantPrice && (
+                        <p className="text-xs text-muted-foreground line-through">
+                          {region?.currency_code?.toUpperCase() || "PHP"} {variant.calculated_price.original_amount.toFixed(2)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </ScrollArea>
         <DialogFooter>
           <Button variant="outline" onClick={() => setShowVariantDialog(false)}>
             Cancel
@@ -467,167 +428,184 @@ const ProductCard = ({
   
   // Quantity selector component
   const QuantitySelector = () => (
-    <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1">
+    <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 w-full justify-between">
       <Button
         variant="outline"
         size="icon"
-        className="h-6 w-6"
-        onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
+        className="h-8 w-8"
+        onClick={(e) => {
+          e.stopPropagation();
+          setQuantity(prev => Math.max(1, prev - 1));
+        }}
         disabled={quantity <= 1}
       >
-        <Minus className="h-3 w-3" />
+        <Minus className="h-4 w-4" />
       </Button>
-      <span className="w-8 text-center text-sm font-medium">{quantity}</span>
+      <span className="w-10 text-center text-base font-semibold">{quantity}</span>
       <Button
         variant="outline"
         size="icon"
-        className="h-6 w-6"
-        onClick={() => setQuantity(prev => Math.min(inventoryQuantity, prev + 1))}
+        className="h-8 w-8"
+        onClick={(e) => {
+          e.stopPropagation();
+          setQuantity(prev => Math.min(inventoryQuantity, prev + 1));
+        }}
         disabled={quantity >= inventoryQuantity}
       >
-        <Plus className="h-3 w-3" />
+        <Plus className="h-4 w-4" />
       </Button>
     </div>
   );
   
+  const currencySymbol = region?.currency_code?.toUpperCase() || "PHP";
+  
   return (
     <>
-      <Card 
-        className={cn(
-          "group overflow-hidden transition-all hover:shadow-lg",
-          !isOutOfStock && "cursor-pointer",
-          isOutOfStock && "opacity-60"
-        )} 
-        onClick={!isOutOfStock ? handleQuickAdd : undefined}
-      >
+      <Card className={cn(
+        "overflow-hidden transition-all hover:shadow-xl",
+        isOutOfStock && "opacity-60"
+      )}>
         <CardContent className="p-0">
-          {/* Image Section */}
-          <div className="relative aspect-square overflow-hidden bg-muted">
+          {/* Image Section - No click handler */}
+          <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
             {product.thumbnail ? (
               <Image 
                 src={product.thumbnail} 
                 alt={product.title} 
                 fill 
-                className="object-cover group-hover:scale-105 transition-transform duration-300" 
+                className="object-cover transition-transform duration-300" 
               />
             ) : (
               <div className="flex h-full items-center justify-center">
-                <Package className="h-12 w-12 text-muted-foreground" />
+                <Package className="h-16 w-16 text-muted-foreground/50" />
               </div>
             )}
             
             {/* Badges */}
-            <div className="absolute top-2 left-2 flex flex-col gap-1">
+            <div className="absolute top-3 left-3 flex flex-col gap-1">
               {hasDiscount && (
-                <Badge className="bg-red-500 text-white text-[10px]">
-                  -{discountPercent}%
+                <Badge className="bg-red-500 hover:bg-red-600 text-white px-2 py-1 text-xs font-semibold">
+                  -{discountPercent}% OFF
                 </Badge>
               )}
               {isLowStock && !isOutOfStock && (
-                <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 text-[10px]">
+                <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-100 px-2 py-1 text-xs font-semibold">
                   Low Stock
                 </Badge>
               )}
             </div>
             
             {isOutOfStock && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                <Badge variant="destructive" className="text-sm">
+              <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
+                <Badge variant="destructive" className="text-sm px-3 py-1.5 font-semibold">
                   Out of Stock
                 </Badge>
               </div>
             )}
             
-            {showCustomPrice && (
-              <Badge variant="secondary" className="absolute top-2 right-2 text-[10px]">
-                <DollarSign className="h-2 w-2 mr-1" />
+            {/* {showCustomPrice && (
+              <Badge variant="secondary" className="absolute top-3 right-3 bg-purple-100 text-purple-700 text-xs px-2 py-1">
+                <DollarSign className="h-3 w-3 mr-1 inline" />
                 Custom Price
               </Badge>
-            )}
+            )} */}
           </div>
           
-          <div className="p-3">
+          {/* Content Section - No click handler on the whole card */}
+          <div className="p-2 space-y-3">
             {/* Product Title */}
-            <h3 className="font-semibold text-sm line-clamp-2 min-h-[40px]">
-              {product.title}
-            </h3>
+            <div>
+              <h3 className="font-semibold text-base line-clamp-2 min-h-[28px]">
+                {product.title}
+              </h3>
+            </div>
             
             {/* Variant Selector */}
             {hasVariants && (
-              <div onClick={(e) => e.stopPropagation()} className="mt-2">
+              <div>
                 {hasMultipleVariants ? (
                   <Button
                     variant="outline"
-                    size="sm"
-                    className="w-full h-7 text-xs justify-between"
-                    onClick={() => setShowVariantDialog(true)}
+                    size="default"
+                    className="w-full justify-between text-sm"
+                    onClick={handleOpenVariantDialog}
                   >
                     <span className="truncate">
                       {selectedVariant?.title || "Select Variant"}
                     </span>
-                    <ChevronDown className="h-3 w-3 ml-1 opacity-50" />
+                    <ChevronDown className="h-4 w-4 ml-2 opacity-50" />
                   </Button>
                 ) : (
-                  // Single variant - show as text
-                  <div className="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">
+                  <div className="text-sm text-muted-foreground px-3 py-2 bg-muted/50 rounded-md">
                     {selectedVariant?.title}
                   </div>
                 )}
               </div>
             )}
             
-            {/* Price and Actions */}
-            <div className="mt-2 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex flex-col">
-    
-                  {originalPrice !== price && (
-                    <span className="text-xs text-muted-foreground line-through">
-                      {region?.currency_code?.toUpperCase() || "PHP"} {originalPrice.toFixed(2)}
+            {/* Price Section */}
+            <div className="space-y-2 pt-2">
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className="text-xl font-bold text-primary">
+                  {currencySymbol} {price.toFixed(2)}
+                </span>
+                {hasDiscount && (
+                  <>
+                    <span className="text-sm text-muted-foreground line-through">
+                      {currencySymbol} {originalPrice.toFixed(2)}
                     </span>
-                  )}
-                </div>
-                
-                {!isOutOfStock && (
-                  <div className="flex items-center gap-1">
-                    {quantity > 1 && (
-                      <QuantitySelector />
-                    )}
-                    <Button 
-                      size="sm" 
-                      onClick={handleQuickAdd}
-                      disabled={isAdding || isLoading || !selectedVariant}
-                      className={cn(
-                        "h-8 w-8 rounded-full",
-                        quantity > 1 && "h-8 px-3 rounded-md w-auto gap-1"
-                      )}
-                    >
-                      {isAdding ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <>
-                          <Plus className="h-3 w-3" />
-                          {quantity > 1 && <span className="text-xs">{quantity}</span>}
-                        </>
-                      )}
-                    </Button>
-                  </div>
+                    <Badge variant="secondary" className="bg-green-100 text-green-700 text-xs">
+                      Save {currencySymbol} {(originalPrice - price).toFixed(2)}
+                    </Badge>
+                  </>
                 )}
               </div>
               
-              {/* Bulk quantity selector for mobile */}
-              {!isOutOfStock && quantity === 1 && hasMultipleVariants && (
-                <div className="flex items-center justify-between pt-1 border-t">
-                  <span className="text-xs text-muted-foreground">Quantity</span>
+              {/* {quantity > 1 && (
+                <div className="text-sm text-muted-foreground">
+                  Total: {currencySymbol} {(price * quantity).toFixed(2)}
+                </div>
+              )} */}
+            </div>
+            
+            {/* Action Section - Only buttons trigger actions */}
+            {!isOutOfStock && (
+              <div className="space-y-3 pt-2">
+                {/* Quantity Selector */}
+                <div className="w-full flex items-center justify-between">
                   <QuantitySelector />
                 </div>
-              )}
-            </div>
+                
+                {/* Add to Cart Button - Primary action */}
+                <Button 
+                  size="lg"
+                  className="w-full gap-2"
+                  onClick={handleAddToCart}
+                  disabled={isAdding || isLoading || !selectedVariant}
+                >
+                  {isAdding ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Adding...
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingCart className="h-4 w-4" />
+                      Add to Cart
+                      {quantity > 1 && (
+                        <Badge variant="secondary" className="ml-2 bg-white/20">
+                          {quantity}x
+                        </Badge>
+                      )}
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
       
-      {/* Variant Selection Dialog */}
       <VariantSelectionDialog />
     </>
   );
