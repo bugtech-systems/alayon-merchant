@@ -23,7 +23,7 @@ const DYNAMIC_ROUTES = new Set([
   "pos"
 ]);
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
   // Skip static assets
