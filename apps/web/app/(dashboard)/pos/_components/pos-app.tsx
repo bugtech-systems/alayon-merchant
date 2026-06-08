@@ -346,7 +346,7 @@ function PaymentDialog({ open, onOpenChange, cartTotal, region, onComplete }: an
               <Input
                 type="number"
                 value={cashAmount}
-                onChange={(e) => setCashAmount(parseFloat(e.target.value) || 0)}
+                onChange={(e) => setCashAmount(parseFloat(e.target.value))}
                 className="text-lg"
                 step="0.01"
                 min="0"
