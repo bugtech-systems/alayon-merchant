@@ -50,10 +50,10 @@ import { useToast } from "@/hooks/use-toast";
 const navItems: NavItem[] = [
   { icon: Building2, label: "Products", href: "/pos" },
   { icon: Layers, label: "Tables", href: "/pos/tables" },
-  { icon: Users, label: "Customers", href: "/pos/customers", disabled: true },
-  { icon: History, label: "Drafts", href: "/pos/drafts", disabled: true },
-  { icon: FileText, label: "Reports", href: "/pos/reports", disabled: true },
-  { icon: Settings, label: "Settings", href: "/pos/settings", disabled: true },
+  { icon: Users, label: "Customers", href: "/pos/customers", disabled: false },
+  { icon: History, label: "Orders", href: "/pos/orders", disabled: false },
+  { icon: FileText, label: "Reports", href: "/pos/reports", disabled: false },
+  { icon: Settings, label: "Settings", href: "/pos/settings", disabled: false },
 ];
 
 interface NavItem {

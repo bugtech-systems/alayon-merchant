@@ -953,3 +953,21 @@ export async function bulkSendSms(data: any): Promise<{ success: boolean; error?
     }
   }
 }
+
+
+export async function deleteCustomer(id: string) {
+  try {
+      await sdk.client.fetch(`/dashboard/customers/${id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await getAuthHeaders()),
+        },
+      });
+  
+    revalidateTag("customer", "max");
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

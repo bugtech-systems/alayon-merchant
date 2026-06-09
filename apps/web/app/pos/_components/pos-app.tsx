@@ -974,11 +974,12 @@ const processCartItemsWithPricing = useCallback(async (
 
 const refreshCart = useCallback(async (cartIdToRefresh?: string) => {
   const targetCartId = cartIdToRefresh || cartId;
-  if (!targetCartId) return;
+  if (!targetCartId) return
+  
   
   try {
     setIsLoadingCart(true);
-    
+    console.log('refftres')
     // 1. Retrieve existing cart
     const updatedCart = await sdk.store.cart.retrieve(targetCartId);
     
@@ -988,7 +989,7 @@ const refreshCart = useCallback(async (cartIdToRefresh?: string) => {
     const customPrices = cartData.metadata?.custom_prices || {};
     const appliedPriceListId = priceListId;
     const appliedCustomerGroupId = customerGroupId;
-    
+    if(!cartData) return
     // 3. Process items with shared pricing logic
     const transformedItems = await processCartItemsWithPricing(
       cartData,
@@ -1003,6 +1004,8 @@ const refreshCart = useCallback(async (cartIdToRefresh?: string) => {
     const total = subtotal + taxTotal;
     
     // 5. Update state (repopulate, not replace)
+
+
     setCart({
       ...cartData,
       items: transformedItems,
@@ -1018,6 +1021,22 @@ const refreshCart = useCallback(async (cartIdToRefresh?: string) => {
       itemsCount: transformedItems.length,
       total
     });
+    
+
+            
+    // // Restore metadata state
+    if (cartData.metadata) {
+      if (cartData.metadata.table_ids) setSelectedTableIds(cartData.metadata.table_ids);
+      if (cartData.metadata.customer_id && cartData.metadata.customer_name) {
+        setSelectedCustomer({
+          id: cartData.customer_id,
+          first_name: cartData.metadata.customer_name,
+          email: cartData.metadata.customer_email || "",
+        });
+      }
+      if (cartData.metadata.notes) setOrderNotes(cartData.metadata.notes);
+    }
+
     
   } catch (error) {
     console.error("Error refreshing cart:", error);
@@ -1050,20 +1069,14 @@ const initCart = useCallback(async (options?: {
       } catch {
         activeCart = null;
       }
-    }
+    } 
     
-    if (!activeCart) {
-      activeCart = await sdk.store.cart.create({
-        currency_code: region?.currency_code || "php",
-        customer_id: selectedCustomer?.id,
-      });
-      localStorage.setItem("pos_cart_id", activeCart.cart.id);
+    const cartData = activeCart?.cart || activeCart as any;
+    if(!cartData){
+    setCartTotal(0)
+    setCartItems([])
+    return  
     }
-    
-    const cartData = activeCart.cart || activeCart;
-    setCart(cartData);
-    setCartId(cartData.id);
-    console.log(cartData, 'caart')
     // Apply pricing strategy
     const appliedPriceListId = options?.priceListId || priceListId;
     const appliedCustomerGroupId = options?.customerGroupId || customerGroupId;
@@ -1071,7 +1084,7 @@ const initCart = useCallback(async (options?: {
 
     
     // Get custom prices
-    const customPrices = options?.customPricing || cartData.metadata?.custom_prices || {};
+    const customPrices = options?.customPricing || cartData?.metadata?.custom_prices || {};
     
     // Process items with shared pricing logic
     const transformedItems = await processCartItemsWithPricing(
@@ -1089,36 +1102,20 @@ const initCart = useCallback(async (options?: {
 
 
 
+
     // Update state
-    setCart({
-      ...cartData,
-      items: transformedItems,
-      subtotal,
-      tax_total: taxTotal,
-      total,
-    });
+
+    console.log(total, 'TOTTTS', cartData, storedCartId, cartId)
     setCartItems(transformedItems);
     setCartTotal(total);
-    
-    // // Restore metadata state
-    if (cartData.metadata) {
-      if (cartData.metadata.table_ids) setSelectedTableIds(cartData.metadata.table_ids);
-      if (cartData.metadata.customer_id && cartData.metadata.customer_name) {
-        setSelectedCustomer({
-          id: cartData.customer_id,
-          first_name: cartData.metadata.customer_name,
-          email: cartData.metadata.customer_email || "",
-        });
-      }
-      if (cartData.metadata.notes) setOrderNotes(cartData.metadata.notes);
-    }
+
     
   } catch (error) {
     console.error("Error initializing cart:", error);
   } finally {
     setIsLoadingCart(false);
   }
-}, [region, customerGroupId, priceListId, selectedCustomer?.id, processCartItemsWithPricing]);
+}, [region, customerGroupId, priceListId, processCartItemsWithPricing]);
 
 
   // Delete a draft
@@ -1325,32 +1322,52 @@ const initCart = useCallback(async (options?: {
 
   // Add to cart
   const addToCart = async ({ variantId, quantity }: { variantId: string; quantity: number }) => {
-    if (!cartId) return;
+   let storedCartId = localStorage.getItem("pos_cart_id") || cartId;
+   const existingItems = cartItems ?? [];
+    if (!storedCartId) {
+    let activeCart = await sdk.store.cart.create({
+        currency_code: region?.currency_code || "php",
+        metadata: {
+          seller_id: user?.id
+        }
+      });
+
+
+      console.log(activeCart, 'acct')
+      localStorage.setItem("pos_cart_id", activeCart.cart.id);
+      setCartId(activeCart.cart.id)
+      setCart(activeCart.cart)
+      setCartItems([])
+      storedCartId = activeCart.cart.id
+    }
     
+
+    console.log(storedCartId, 'storrree', existingItems)
     try {
-      const existingItem = cartItems.find(item => item.variant_id === variantId);
-      
+      const existingItem = existingItems.find(item => item.variant_id === variantId);
+          console.log(storedCartId, existingItem, storedCartId, 'ssssss')
+
       if (existingItem) {
-        await sdk.store.cart.updateLineItem(cartId, existingItem.id, {
+        await sdk.store.cart.updateLineItem(storedCartId, existingItem.id, {
           quantity: existingItem.quantity + quantity,
         });
       } else {
       const priceListData = await fetchPriceListWithVariants(priceListId, 'php');
         
-
-      let updatedCart = await sdk.store.cart.createLineItem(cartId, {
+      
+      let updatedCart = await sdk.store.cart.createLineItem(storedCartId, {
           variant_id: variantId,
           quantity,
         }) as any;
 
-      let priceListKey = `${variantId}-${cart.currency_code}`
+      let priceListKey = `${variantId}-php`
       let customUnitPrice = priceListData.get(priceListKey)
         console.log(updatedCart, 'cAAAT', customUnitPrice)
       
       let lineItem = updatedCart?.cart.items.find(a => a.variant_id == variantId);
-      console.log(lineItem, 'lineee')
+      console.log(lineItem, customUnitPrice, 'lineee', quantity)
       if(lineItem && customUnitPrice){
-        await updateLineItemPrice(lineItem.id, { cartId, variantId, customUnitPrice, quantity, priceListId, customerGroupId});
+        await updateLineItemPrice(lineItem.id, { cartId: storedCartId, variantId, customUnitPrice, quantity, priceListId, customerGroupId});
 
       const currentCustomPrices = cart?.metadata?.custom_prices || {};
       const updatedCustomPrices = {
@@ -1358,9 +1375,9 @@ const initCart = useCallback(async (options?: {
         [variantId]: customUnitPrice
       };
       
-        
 
-      await sdk.store.cart.update(cartId, {
+
+      await sdk.store.cart.update(storedCartId, {
         metadata: {
           ...cart?.metadata,
           custom_prices: updatedCustomPrices,
@@ -1372,7 +1389,7 @@ const initCart = useCallback(async (options?: {
 
       }
       
-      await refreshCart();
+      await refreshCart(storedCartId);
       toast({ title: "Added", description: "Item added to cart" });
     } catch (error) {
       console.error("Error adding to cart:", error);
@@ -1468,25 +1485,14 @@ const initCart = useCallback(async (options?: {
   // ============================================
 
   const handlePaymentComplete = async (paymentData: any) => {
-    if (!cartId) return;
+       let storedCartId = localStorage.getItem("pos_cart_id") || cartId;
+
+    if (!storedCartId) return;
     
     setIsCheckingOut(true);
     try {
 
-    console.log(cart, 'cartt')
-      // Update line items with custom prices before checkout
-      if (cart?.metadata?.custom_prices) {
-        const customPrices = cart.metadata.custom_prices;
-        
-        for (const item of cartItems) {
-          if (customPrices[item.variant_id] && customPrices[item.variant_id] !== item.unit_price) {
-              console.log(customPrices[item.variant_id], 'cusstom')
-            // await updateLineItemPrice(item.id, {...customPrices[item.variant_id],  cartId, variantId: item.variant_id, quantity: item.quantity, priceListId, customerGroupId });
-          }
-        }
-        
-        await refreshCart();
-      }
+
       
       const orderTotals = calculateOrderTotals(cartItems);
       
@@ -1508,7 +1514,7 @@ const initCart = useCallback(async (options?: {
         }
       }));
       
-      await sdk.store.cart.update(cartId, {
+      await sdk.store.cart.update(storedCartId, {
         metadata: {
           ...cart?.metadata,
           order_pricing_snapshot: {
@@ -1533,12 +1539,15 @@ const initCart = useCallback(async (options?: {
         provider_id: paymentProviderId
       });
       
-      const completeResult = await sdk.store.cart.complete(cartId);
-      
+      const completeResult = await sdk.store.cart.complete(storedCartId);
+
+      console.log(completeResult, 'comppp')
       if (!completeResult.order) throw new Error("Failed to create order");
       
       const createdOrder = completeResult.order;
       
+      // Clean up
+
   
       // Save to order history
       const orders = JSON.parse(localStorage.getItem("pos_order_history") || "[]");
@@ -1590,46 +1599,25 @@ const initCart = useCallback(async (options?: {
         localStorage.setItem("simple-tables", JSON.stringify(updatedTables));
       }
       
-      toast({ 
-        title: "Order Complete", 
-        description: `Order #${createdOrder.display_id} completed. Total: ${orderTotals.currency_code.toUpperCase()} ${orderTotals.total.toFixed(2)}` 
-      });
-      
-      // Clean up
+
       setPaymentDialogOpen(false);
       setMobileCartOpen(false);
       removeCartId();
       localStorage.removeItem("pos_cart_id");
-      const updatedDrafts = drafts.filter(d => d.id !== cartId);
-      saveDrafts(updatedDrafts);
-      
       setSelectedTableIds([]);
       setSelectedCustomer(null);
       setOrderNotes('');
-      
-      const receiptData = {
-        order_id: createdOrder.id,
-        display_id: createdOrder.display_id,
-        customer: selectedCustomer,
-        tables: selectedTableIds,
-        items: orderItemsWithPricing,
-        totals: orderTotals,
-        payment: paymentData,
-        pricing_info: {
-          strategy: cart?.metadata?.pricing_strategy,
-          has_custom_prices: Object.keys(cart?.metadata?.custom_prices || {}).length > 0,
-          price_list_applied: !!cart?.metadata?.price_list_id,
-          total_discount: calculateTotalDiscount(cartItems)
-        },
-        timestamp: new Date().toISOString()
-      };
-      
-      localStorage.setItem(`receipt_${createdOrder.id}`, JSON.stringify(receiptData));
-      setCurrentReceiptData(receiptData);
-      setPrintOpen(true);
-      
-      await refreshCart();
-      
+      setCart(null)
+      setCartId(null)
+      setCartItems([])
+      setCartTotal(0)
+
+      // await initCart()
+
+        const updatedDrafts = drafts.filter(d => d.id !== cartId);
+      saveDrafts(updatedDrafts);
+      refreshCart();
+
     } catch (error) {
       console.error("Error completing order:", error);
       toast({ title: "Error", description: "Failed to complete order", variant: "destructive" });
@@ -1653,7 +1641,6 @@ const initCart = useCallback(async (options?: {
   // ============================================
   // MOBILE LAYOUT
   // ============================================
-console.log(selectedCustomer, 'selll')
   if (isMobile) {
     return (
       <>
