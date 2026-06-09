@@ -259,6 +259,7 @@ const buildQueryString = (
   if (filters?.fulfillment_status) params.set("fulfillment_status", filters.fulfillment_status);
   if (filters?.customer_id) params.set("customer_id", filters.customer_id);
   if (filters?.company_id) params.set("company_id", filters.company_id);
+  if (filters?.seller_id) params.set("seller_id", filters.seller_id);
   if (filters?.email) params.set("email", filters.email);
   if (filters?.created_from) params.set("created_from", filters.created_from.toISOString());
   if (filters?.created_to) params.set("created_to", filters.created_to.toISOString());
@@ -283,14 +284,13 @@ const buildQueryString = (
 export const listOrders = async (
   limit: number = 10,
   offset: number = 0,
-  filters?: OrderFilters,
+  filters?: any,
   sort?: OrderSortOptions
 ): Promise<PaginatedOrderResponse> => {
   try {
     const headers = await getAuthHeaders();
     const next = await getCacheOptions("orders");
     const queryString = buildQueryString(limit, offset, filters, sort);
-      console.log(queryString, 'QUERY STRR', filters)
     // Use Medusa SDK client to fetch from custom endpoint
     const response = await sdk.client.fetch<any>(
       `/dashboard/orders?${queryString}`,
@@ -300,7 +300,7 @@ export const listOrders = async (
         next,
       }
     );
-
+console.log(response.orders, 'RESSSPPON')
     // Transform orders for dashboard
     const transformedOrders = response.orders?.map(transformOrderForDashboard) || [];
     
@@ -316,6 +316,7 @@ export const listOrders = async (
       has_next: currentPage < totalPages,
       has_previous: currentPage > 1,
     };
+
   } catch (error) {
     console.error("Error fetching orders:", error);
     medusaError(error);

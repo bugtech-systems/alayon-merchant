@@ -793,7 +793,7 @@ function PaymentDialog({ open, onOpenChange, cartTotal, region, onComplete }: an
 // ============================================
 
 interface PosAppProps {
-  region?: Region;
+  region?: any;
   user?: any;
   countryCode?: string;
 }

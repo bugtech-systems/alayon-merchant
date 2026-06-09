@@ -1,11 +1,13 @@
 // components/orders/orders-client.tsx
 'use client';
 
-import React, { useState, useTransition, useCallback } from 'react';
+import React, { useState, useTransition, useCallback, useEffect } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { DataTable, TableConfig } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import {
@@ -33,9 +35,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { OrderView } from './order-view';
 import { updateOrderStatus, deleteOrder } from '@/lib/actions/orders';
-import { Package, Eye, Trash2, RefreshCw } from 'lucide-react';
+import { listOrders } from '@/lib/data/orders';
+
+import { 
+  Package, 
+  Eye, 
+  Trash2, 
+  RefreshCw, 
+  Filter, 
+  Calendar as CalendarIcon,
+  X,
+  Download,
+  FileText,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 // Status badge component
 const OrderStatusBadge = ({ status }: { status: string }) => {
@@ -47,11 +70,29 @@ const OrderStatusBadge = ({ status }: { status: string }) => {
     refunded: { label: 'Refunded', variant: 'secondary' },
   };
   
-  const config = statusConfig[status.toLowerCase()] || { label: status, variant: 'secondary' };
+  const config = statusConfig[status?.toLowerCase()] || { label: status, variant: 'secondary' };
   
   return (
     <Badge variant={config.variant}>
       {config.label}
+    </Badge>
+  );
+};
+
+// Payment status badge
+const PaymentStatusBadge = ({ status }: { status: string }) => {
+  const config: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+    paid: { label: 'Paid', variant: 'default' },
+    pending: { label: 'Pending', variant: 'secondary' },
+    failed: { label: 'Failed', variant: 'destructive' },
+    refunded: { label: 'Refunded', variant: 'outline' },
+  };
+  
+  const badgeConfig = config[status?.toLowerCase()] || { label: status, variant: 'secondary' };
+  
+  return (
+    <Badge variant={badgeConfig.variant}>
+      {badgeConfig.label}
     </Badge>
   );
 };
@@ -65,41 +106,28 @@ const orderTableConfig: TableConfig = {
   sortOrder: 'desc',
   columns: [
     {
-      key: 'id',
-      header: 'Order ID',
+      key: 'display_id',
+      header: 'Order #',
       sortable: true,
       searchable: true,
       visible: true,
-      width: '120px',
+      width: '100px',
       render: (value) => (
-        <span className="font-mono text-xs">{value?.slice(0, 8)}...</span>
+        <span className="font-mono text-sm font-medium">
+          #{value}
+        </span>
       ),
     },
     {
-      key: 'display_id',
-      header: '#',
+      key: 'customer_name',
+      header: 'Customer',
       sortable: true,
-      searchable: true,
-      visible: true,
-      width: '70px',
-    },
-    {
-      key: 'email',
-      header: 'Customer Email',
-      sortable: true,
-      searchable: true,
-      visible: true,
-    },
-    {
-      key: 'customer',
-      header: 'Customer Name',
-      sortable: false,
       searchable: true,
       visible: true,
       render: (value, row) => {
-        const firstName = row.customer?.first_name || '';
+        const name = row.customer?.first_name || row.customer_name || '';
         const lastName = row.customer?.last_name || '';
-        return firstName || lastName ? `${firstName} ${lastName}`.trim() : '—';
+        return name || lastName ? `${name} ${lastName}`.trim() : 'Guest';
       },
     },
     {
@@ -109,8 +137,8 @@ const orderTableConfig: TableConfig = {
       searchable: false,
       visible: true,
       render: (value) => (
-        <span className="font-medium">
-          ${(value / 100).toFixed(2)}
+        <span className="font-semibold">
+          ₱{(value).toFixed(2)}
         </span>
       ),
     },
@@ -123,12 +151,20 @@ const orderTableConfig: TableConfig = {
       render: (value) => <OrderStatusBadge status={value} />,
     },
     {
-      key: 'items',
+      key: 'payment_status',
+      header: 'Payment',
+      sortable: true,
+      searchable: false,
+      visible: true,
+      render: (value) => <PaymentStatusBadge status={value} />,
+    },
+    {
+      key: 'items_count',
       header: 'Items',
       sortable: false,
       searchable: false,
       visible: true,
-      render: (value) => value?.length || 0,
+      render: (value) => value || 0,
     },
     {
       key: 'created_at',
@@ -136,7 +172,23 @@ const orderTableConfig: TableConfig = {
       sortable: true,
       searchable: false,
       visible: true,
-      render: (value) => value ? format(new Date(value), 'MMM dd, yyyy') : '—',
+      render: (value) => value ? format(new Date(value), 'MMM dd, yyyy h:mm a') : '—',
+    },
+    {
+      key: 'email',
+      header: 'Email',
+      sortable: true,
+      searchable: true,
+      visible: false,
+      render: (value) => value || '—',
+    },
+    {
+      key: 'phone',
+      header: 'Phone',
+      sortable: false,
+      searchable: true,
+      visible: false,
+      render: (value) => value || '—',
     },
     {
       key: 'updated_at',
@@ -158,18 +210,6 @@ const orderTableConfig: TableConfig = {
         return parts.join(', ');
       },
     },
-    {
-      key: 'payment_status',
-      header: 'Payment',
-      sortable: true,
-      searchable: false,
-      visible: false,
-      render: (value) => (
-        <Badge variant={value === 'paid' ? 'default' : 'secondary'}>
-          {value || 'pending'}
-        </Badge>
-      ),
-    },
   ],
 };
 
@@ -183,51 +223,91 @@ const statusOptions = [
   { value: 'refunded', label: 'Refunded' },
 ];
 
+const paymentStatusOptions = [
+  { value: 'all', label: 'All Payments' },
+  { value: 'paid', label: 'Paid' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'refunded', label: 'Refunded' },
+];
+
 interface OrdersClientProps {
   initialData: {
     orders: any[];
     count: number;
+    page: number;
+    total_pages: number;
+    has_next: boolean;
+    has_previous: boolean;
   };
   initialPage: number;
   initialLimit: number;
-  initialSort: string;
-  initialOrder: 'asc' | 'desc';
+  initialSortField: string;
+  initialSortOrder: 'asc' | 'desc';
   initialSearch: string;
-  initialFilters: Record<string, any>;
   initialStatus: string;
+  initialPaymentStatus: string;
+  initialDateFrom: string;
+  initialDateTo: string;
+  initialMinTotal: string;
+  initialMaxTotal: string;
+  initialCustomerId: string;
+  user: any;
 }
 
 export function OrdersClient({
   initialData,
   initialPage,
   initialLimit,
-  initialSort,
-  initialOrder,
+  initialSortField,
+  initialSortOrder,
   initialSearch,
-  initialFilters,
   initialStatus,
+  initialPaymentStatus,
+  initialDateFrom,
+  initialDateTo,
+  initialMinTotal,
+  initialMaxTotal,
+  initialCustomerId,
+  user
 }: OrdersClientProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   
-  // Local state for dialogs and optimistic updates
+  // Local state
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   const [newStatus, setNewStatus] = useState('');
   const [orders, setOrders] = useState(initialData.orders);
-  const [total, setTotal] = useState(initialData.count);
+  const [pagination, setPagination] = useState({
+    count: initialData.count,
+    page: initialData.page,
+    total_pages: initialData.total_pages,
+    has_next: initialData.has_next,
+    has_previous: initialData.has_previous
+  });
+  
+  // Filter states
   const [currentStatus, setCurrentStatus] = useState(initialStatus);
+  const [currentPaymentStatus, setCurrentPaymentStatus] = useState(initialPaymentStatus);
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(initialDateFrom ? new Date(initialDateFrom) : undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(initialDateTo ? new Date(initialDateTo) : undefined);
+  const [minTotal, setMinTotal] = useState(initialMinTotal);
+  const [maxTotal, setMaxTotal] = useState(initialMaxTotal);
+  const [searchTerm, setSearchTerm] = useState(initialSearch);
+  const [customerId, setCustomerId] = useState(initialCustomerId);
 
   // Update URL with new params
-  const updateUrlParams = useCallback((updates: Record<string, string | number | null>) => {
+  const updateUrlParams = useCallback((updates: Record<string, string | number | null | undefined>) => {
     const params = new URLSearchParams(searchParams.toString());
     
     Object.entries(updates).forEach(([key, value]) => {
-      if (value === null || value === '' || value === 0 || value === 'all') {
+      if (value === null || value === undefined || value === '' || value === 0 || value === 'all') {
         params.delete(key);
       } else {
         params.set(key, String(value));
@@ -239,6 +319,73 @@ export function OrdersClient({
     });
   }, [router, pathname, searchParams]);
 
+  // Fetch data from server based on current params
+  const fetchData = useCallback(async () => {
+    const page = parseInt(searchParams.get('page') || String(initialPage));
+    const limit = parseInt(searchParams.get('limit') || String(initialLimit));
+    const offset = (page - 1) * limit;
+    
+    const sortField = searchParams.get('sort_field') || initialSortField;
+    const sortOrder = (searchParams.get('sort_order') || initialSortOrder) as 'asc' | 'desc';
+    
+    // Build filters
+    const filters: Record<string, any> = {};
+    
+    const search = searchParams.get('search');
+    if (search) filters.search = search;
+    
+    const status = searchParams.get('status');
+    if (status && status !== 'all') filters.status = status;
+    
+    const paymentStatus = searchParams.get('payment_status');
+    if (paymentStatus && paymentStatus !== 'all') filters.payment_status = paymentStatus;
+    
+    const dateFromParam = searchParams.get('date_from');
+    if (dateFromParam) filters.date_from = dateFromParam;
+    
+   if (user && user?.id) {
+    filters.seller_id = user.id;
+    }
+
+    const dateToParam = searchParams.get('date_to');
+    if (dateToParam) filters.date_to = dateToParam;
+    
+    const minTotalParam = searchParams.get('min_total');
+    if (minTotalParam) filters.min_total = parseFloat(minTotalParam);
+    
+    const maxTotalParam = searchParams.get('max_total');
+    if (maxTotalParam) filters.max_total = parseFloat(maxTotalParam);
+    
+    const customerIdParam = searchParams.get('customer_id');
+    if (customerIdParam) filters.customer_id = customerIdParam;
+    
+    const sort = {
+      field: sortField,
+      order: sortOrder
+    };
+    
+    try {
+      const response = await listOrders(limit, offset, filters);
+      console.log(response, 'RESSP')
+      setOrders(response.orders);
+      setPagination({
+        count: response.count,
+        page: response.page,
+        total_pages: response.total_pages,
+        has_next: response.has_next,
+        has_previous: response.has_previous
+      });
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      toast.error('Failed to fetch orders');
+    }
+  }, [user, searchParams, initialPage, initialLimit, initialSortField, initialSortOrder]);
+
+  // Refetch when search params change
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
   // Handle page change
   const handlePageChange = (page: number) => {
     updateUrlParams({ page });
@@ -246,18 +393,65 @@ export function OrdersClient({
 
   // Handle sort change
   const handleSortChange = (field: string, order: 'asc' | 'desc') => {
-    updateUrlParams({ sort: field, order, page: 1 });
+    updateUrlParams({ sort_field: field, sort_order: order, page: 1 });
   };
 
-  // Handle search change
-  const handleSearchChange = (term: string) => {
-    updateUrlParams({ search: term || null, page: 1 });
-  };
+  // Handle search change with debounce
+  const handleSearchChange = useCallback((term: string) => {
+    setSearchTerm(term);
+    const timeoutId = setTimeout(() => {
+      updateUrlParams({ search: term || null, page: 1 });
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [updateUrlParams]);
 
-  // Handle status filter change
+  // Handle status filter
   const handleStatusFilter = (status: string) => {
     setCurrentStatus(status);
     updateUrlParams({ status: status === 'all' ? null : status, page: 1 });
+  };
+
+  // Handle payment status filter
+  const handlePaymentStatusFilter = (status: string) => {
+    setCurrentPaymentStatus(status);
+    updateUrlParams({ payment_status: status === 'all' ? null : status, page: 1 });
+  };
+
+  // Apply filters
+  const applyFilters = () => {
+    updateUrlParams({ 
+      date_from: dateFrom ? dateFrom.toISOString().split('T')[0] : null,
+      date_to: dateTo ? dateTo.toISOString().split('T')[0] : null,
+      min_total: minTotal || null,
+      max_total: maxTotal || null,
+      customer_id: customerId || null,
+      page: 1
+    });
+    setFilterDialogOpen(false);
+  };
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setCurrentStatus('all');
+    setCurrentPaymentStatus('all');
+    setDateFrom(undefined);
+    setDateTo(undefined);
+    setMinTotal('');
+    setMaxTotal('');
+    setCustomerId('');
+    setSearchTerm('');
+    updateUrlParams({
+      status: null,
+      payment_status: null,
+      date_from: null,
+      date_to: null,
+      min_total: null,
+      max_total: null,
+      customer_id: null,
+      search: null,
+      page: 1
+    });
+    setFilterDialogOpen(false);
   };
 
   // Handle view order
@@ -270,7 +464,6 @@ export function OrdersClient({
   const handleStatusUpdate = async () => {
     if (!selectedOrder || !newStatus) return;
     
-    // Optimistic update
     const previousOrders = [...orders];
     const updatedOrders = orders.map(order => 
       order.id === selectedOrder.id ? { ...order, status: newStatus } : order
@@ -282,16 +475,13 @@ export function OrdersClient({
       const result = await updateOrderStatus(selectedOrder.id, newStatus);
       if (result.success) {
         toast.success(`Order status updated to ${newStatus}`);
-        setSelectedOrder({ ...selectedOrder, status: newStatus });
-        refreshData();
+        fetchData();
       } else {
         throw new Error(result.error);
       }
     } catch (error) {
-      // Rollback on error
       setOrders(previousOrders);
       toast.error('Failed to update order status');
-      console.error('Error updating order status:', error);
     }
   };
 
@@ -299,68 +489,285 @@ export function OrdersClient({
   const handleDelete = async () => {
     if (!selectedOrder) return;
     
-    // Optimistic update
     const previousOrders = [...orders];
     setOrders(orders.filter(o => o.id !== selectedOrder.id));
-    setTotal(total - 1);
     setDeleteDialogOpen(false);
     
     try {
       const result = await deleteOrder(selectedOrder.id);
       if (result.success) {
         toast.success('Order deleted successfully');
-        refreshData();
+        fetchData();
       } else {
         throw new Error(result.error);
       }
     } catch (error) {
-      // Rollback on error
       setOrders(previousOrders);
-      setTotal(total);
       toast.error('Failed to delete order');
-      console.error('Error deleting order:', error);
     }
   };
 
-  // Refresh data from server
-  const refreshData = useCallback(async () => {
-    const params = new URLSearchParams(searchParams.toString());
-    const response = await fetch(`/api/orders?${params.toString()}`);
-    const data = await response.json();
-    setOrders(data.orders);
-    setTotal(data.count);
-  }, [searchParams]);
+  // Get active filters count
+  const getActiveFiltersCount = () => {
+    let count = 0;
+    if (currentStatus !== 'all') count++;
+    if (currentPaymentStatus !== 'all') count++;
+    if (dateFrom || dateTo) count++;
+    if (minTotal || maxTotal) count++;
+    if (customerId) count++;
+    if (searchTerm) count++;
+    return count;
+  };
 
   // Custom actions for orders table
   const renderCustomActions = () => (
     <div className="flex gap-2">
-      <Select value={currentStatus} onValueChange={handleStatusFilter}>
-        <SelectTrigger className="w-[150px]">
-          <SelectValue placeholder="Filter by status" />
-        </SelectTrigger>
-        <SelectContent>
-          {statusOptions.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <Popover open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-2">
+            <Filter className="h-4 w-4" />
+            Filters
+            {getActiveFiltersCount() > 0 && (
+              <Badge variant="secondary" className="ml-1">
+                {getActiveFiltersCount()}
+              </Badge>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80" align="end">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium">Filter Orders</h4>
+              <Button variant="ghost" size="sm" onClick={clearAllFilters}>
+                <X className="h-3 w-3 mr-1" />
+                Clear all
+              </Button>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Order Status</Label>
+              <Select value={currentStatus} onValueChange={handleStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {statusOptions.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Payment Status</Label>
+              <Select value={currentPaymentStatus} onValueChange={handlePaymentStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {paymentStatusOptions.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Customer ID</Label>
+              <Input
+                placeholder="Enter customer ID"
+                value={customerId}
+                onChange={(e) => setCustomerId(e.target.value)}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Date Range</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">From</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start text-left font-normal">
+                        <CalendarIcon className="mr-2 h-3 w-3" />
+                        {dateFrom ? format(dateFrom, 'MMM dd, yyyy') : 'Select date'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={dateFrom}
+                        onSelect={setDateFrom}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div>
+                  <Label className="text-xs">To</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start text-left font-normal">
+                        <CalendarIcon className="mr-2 h-3 w-3" />
+                        {dateTo ? format(dateTo, 'MMM dd, yyyy') : 'Select date'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={dateTo}
+                        onSelect={setDateTo}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Total Amount Range (₱)</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  type="number"
+                  placeholder="Min"
+                  value={minTotal}
+                  onChange={(e) => setMinTotal(e.target.value)}
+                />
+                <Input
+                  type="number"
+                  placeholder="Max"
+                  value={maxTotal}
+                  onChange={(e) => setMaxTotal(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <Button onClick={applyFilters} className="w-full">
+              Apply Filters
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
+
+  // Active filters display
+  const ActiveFilters = () => {
+    const filters = [];
+    if (currentStatus !== 'all') filters.push({ label: `Status: ${currentStatus}`, key: 'status' });
+    if (currentPaymentStatus !== 'all') filters.push({ label: `Payment: ${currentPaymentStatus}`, key: 'payment' });
+    if (dateFrom) filters.push({ label: `From: ${format(dateFrom, 'MMM dd, yyyy')}`, key: 'date_from' });
+    if (dateTo) filters.push({ label: `To: ${format(dateTo, 'MMM dd, yyyy')}`, key: 'date_to' });
+    if (minTotal) filters.push({ label: `Min: ₱${minTotal}`, key: 'min_total' });
+    if (maxTotal) filters.push({ label: `Max: ₱${maxTotal}`, key: 'max_total' });
+    if (customerId) filters.push({ label: `Customer: ${customerId.slice(0, 8)}...`, key: 'customer_id' });
+    if (searchTerm) filters.push({ label: `Search: ${searchTerm}`, key: 'search' });
+    
+    if (filters.length === 0) return null;
+    
+    return (
+      <div className="flex flex-wrap gap-2 mb-4">
+        {filters.map((filter) => (
+          <Badge key={filter.key} variant="secondary" className="gap-1">
+            {filter.label}
+            <button
+              onClick={() => {
+                if (filter.key === 'status') handleStatusFilter('all');
+                if (filter.key === 'payment') handlePaymentStatusFilter('all');
+                if (filter.key === 'date_from') setDateFrom(undefined);
+                if (filter.key === 'date_to') setDateTo(undefined);
+                if (filter.key === 'min_total') setMinTotal('');
+                if (filter.key === 'max_total') setMaxTotal('');
+                if (filter.key === 'customer_id') setCustomerId('');
+                if (filter.key === 'search') {
+                  setSearchTerm('');
+                  updateUrlParams({ search: null, page: 1 });
+                }
+                updateUrlParams({
+                  [filter.key]: null,
+                  page: 1
+                });
+              }}
+              className="ml-1 hover:text-destructive"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+        ))}
+        {filters.length > 0 && (
+          <Button variant="ghost" size="sm" onClick={clearAllFilters} className="h-6 text-xs">
+            Clear all
+          </Button>
+        )}
+      </div>
+    );
+  };
+
+    const { page, total_pages, has_next, has_previous } = pagination;
+
+
+  // Pagination component
+  const Pagination = () => {
+    
+    if (total_pages <= 1) return null;
+    
+    return (
+      <div className="flex items-center justify-between px-2 py-4">
+        <div className="text-sm text-muted-foreground">
+          Showing page {page} of {total_pages}
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handlePageChange(page - 1)}
+            disabled={!has_previous || isPending}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handlePageChange(page + 1)}
+            disabled={!has_next || isPending}
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <>
       {/* Custom filters bar */}
-      <div className="mb-4 flex justify-end">
+      <div className="mb-4 flex justify-between items-center">
+        <div className="flex-1 max-w-md">
+          <Input
+            placeholder="Search orders by ID, customer, email..."
+            value={searchTerm}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="w-full"
+          />
+        </div>
         {renderCustomActions()}
       </div>
+      
+      {/* Active filters display */}
+      <ActiveFilters />
 
       <DataTable
         config={orderTableConfig}
         data={orders}
-        total={total}
-        currentPage={initialPage}
+        total={pagination.count}
+        currentPage={page}
         onPageChange={handlePageChange}
         onSortChange={handleSortChange}
         onSearchChange={handleSearchChange}
@@ -376,21 +783,21 @@ export function OrdersClient({
         }}
         loading={isPending}
         customActions={(order) => (
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setSelectedOrder(order);
-                setNewStatus(order.status);
-                setStatusDialogOpen(true);
-              }}
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-          </>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSelectedOrder(order);
+              setNewStatus(order.status);
+              setStatusDialogOpen(true);
+            }}
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
         )}
       />
+      
+      <Pagination />
 
       {/* View Order Dialog */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>

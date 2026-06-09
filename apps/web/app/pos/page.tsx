@@ -3,7 +3,6 @@ import { getRegion } from "@/lib/actions/regions";
 import PosApp from "./_components/pos-app";
 import { Skeleton } from "@/components/ui/skeleton";
 import { retrieveUser } from "@/lib/data";
-import { listPriceListProducts } from "@/lib/data/products";
 import { redirect } from "next/navigation";
 
 export const dynamic = 'force-dynamic';
