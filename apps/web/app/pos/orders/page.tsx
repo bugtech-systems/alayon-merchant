@@ -78,8 +78,11 @@ export default async function OrdersPage({ searchParams }: PageProps) {
   // Seller filter based on user role
   if (user && user?.id) {
     filters.seller_id = user.id;
+   
   }
-  
+   if(user?.employee?.company?.id){
+    filters.company_id = user?.employee?.company?.id;
+   }
   // Customer group filter based on user role
   const customerGroupId = user?.metadata?.role === 'company' 
     ? user.employee?.company?.customer_group_id 

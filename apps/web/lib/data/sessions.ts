@@ -41,6 +41,11 @@ export async function retrieveSession() {
 export async function destroySession() {
   const cookieStore = await cookies();
   cookieStore.delete("_medusa_jwt");
+  cookieStore.delete("customer_group_id");
+  cookieStore.delete("medusa_region_id");
+  cookieStore.delete("_medusa_cache_id");
+  cookieStore.delete("_medusa_company_id");
+  
   revalidateTag("user", "max");
 }
 

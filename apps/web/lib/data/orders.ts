@@ -275,7 +275,7 @@ const buildQueryString = (
   params.set("expand_customer", "true");
   params.set("expand_addresses", "true");
   params.set("expand_shipping_methods", "true");
-    params.set("expand_payments", "false");
+  params.set("expand_payments", "false");
 
   return params.toString();
 };

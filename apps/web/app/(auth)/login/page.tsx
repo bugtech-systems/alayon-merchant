@@ -40,9 +40,9 @@ export default function LoginPage() {
 
   const userTypes = [
     // { value: "customer", label: "Customer", icon: User, color: "blue" },
-    { value: "company", label: "Merchant", icon: Store, color: "green" },
+    { value: "employee", label: "Store", icon: Store, color: "green" },
     { value: "driver", label: "Driver", icon: Truck, color: "orange" },
-    { value: "user", label: "Admin", icon: Building2, color: "purple" },
+    { value: "company", label: "Admin", icon: Building2, color: "purple" },
   ]
 
   const validateForm = (): boolean => {
@@ -113,7 +113,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-4">
-           <LoginForm redirectUrl="/dashboard" />
+           <LoginForm />
     </div>
   )
 }

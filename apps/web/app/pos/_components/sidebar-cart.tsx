@@ -1,7 +1,7 @@
 // app/(pos)/components/sidebar-cart.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
@@ -49,7 +49,7 @@ import { Separator } from "@/components/ui/separator";
 import { listBarangays, listMunicipalities } from "@/lib/actions/regions";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { createQuickCustomer } from "@/lib/actions";
-import { listCustomerGroupCustomers } from "@/lib/data/customer";
+import { listCustomerGroupCustomers, listCustomers } from "@/lib/data/customer";
 
 // Types
 interface CartItem {
@@ -265,185 +265,30 @@ function MultiTableSelector({
   );
 }
 
-// Create Customer Dialog Component
-// Create Customer Dialog Component
-function CreateCustomerDialog({ 
-  open, 
-  onOpenChange, 
+// Simplified Create Customer Form Component (No advanced search)
+function CreateCustomerForm({ 
   onCustomerCreated,
+  onCancel,
   user
 }: { 
-  open: boolean; 
-  onOpenChange: (open: boolean) => void;
   onCustomerCreated: (customer: Customer) => void;
+  onCancel: () => void;
   user?: any
 }) {
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
-    email: "",
     phone: "",
-    address: "",
+    email: "",
   });
   
-  const [municipalities, setMunicipalities] = useState<Municipality[]>([]);
-  const [selectedMunicipality, setSelectedMunicipality] = useState<Municipality | null>(null);
-  const [barangays, setBarangays] = useState<Barangay[]>([]);
-  const [selectedBarangay, setSelectedBarangay] = useState<Barangay | null>(null);
-  
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingMunicipalities, setLoadingMunicipalities] = useState(false);
-  const [loadingBarangays, setLoadingBarangays] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
-  const [duplicateCustomer, setDuplicateCustomer] = useState<any>(null);
 
   const customerGroupId = user?.metadata?.role === 'company' 
     ? user.employee?.company?.customer_group_id 
     : user?.driver?.customer_group_id;
-    
-  // Helper function to extract error message from API response
-  const extractErrorMessage = (error: any): string => {
-    // Check for duplicate customer error
-    if (error.message?.includes("already exists") || error.status === 500) {
-      // Try to extract customer info from error
-      const emailMatch = error.message?.match(/email:\s*([^,]+)/);
-      if (emailMatch) {
-        const existingEmail = emailMatch[1];
-        setDuplicateCustomer({ email: existingEmail });
-        return `A customer with email ${existingEmail} already exists. Please use a different email or search for the existing customer.`;
-      }
-      return "A customer with this email or phone number already exists. Please check your information or search for the existing customer.";
-    }
-    
-    // Check for phone number duplicate
-    if (error.message?.includes("phone") || error.message?.includes("Phone")) {
-      return "This phone number is already registered. Please use a different number or search for the existing customer.";
-    }
-    
-    // Network or server errors
-    if (error.status === 500) {
-      return "Server error. Please try again later or contact support if the issue persists.";
-    }
-    
-    if (error.status === 400) {
-      return "Invalid information provided. Please check all fields and try again.";
-    }
-    
-    if (error.status === 401 || error.status === 403) {
-      return "You don't have permission to create customers. Please contact your administrator.";
-    }
-    
-    if (error.message?.includes("network") || error.message?.includes("fetch")) {
-      return "Network error. Please check your connection and try again.";
-    }
-    
-    return error.message || "Failed to create customer. Please try again.";
-  };
-
-  // Load municipalities when dialog opens
-  useEffect(() => {
-    if (open) {
-      loadMunicipalities();
-    }
-  }, [open]);
-
-  // Reset form when dialog closes
-  useEffect(() => {
-    if (!open) {
-      setFormData({
-        first_name: "",
-        last_name: "",
-        email: "",
-        phone: "",
-        address: "",
-      });
-      setSelectedMunicipality(null);
-      setSelectedBarangay(null);
-      setBarangays([]);
-      setErrors({});
-      setTouched({});
-      setDuplicateCustomer(null);
-    }
-  }, [open]);
-
-  // Load barangays when municipality changes
-  useEffect(() => {
-    if (selectedMunicipality) {
-      loadBarangays(selectedMunicipality.citymun_code);
-    } else {
-      setBarangays([]);
-      setSelectedBarangay(null);
-    }
-  }, [selectedMunicipality]);
-
-  const loadMunicipalities = async () => {
-    setLoadingMunicipalities(true);
-    setErrors(prev => ({ ...prev, municipalities: "" }));
-    try {
-      const response = await listMunicipalities();
-      let municipalitiesData: Municipality[] = [];
-      if (Array.isArray(response)) {
-        municipalitiesData = response;
-      } else if (response && typeof response === 'object' && 'data' in response) {
-        municipalitiesData = (response as any).data;
-      } else if (response && typeof response === 'object' && 'municipalities' in response) {
-        municipalitiesData = (response as any).municipalities;
-      }
-      
-      if (municipalitiesData.length === 0) {
-        setErrors(prev => ({ ...prev, municipalities: "No municipalities found. Please refresh the page." }));
-      }
-      setMunicipalities(municipalitiesData);
-    } catch (error) {
-      console.error("Error loading municipalities:", error);
-      setErrors(prev => ({ ...prev, municipalities: "Failed to load municipalities. Please refresh the page." }));
-    } finally {
-      setLoadingMunicipalities(false);
-    }
-  };
-
-  const loadBarangays = async (citymunCode: string) => {
-    setLoadingBarangays(true);
-    setErrors(prev => ({ ...prev, barangays: "" }));
-    try {
-      const response = await listBarangays(citymunCode);
-      let barangaysData: Barangay[] = [];
-      if (Array.isArray(response)) {
-        barangaysData = response;
-      } else if (response && typeof response === 'object' && 'data' in response) {
-        barangaysData = (response as any).data;
-      } else if (response && typeof response === 'object' && 'barangays' in response) {
-        barangaysData = (response as any).barangays;
-      }
-      
-      if (barangaysData.length === 0) {
-        setErrors(prev => ({ ...prev, barangays: "No barangays found for this municipality." }));
-      }
-      setBarangays(barangaysData);
-    } catch (error) {
-      console.error("Error loading barangays:", error);
-      setErrors(prev => ({ ...prev, barangays: "Failed to load barangays. Please try again." }));
-    } finally {
-      setLoadingBarangays(false);
-    }
-  };
-
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: "" }));
-    }
-    // Clear duplicate customer error when email or phone changes
-    if (field === 'email' || field === 'phone') {
-      setDuplicateCustomer(null);
-      setErrors(prev => ({ ...prev, general: "" }));
-    }
-  };
-
-  const handleBlur = (field: string) => {
-    setTouched(prev => ({ ...prev, [field]: true }));
-  };
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -457,19 +302,9 @@ function CreateCustomerDialog({
       newErrors.first_name = "First name must be less than 50 characters";
     }
     
-    // Last name validation (optional but validate if provided)
+    // Last name validation (optional)
     if (formData.last_name && formData.last_name.length > 50) {
       newErrors.last_name = "Last name must be less than 50 characters";
-    }
-    
-    // Email validation (optional but validate format if provided)
-    if (formData.email) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.email)) {
-        newErrors.email = "Please enter a valid email address";
-      } else if (formData.email.length > 100) {
-        newErrors.email = "Email must be less than 100 characters";
-      }
     }
     
     // Phone validation
@@ -481,30 +316,35 @@ function CreateCustomerDialog({
       newErrors.phone = "Please enter a valid phone number (10-11 digits)";
     }
     
-    // Address validation (optional but validate if provided)
-    if (formData.address && formData.address.length > 200) {
-      newErrors.address = "Address must be less than 200 characters";
-    }
-    
-    // Municipality validation
-    if (!selectedMunicipality) {
-      newErrors.municipality = "Please select a municipality/city";
-    }
-    
-    // Barangay validation
-    if (!selectedBarangay) {
-      newErrors.barangay = "Please select a barangay";
+    // Email validation (optional)
+    if (formData.email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        newErrors.email = "Please enter a valid email address";
+      } else if (formData.email.length > 100) {
+        newErrors.email = "Email must be less than 100 characters";
+      }
     }
     
     return newErrors;
   };
 
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: "" }));
+    }
+  };
+
+  const handleBlur = (field: string) => {
+    setTouched(prev => ({ ...prev, [field]: true }));
+  };
+
   const handleSubmit = async () => {
     // Mark all fields as touched
-    const allFields = ['first_name', 'phone', 'municipality', 'barangay'];
+    const allFields = ['first_name', 'phone'];
     if (formData.email) allFields.push('email');
     if (formData.last_name) allFields.push('last_name');
-    if (formData.address) allFields.push('address');
     
     const touchedState: Record<string, boolean> = {};
     allFields.forEach(field => { touchedState[field] = true; });
@@ -518,7 +358,6 @@ function CreateCustomerDialog({
 
     setIsLoading(true);
     setErrors({});
-    setDuplicateCustomer(null);
     
     try {
       // Generate a temporary email if not provided
@@ -530,15 +369,10 @@ function CreateCustomerDialog({
         first_name: formData.first_name,
         last_name: formData.last_name || "",
         phone: formData.phone,
-        address: formData.address,
-        municipality: selectedMunicipality?.citymun_desc,
-        municipalityCode: selectedMunicipality?.citymun_code,
-        barangay: selectedBarangay?.barangay_desc,
-        barangayCode: selectedBarangay?.psgc_code,
       });
-     
 
-      console.log(response, 'RESSPONSIVE')
+
+      console.log(response, 'RESPSSS')
       if (response.customer) {
         onCustomerCreated({
           id: response.customer.id,
@@ -546,369 +380,240 @@ function CreateCustomerDialog({
           last_name: response.customer.last_name,
           email: response.customer.email,
           phone: response.customer.phone,
-          address: formData.address,
-          municipality: selectedMunicipality?.citymun_desc,
-          barangay: selectedBarangay?.barangay_desc,
         });
-        onOpenChange(false);
       }
     } catch (error: any) {
       console.error("Error creating customer:", error);
       
-      // Parse error response
-      let errorMessage = extractErrorMessage(error);
-      
-      // Check for specific duplicate scenarios
       if (error.message?.includes("already exists") || error.status === 500) {
-        // Try to search for existing customer
-        try {
-          const searchResponse = await sdk.client.fetch(`/store/customers?q=${formData.email || formData.phone}`, {
-            method: "GET",
-            headers: await getAuthHeaders(),
-          });
-          
-          if (searchResponse.customers && searchResponse.customers.length > 0) {
-            const existingCustomer = searchResponse.customers[0];
-            setDuplicateCustomer(existingCustomer);
-            errorMessage = `A customer with ${formData.email ? 'email' : 'phone'} "${formData.email || formData.phone}" already exists. Would you like to use this existing customer?`;
-          }
-        } catch (searchError) {
-          console.error("Error searching for existing customer:", searchError);
-        }
-        
-        setErrors({ general: errorMessage });
+        setErrors({ general: "A customer with this phone number already exists. Please search for existing customer." });
       } else if (error.message?.includes("phone")) {
         setErrors({ phone: "This phone number is already registered. Please use a different number." });
-      } else if (error.message?.includes("email")) {
-        setErrors({ email: "This email is already registered. Please use a different email." });
       } else {
-        setErrors({ general: errorMessage });
+        setErrors({ general: "Failed to create customer. Please try again." });
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleUseExistingCustomer = () => {
-    if (duplicateCustomer) {
-      onCustomerCreated({
-        id: duplicateCustomer.id,
-        first_name: duplicateCustomer.first_name,
-        last_name: duplicateCustomer.last_name,
-        email: duplicateCustomer.email,
-        phone: duplicateCustomer.phone,
-        address: duplicateCustomer.metadata?.address,
-        municipality: duplicateCustomer.metadata?.municipality,
-        barangay: duplicateCustomer.metadata?.barangay,
-      });
-      onOpenChange(false);
-    }
-  };
-
-  const municipalityOptions = municipalities.map(m => ({
-    id: m.citymun_code,
-    name: m.citymun_desc,
-  }));
-
-  const barangayOptions = barangays.map(b => ({
-    id: b.psgc_code,
-    name: b.barangay_desc,
-  }));
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Create New Customer</DialogTitle>
-          <DialogDescription>Enter customer details to create a new account</DialogDescription>
-        </DialogHeader>
-        
-        <div className="space-y-4">
-          {/* General Error Alert */}
-          {errors.general && (
-            <div className="rounded-lg bg-red-50 border border-red-200 p-3">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 text-red-600 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm text-red-800">{errors.general}</p>
-                  {duplicateCustomer && (
-                    <Button 
-                      variant="link" 
-                      size="sm" 
-                      className="text-red-700 p-0 h-auto mt-1"
-                      onClick={handleUseExistingCustomer}
-                    >
-                      Use existing customer instead
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+    <div className="space-y-4">
+      <div className="text-center">
+        <h3 className="font-medium text-sm">Create New Customer</h3>
+        <p className="text-xs text-muted-foreground mt-1">Enter customer details below</p>
+      </div>
 
-          {/* Municipalities Loading Error */}
-          {errors.municipalities && (
-            <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-2">
-              <p className="text-xs text-yellow-800">{errors.municipalities}</p>
-            </div>
-          )}
-
-          {/* Barangays Loading Error */}
-          {errors.barangays && (
-            <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-2">
-              <p className="text-xs text-yellow-800">{errors.barangays}</p>
-            </div>
-          )}
-
-          {/* Name Fields */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className={errors.first_name && touched.first_name ? "text-red-600" : ""}>
-                First Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                value={formData.first_name}
-                onChange={(e) => handleInputChange('first_name', e.target.value)}
-                onBlur={() => handleBlur('first_name')}
-                placeholder="John"
-                className={errors.first_name && touched.first_name ? "border-red-500 focus-visible:ring-red-500" : ""}
-              />
-              {errors.first_name && touched.first_name && (
-                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  {errors.first_name}
-                </p>
-              )}
-            </div>
-            <div>
-              <Label>Last Name</Label>
-              <Input
-                value={formData.last_name}
-                onChange={(e) => handleInputChange('last_name', e.target.value)}
-                onBlur={() => handleBlur('last_name')}
-                placeholder="Doe"
-                className={errors.last_name && touched.last_name ? "border-red-500" : ""}
-              />
-              {errors.last_name && touched.last_name && (
-                <p className="text-xs text-red-500 mt-1">{errors.last_name}</p>
-              )}
-            </div>
+      {/* General Error Alert */}
+      {errors.general && (
+        <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 text-red-600 mt-0.5" />
+            <p className="text-sm text-red-800">{errors.general}</p>
           </div>
+        </div>
+      )}
 
-          {/* Contact Fields */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className={errors.phone && touched.phone ? "text-red-600" : ""}>
-                Phone Number <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => handleInputChange('phone', e.target.value)}
-                onBlur={() => handleBlur('phone')}
-                placeholder="09123456789"
-                className={errors.phone && touched.phone ? "border-red-500" : ""}
-              />
-              {errors.phone && touched.phone && (
-                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  {errors.phone}
-                </p>
-              )}
-            </div>
-            <div>
-              <Label className={errors.email && touched.email ? "text-red-600" : ""}>
-                Email <span className="text-gray-400 text-xs">(Optional)</span>
-              </Label>
-              <Input
-                type="email"
-                value={formData.email}
-                onChange={(e) => handleInputChange('email', e.target.value)}
-                onBlur={() => handleBlur('email')}
-                placeholder="customer@example.com"
-                className={errors.email && touched.email ? "border-red-500" : ""}
-              />
-              {errors.email && touched.email && (
-                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  {errors.email}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Address */}
-          <div>
-            <Label>Street Address / Building</Label>
-            <Input
-              value={formData.address}
-              onChange={(e) => handleInputChange('address', e.target.value)}
-              onBlur={() => handleBlur('address')}
-              placeholder="123 Main Street"
-              className={errors.address && touched.address ? "border-red-500" : ""}
-            />
-            {errors.address && touched.address && (
-              <p className="text-xs text-red-500 mt-1">{errors.address}</p>
-            )}
-          </div>
-
-          {/* Municipality Selection */}
-          <div className="space-y-2">
-            <Label className={errors.municipality && touched.municipality ? "text-red-600" : ""}>
-              Municipality / City <span className="text-red-500">*</span>
-            </Label>
-            <SearchableSelect
-              options={municipalityOptions}
-              value={selectedMunicipality?.citymun_code || ''}
-              onValueChange={(value) => {
-                const municipality = municipalities.find(m => m.citymun_code === value);
-                setSelectedMunicipality(municipality || null);
-                if (errors.municipality) setErrors(prev => ({ ...prev, municipality: "" }));
-              }}
-              placeholder="Search for municipality..."
-              searchPlaceholder="Search municipality name..."
-              emptyMessage={loadingMunicipalities ? "Loading municipalities..." : "No municipality found."}
-              disabled={loadingMunicipalities}
-              loading={loadingMunicipalities}
-              className={errors.municipality && touched.municipality ? "border-red-500" : ""}
-            />
-            {errors.municipality && touched.municipality && (
-              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                <AlertCircle className="h-3 w-3" />
-                {errors.municipality}
-              </p>
-            )}
-          </div>
-
-          {/* Barangay Selection */}
-          {selectedMunicipality && (
-            <div className="space-y-2">
-              <Label className={errors.barangay && touched.barangay ? "text-red-600" : ""}>
-                Barangay <span className="text-red-500">*</span>
-              </Label>
-              <SearchableSelect
-                options={barangayOptions}
-                value={selectedBarangay?.psgc_code || ''}
-                onValueChange={(value) => {
-                  const barangay = barangays.find(b => b.psgc_code === value);
-                  setSelectedBarangay(barangay || null);
-                  if (errors.barangay) setErrors(prev => ({ ...prev, barangay: "" }));
-                }}
-                placeholder="Search for barangay..."
-                searchPlaceholder="Search barangay name..."
-                emptyMessage={
-                  loadingBarangays 
-                    ? "Loading barangays..." 
-                    : barangays.length === 0 
-                      ? "No barangay found for this municipality."
-                      : "Select a barangay"
-                }
-                disabled={loadingBarangays || barangays.length === 0}
-                loading={loadingBarangays}
-                className={errors.barangay && touched.barangay ? "border-red-500" : ""}
-              />
-              {errors.barangay && touched.barangay && (
-                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  {errors.barangay}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Location Preview */}
-          {selectedMunicipality && selectedBarangay && (
-            <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
-              <p className="text-xs text-blue-700 mb-1">Selected Location</p>
-              <p className="text-sm font-medium text-gray-900">
-                {selectedBarangay.barangay_desc}, {selectedMunicipality.citymun_desc}
-              </p>
-              {formData.address && (
-                <p className="text-xs text-gray-600 mt-1">{formData.address}</p>
-              )}
-            </div>
+      {/* Name Fields */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label className={errors.first_name && touched.first_name ? "text-red-600" : ""}>
+            First Name <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            value={formData.first_name}
+            onChange={(e) => handleInputChange('first_name', e.target.value)}
+            onBlur={() => handleBlur('first_name')}
+            placeholder="John"
+            className={errors.first_name && touched.first_name ? "border-red-500" : ""}
+          />
+          {errors.first_name && touched.first_name && (
+            <p className="text-xs text-red-500 mt-1">{errors.first_name}</p>
           )}
         </div>
+        <div>
+          <Label>Last Name</Label>
+          <Input
+            value={formData.last_name}
+            onChange={(e) => handleInputChange('last_name', e.target.value)}
+            onBlur={() => handleBlur('last_name')}
+            placeholder="Doe"
+          />
+          {errors.last_name && touched.last_name && (
+            <p className="text-xs text-red-500 mt-1">{errors.last_name}</p>
+          )}
+        </div>
+      </div>
 
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={isLoading}>
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Create Customer
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      {/* Contact Fields */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label className={errors.phone && touched.phone ? "text-red-600" : ""}>
+            Phone Number <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            type="tel"
+            value={formData.phone}
+            onChange={(e) => handleInputChange('phone', e.target.value)}
+            onBlur={() => handleBlur('phone')}
+            placeholder="09123456789"
+            className={errors.phone && touched.phone ? "border-red-500" : ""}
+          />
+          {errors.phone && touched.phone && (
+            <p className="text-xs text-red-500 mt-1">{errors.phone}</p>
+          )}
+        </div>
+        <div>
+          <Label>Email <span className="text-gray-400 text-xs">(Optional)</span></Label>
+          <Input
+            type="email"
+            value={formData.email}
+            onChange={(e) => handleInputChange('email', e.target.value)}
+            onBlur={() => handleBlur('email')}
+            placeholder="customer@example.com"
+          />
+          {errors.email && touched.email && (
+            <p className="text-xs text-red-500 mt-1">{errors.email}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex gap-2 pt-2">
+        <Button variant="outline" onClick={onCancel} className="flex-1">
+          Cancel
+        </Button>
+        <Button onClick={handleSubmit} disabled={isLoading} className="flex-1">
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Create Customer
+        </Button>
+      </div>
+    </div>
   );
 }
 
-// Customer Selector Component
-function CustomerSelector({ selectedCustomer, onSelectCustomer, onClear, user }: any) {
-    const customerGroupId = user?.metadata?.role === 'company' 
+function CustomerSelector({ selectedCustomer, onSelectCustomer, onClear, user }: CustomerSelectorProps) {
+  const customerGroupId = user?.metadata?.role === 'company' 
     ? user.employee?.company?.customer_group_id 
     : user?.driver?.customer_group_id;
     
   const [isOpen, setIsOpen] = useState(false);
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
-  const [searchFilters, setSearchFilters] = useState({
-    first_name: "",
-    last_name: "",
-    email: "",
-    phone: "",
-    customer_group_id: customerGroupId
-  });
+  const [hasSearched, setHasSearched] = useState(false);
+  const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 });
 
-
-  const searchCustomers = async () => {
-    const query = searchTerm || searchFilters.first_name || searchFilters.last_name || searchFilters.email || searchFilters.phone;
-    if (!query) return;
-    
+  // Unified function to fetch customers using listCustomers action
+  const fetchCustomers = useCallback(async (params: any = {}) => {
     setIsLoading(true);
     try {
-      const headers = await getAuthHeaders();
-      const response = await sdk.client.fetch(`/store/customers?search=${encodeURIComponent(query)}&limit=20`, {
-        method: "GET",
-        headers,
+      const response = await listCustomers({
+        ...params,
+        limit: params.limit || 20,
+        include_addresses: true,
+        include_groups: true,
       });
-      setCustomers(response.customers || []);
+      
+      if (response?.success && response?.data) {
+        setCustomers(response.data);
+        setPagination({
+          total: response.pagination.total,
+          page: response.pagination.page,
+          totalPages: response.pagination.totalPages,
+        });
+        setHasSearched(true);
+      } else {
+        setCustomers([]);
+        setPagination({ total: 0, page: 1, totalPages: 1 });
+      }
     } catch (error) {
-      console.error("Error searching customers:", error);
+      console.error("Error fetching customers:", error);
+      setCustomers([]);
+      setPagination({ total: 0, page: 1, totalPages: 1 });
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  // Search customers by query
+  const searchCustomers = useCallback(async () => {
+    if (!searchTerm.trim()) return;
+    
+    await fetchCustomers({
+      search: searchTerm.trim(),
+      limit: 20,
+    });
+  }, [searchTerm, fetchCustomers]);
+
+  // Load initial customers when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      if (customerGroupId) {
+        // Load customers from specific group
+        fetchCustomers({
+          customer_group_id: customerGroupId,
+          limit: 20,
+          order: "-created_at",
+        });
+      } else {
+        // Load all customers
+        fetchCustomers({
+          limit: 20,
+          order: "-created_at",
+        });
+      }
+    }
+  }, [isOpen, customerGroupId, fetchCustomers]);
 
   const handleCustomerSelect = (customer: Customer) => {
     onSelectCustomer(customer);
+    handleClose();
+  };
+
+  const handleClose = () => {
     setIsOpen(false);
+    setShowCreateForm(false);
     setSearchTerm("");
-    setSearchFilters({ first_name: "", last_name: "", email: "", phone: "" });
+    setHasSearched(false);
+    setCustomers([]);
+    setPagination({ total: 0, page: 1, totalPages: 1 });
   };
 
   const handleCustomerCreated = (newCustomer: Customer) => {
     onSelectCustomer(newCustomer);
-    setShowCreateDialog(false);
-    setIsOpen(false);
+    handleClose();
   };
 
-  const handleCustomers = async () => {
+  const handleBackToSearch = () => {
+    setShowCreateForm(false);
+    setSearchTerm("");
+    // Reload customers when going back
+    if (customerGroupId) {
+      fetchCustomers({ customer_group_id: customerGroupId, limit: 20 });
+    } else {
+      fetchCustomers({ limit: 20 });
+    }
+  };
 
-     const response = await listCustomerGroupCustomers(customerGroupId) as any;
-      console.log(response, ":RESSS", customerGroupId)
-      if(response && response.customers.length){
-          setCustomers(response.customers)
-      }
-  }
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      searchCustomers();
+    }
+  };
 
-  useEffect(() => {
-        handleCustomers()
-  }, [])
+  const handleLoadMore = () => {
+    if (pagination.page < pagination.totalPages) {
+      const nextPage = pagination.page + 1;
+      const params: any = searchTerm 
+        ? { search: searchTerm, page: nextPage, limit: 20 }
+        : customerGroupId 
+          ? { customer_group_id: customerGroupId, page: nextPage, limit: 20 }
+          : { page: nextPage, limit: 20 };
+      
+      fetchCustomers(params);
+    }
+  };
 
   return (
     <>
@@ -934,35 +639,25 @@ function CustomerSelector({ selectedCustomer, onSelectCustomer, onClear, user }:
           <div className="text-xs text-muted-foreground">No customer selected</div>
         )}
 
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogContent className="max-w-md max-h-[85vh] overflow-hidden">
+        <Dialog open={isOpen} onOpenChange={(open) => {
+          if (!open) handleClose();
+          setIsOpen(open);
+        }}>
+          <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Select Customer</DialogTitle>
-              <DialogDescription>Search for an existing customer or create a new one</DialogDescription>
+              <DialogTitle>
+                {showCreateForm ? "Create New Customer" : "Select Customer"}
+              </DialogTitle>
+              <DialogDescription>
+                {showCreateForm 
+                  ? "Enter customer details (First Name, Last Name, Phone - Email optional)" 
+                  : "Search for an existing customer or create a new one"}
+              </DialogDescription>
             </DialogHeader>
             
-            <div className="space-y-4">
-              {/* Search Tabs */}
-              <div className="flex gap-2">
-                <Button
-                  variant={!showAdvancedSearch ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => setShowAdvancedSearch(false)}
-                >
-                  Quick Search
-                </Button>
-                <Button
-                  variant={showAdvancedSearch ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => setShowAdvancedSearch(true)}
-                >
-                  Advanced Search
-                </Button>
-              </div>
-
-              {!showAdvancedSearch ? (
+            {!showCreateForm ? (
+              <div className="space-y-4">
+                {/* Search Input */}
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
@@ -970,111 +665,134 @@ function CustomerSelector({ selectedCustomer, onSelectCustomer, onClear, user }:
                       placeholder="Search by name, email, or phone..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
+                      onKeyPress={handleKeyPress}
                       className="pl-7"
-                      onKeyPress={(e) => e.key === 'Enter' && searchCustomers()}
+                      autoFocus
                     />
                   </div>
-                  <Button onClick={searchCustomers} disabled={isLoading} size="sm">
+                  <Button onClick={searchCustomers} disabled={isLoading || !searchTerm.trim()} size="sm">
                     Search
                   </Button>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  <Input
-                    placeholder="First name"
-                    value={searchFilters.first_name}
-                    onChange={(e) => setSearchFilters(prev => ({ ...prev, first_name: e.target.value }))}
-                  />
-                  <Input
-                    placeholder="Last name"
-                    value={searchFilters.last_name}
-                    onChange={(e) => setSearchFilters(prev => ({ ...prev, last_name: e.target.value }))}
-                  />
-                  <Input
-                    placeholder="Email"
-                    type="email"
-                    value={searchFilters.email}
-                    onChange={(e) => setSearchFilters(prev => ({ ...prev, email: e.target.value }))}
-                  />
-                  <Input
-                    placeholder="Phone"
-                    value={searchFilters.phone}
-                    onChange={(e) => setSearchFilters(prev => ({ ...prev, phone: e.target.value }))}
-                  />
-                  <Button onClick={searchCustomers} disabled={isLoading} className="w-full">
-                    Search Customers
-                  </Button>
-                </div>
-              )}
 
-              {/* Results */}
-              {isLoading && <Loader2 className="h-6 w-6 animate-spin mx-auto" />}
-              
-              {customers.length > 0 && (
-                <ScrollArea className="h-64">
-                  <div className="space-y-2">
-                    {customers.map((customer) => (
-                      <button
-                        key={customer.id}
-                        onClick={() => handleCustomerSelect(customer)}
-                        className="w-full p-3 rounded-lg border text-left hover:bg-accent transition-colors"
-                      >
-                        <div className="font-medium">
-                          {customer.first_name} {customer.last_name}
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
-                          {customer.phone && (
-                            <div className="flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {customer.phone}
-                            </div>
-                          )}
-                          {customer.barangay && (
-                            <div className="flex items-center gap-1">
-                              <MapPin className="h-3 w-3" />
-                              {customer.barangay}, {customer.municipality}
-                            </div>
-                          )}
-                        </div>
-                      </button>
-                    ))}
+                {/* Results Count */}
+                {hasSearched && !isLoading && (
+                  <div className="text-xs text-muted-foreground">
+                    Found {pagination.total} customer{pagination.total !== 1 ? 's' : ''}
                   </div>
-                </ScrollArea>
-              )}
+                )}
 
-              {searchTerm && customers.length === 0 && !isLoading && (
-                <div className="text-center py-4">
-                  <p className="text-sm text-muted-foreground mb-2">No customers found</p>
-                  <Button variant="outline" onClick={() => setShowCreateDialog(true)}>
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Create New Customer
+                {/* Results */}
+                {isLoading && (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                )}
+                
+                {!isLoading && hasSearched && customers.length > 0 && (
+                  <ScrollArea className="h-64">
+                    <div className="space-y-2">
+                      {customers.map((customer) => (
+                        <button
+                          key={customer.id}
+                          onClick={() => handleCustomerSelect(customer)}
+                          className="w-full p-3 rounded-lg border text-left hover:bg-accent transition-colors"
+                        >
+                          <div className="font-medium">
+                            {customer.first_name} {customer.last_name}
+                            {customer.company_name && (
+                              <span className="text-xs text-muted-foreground ml-2">
+                                ({customer.company_name})
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                            {customer.phone && (
+                              <div className="flex items-center gap-1">
+                                <Phone className="h-3 w-3" />
+                                {customer.phone}
+                              </div>
+                            )}
+                            {customer.email && (
+                              <div className="flex items-center gap-1">
+                                <Mail className="h-3 w-3" />
+                                {customer.email}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+
+                {/* Load More Button */}
+                {!isLoading && hasSearched && customers.length > 0 && pagination.page < pagination.totalPages && (
+                  <Button variant="outline" onClick={handleLoadMore} className="w-full">
+                    Load More ({pagination.page}/{pagination.totalPages})
                   </Button>
-                </div>
-              )}
+                )}
 
-              {!searchTerm && customers.length === 0 && !isLoading && (
-                <div className="text-center py-4">
-                  <Button variant="outline" onClick={() => setShowCreateDialog(true)}>
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Create New Customer
-                  </Button>
-                </div>
-              )}
-            </div>
+                {/* No Results */}
+                {!isLoading && hasSearched && customers.length === 0 && searchTerm && (
+                  <div className="text-center py-6">
+                    <p className="text-sm text-muted-foreground mb-3">No customers found matching "{searchTerm}"</p>
+                    <Button onClick={() => setShowCreateForm(true)} className="w-full">
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Create New Customer
+                    </Button>
+                  </div>
+                )}
 
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsOpen(false)}>Close</Button>
-            </DialogFooter>
+                {/* Initial State - No Search */}
+                {!isLoading && !hasSearched && (
+                  <div className="text-center py-6">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      {customerGroupId 
+                        ? `${pagination.total} customer${pagination.total !== 1 ? 's' : ''} available in this group`
+                        : "Enter a name, email, or phone number to search"}
+                    </p>
+                    {customers.length === 0 && !searchTerm && (
+                      <Button variant="outline" onClick={() => setShowCreateForm(true)}>
+                        <UserPlus className="mr-2 h-4 w-4" />
+                        Or Create New Customer
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                {/* Show existing customers when no search term */}
+                {!isLoading && !searchTerm && customers.length > 0 && (
+                  <ScrollArea className="h-64">
+                    <div className="space-y-2">
+                      {customers.map((customer) => (
+                        <button
+                          key={customer.id}
+                          onClick={() => handleCustomerSelect(customer)}
+                          className="w-full p-3 rounded-lg border text-left hover:bg-accent transition-colors"
+                        >
+                          <div className="font-medium">
+                            {customer.first_name} {customer.last_name}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {customer.phone || customer.email}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </div>
+            ) : (
+              <CreateCustomerForm
+                onCustomerCreated={handleCustomerCreated}
+                onCancel={handleBackToSearch}
+                user={user}
+              />
+            )}
           </DialogContent>
         </Dialog>
       </div>
-
-      <CreateCustomerDialog
-        open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
-        onCustomerCreated={handleCustomerCreated}
-        user={user}
-      />
     </>
   );
 }
@@ -1365,7 +1083,6 @@ export function CartSidebar({
                 {/* Regular Items Section */}
                 {regularItems.length > 0 && (
                   <div className="mb-4">
-    
                     {regularItems.map((item) => (
                       <CartItemComponent
                         key={item.id}

@@ -383,8 +383,8 @@ export async function login(_currentState: unknown, formData: FormData) {
                         setCustomerGroupId(userData.employee.company.customer_group_id)
                     }
             }
-        revalidateTag(productsCacheTag, "max")
-        revalidateTag(cartsCacheTag, "max")
+              revalidateTag(productsCacheTag, "max")
+              revalidateTag(cartsCacheTag, "max")
             await transferCart()
             return {success: true, token}
       })
@@ -393,12 +393,6 @@ export async function login(_currentState: unknown, formData: FormData) {
     return error.toString()
   } 
 
-  try {
-    await transferCart()
-  } catch (error: any) {
-      console.log(error, 'errr  lassst ccssese')
-    return error.toString()
-  }
 }
 
 export async function createAuthUser({

@@ -440,6 +440,48 @@ export const listCustomerGroupCustomers = async (groupId: any) => {
 
 
 
+export const listCustomers = async (params: any = {}): Promise<any> => {
+  const headers = await getAuthHeaders()
+  
+  // Build query string
+  const queryParams = new URLSearchParams()
+  
+  if (params.search) queryParams.append('search', params.search)
+  if (params.limit) queryParams.append('limit', params.limit.toString())
+  if (params.offset) queryParams.append('offset', params.offset.toString())
+  if (params.page) queryParams.append('page', params.page.toString())
+  if (params.order) queryParams.append('order', params.order)
+  if (params.email) queryParams.append('email', params.email)
+  if (params.phone) queryParams.append('phone', params.phone)
+  if (params.first_name) queryParams.append('first_name', params.first_name)
+  if (params.last_name) queryParams.append('last_name', params.last_name)
+  if (params.company_name) queryParams.append('company_name', params.company_name)
+  if (params.has_account !== undefined) queryParams.append('has_account', params.has_account.toString())
+  if (params.customer_group_id) queryParams.append('customer_group_id', params.customer_group_id)
+  if (params.created_at_start) queryParams.append('created_at_start', params.created_at_start)
+  if (params.created_at_end) queryParams.append('created_at_end', params.created_at_end)
+  if (params.include_addresses) queryParams.append('include_addresses', 'true')
+  if (params.include_groups) queryParams.append('include_groups', 'true')
+  if (params.include_orders) queryParams.append('include_orders', 'true')
+  
+  const queryString = queryParams.toString()
+  const url = `/dashboard/customers${queryString ? `?${queryString}` : ''}`
+  
+  return await sdk.client.fetch(url, {
+    method: "GET",
+    headers,
+  })
+}
 
+
+// Get single customer by ID
+export const getCustomer = async (customerId: string): Promise<{ success: boolean; data: Customer }> => {
+  const headers = await getAuthHeaders()
+  
+  return await sdk.client.fetch(`/dashboard/customers/${customerId}`, {
+    method: "GET",
+    headers,
+  })
+}
 
     

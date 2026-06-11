@@ -45,6 +45,8 @@ import { useOffline } from "@/components/medusa-offline-provider";
 import { PosContext, type PosContextType } from "../../../contexts/pos-context";
 import { logout } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMedusaAuth } from "@/providers/MedusaAuthProvider";
 
 // Navigation Items (static, can be moved to separate file)
 const navItems: NavItem[] = [
@@ -178,6 +180,10 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
   const [draftCount, setDraftCount] = useState(0);
   const router = useRouter();
   const {toast} = useToast()
+const { logout } = useMedusaAuth() as any;
+  const {logout: authLogout } = useAuth()
+
+
 
 
   const handleLogout = async () => {
@@ -230,8 +236,9 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
         );
       }
 
-      // 6. Call the logout function from your auth system
-      await logout();
+              // 6. Call the logout function from your auth system
+            logout()
+        authLogout()
       
   
 
@@ -247,7 +254,7 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
         description: "You have been logged out successfully",
       });
       
-      router.push('/login');
+      // router.push('/login');
     }
   };
 
@@ -255,7 +262,7 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
   const getActiveNav = () => {
     if (pathname?.includes("/pos/tables")) return "Tables";
     if (pathname?.includes("/pos/customers")) return "Customers";
-    if (pathname?.includes("/pos/drafts")) return "Drafts";
+    if (pathname?.includes("/pos/orders")) return "Orders";
     if (pathname?.includes("/pos/reports")) return "Reports";
     if (pathname?.includes("/pos/settings")) return "Settings";
     return "Products";

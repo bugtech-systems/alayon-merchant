@@ -113,6 +113,14 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
       </div>
     );
   }
+
+    if (userRole === "store") {
+    return (
+      <div className="@container/main flex flex-col gap-4 md:gap-6">
+        <DriverDashboard />
+      </div>
+    );
+  }
   
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">

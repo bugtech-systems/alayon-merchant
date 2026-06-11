@@ -52,7 +52,7 @@ const loginSchema = z.object({
   password: z.string()
     .min(1, "Password is required")
     .min(6, "Password must be at least 6 characters"),
-  user_type: z.enum(["customer", "company", "driver", "user"], {
+  user_type: z.enum(["customer", "company", "driver", "user", "store"], {
     required_error: "Please select login type",
   }),
   remember_me: z.boolean().optional(),
@@ -63,9 +63,9 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 // User type configuration
 const userTypes = [
   // { value: "customer", label: "Customer", icon: User, color: "blue", description: "Shop as a customer" },
-  { value: "company", label: "Merchant", icon: Store, color: "green", description: "Manage your store", email: "rufrance@example.com", password: "123123" },
+  { value: "store", label: "Store", icon: Store, color: "green", description: "Manage your store", email: "rufrance@example.com", password: "123123" },
   { value: "driver", label: "Driver", icon: Truck, color: "orange", description: "Delivery operations", email: "drive@example.com", password: "123123" },
-  { value: "user", label: "Admin", icon: Building2, color: "purple", description: "Platform management", email: "leo@example.com", password: "123123" },
+  { value: "company", label: "Admin", icon: Building2, color: "purple", description: "Platform management", email: "leo@example.com", password: "123123" },
 ];
 
 interface LoginFormProps {
@@ -73,7 +73,7 @@ interface LoginFormProps {
   onSuccess?: () => void;
 }
 
-export function LoginForm({ redirectUrl = "/dashboard", onSuccess }: LoginFormProps) {
+export function LoginForm({onSuccess }: LoginFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string>("");
@@ -108,7 +108,7 @@ export function LoginForm({ redirectUrl = "/dashboard", onSuccess }: LoginFormPr
     setServerError("");
     setSuccessMessage("");
     clearErrors();
-    
+    let redirectUrl = watchedUserType == 'store' ? '/pos' : '/dashboard';
     startTransition(async () => {
       try {
         const formData = new FormData();

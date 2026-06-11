@@ -79,8 +79,15 @@ export const setAuthToken = async (token: string) => {
 
 export const removeAuthToken = async () => {
   const cookies = await nextCookies()
-
+  
   cookies.delete("_medusa_jwt")
+  cookies.delete("customer_group_id");
+  cookies.delete("medusa_region_id");
+  cookies.delete("_medusa_cache_id");
+  cookies.delete("_medusa_company_id");
+  cookies.set("customer_group_id", "", {
+    maxAge: -1,
+  })
 }
 
 export const getCartId = async () => {
