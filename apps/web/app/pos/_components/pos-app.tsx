@@ -1462,14 +1462,17 @@ const initCart = useCallback(async (options?: {
   
   // Clear cart
   const clearCart = async () => {
-    if (!cartId) return;
+console.log(cartId, 'CAARRT')
+      removeCartId();
+      localStorage.removeItem('pos_cart_id');
     try {
+          if (cartId) {
       for (const item of cartItems) {
         await sdk.store.cart.deleteLineItem(cartId, item.id);
       }
-  
-      removeCartId();
-      localStorage.removeItem('pos_cart_id');
+  }
+
+      await initCart();
       await refreshCart();
       setSelectedTableIds([]);
       setSelectedCustomer(null);
