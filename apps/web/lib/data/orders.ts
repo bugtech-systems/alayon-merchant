@@ -3,6 +3,7 @@
 import { sdk } from "@/lib/config";
 import { getAuthHeaders, getCacheOptions } from "@/lib/data/cookies";
 import medusaError from "@/lib/util/medusa-error";
+import { adminFetch } from "../apiClient";
 
 // Types for order operations
 export interface OrderFilters {
@@ -643,3 +644,66 @@ export const declineTransferRequest = async (id: string, token: string) => {
     return { success: false, error: error.message, order: null };
   }
 };
+
+
+export async function listPosOrders(limit: number = 10, offset: number = 0, filters: Record<string, any> = {}) {
+  try {
+    const params = new URLSearchParams({
+      limit: limit.toString(),
+      offset: offset.toString(),
+      ...filters,
+    });
+    
+    const response = await adminFetch(`/admin/orders?${params.toString()}`);
+    
+    return {
+      orders: response.orders || [],
+      count: response.count || 0,
+      page: Math.floor(offset / limit) + 1,
+      total_pages: Math.ceil((response.count || 0) / limit),
+      has_next: offset + limit < (response.count || 0),
+      has_previous: offset > 0,
+    };
+  } catch (error) {
+    console.error('Error fetching orders:', error);
+    return {
+      orders: [],
+      count: 0,
+      page: 1,
+      total_pages: 0,
+      has_next: false,
+      has_previous: false,
+    };
+  }
+}
+
+export async function listDraftOrders(limit: number = 10, offset: number = 0, filters: Record<string, any> = {}) {
+  try {
+    const params = new URLSearchParams({
+      limit: limit.toString(),
+      offset: offset.toString(),
+      ...filters,
+    });
+    
+    const response = await adminFetch(`/admin/draft-orders?${params.toString()}`);
+    
+    return {
+      draft_orders: response.draft_orders || [],
+      count: response.count || 0,
+      page: Math.floor(offset / limit) + 1,
+      total_pages: Math.ceil((response.count || 0) / limit),
+      has_next: offset + limit < (response.count || 0),
+      has_previous: offset > 0,
+    };
+  } catch (error) {
+    console.error('Error fetching draft orders:', error);
+    return {
+      draft_orders: [],
+      count: 0,
+      page: 1,
+      total_pages: 0,
+      has_next: false,
+      has_previous: false,
+    };
+  }
+}

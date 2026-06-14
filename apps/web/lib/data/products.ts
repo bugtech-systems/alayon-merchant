@@ -32,7 +32,7 @@ export const getProductsById = async ({
         id: ids,
         region_id: regionId,
         fields:
-          "*variants,*variants.calculated_price,*variants.inventory_quantity,*company",
+          "*variants,*variants.calculated_price,*variants.inventory_quantity,*companies",
       },
       headers,
       next,
@@ -58,7 +58,7 @@ export const getProductByHandle = async (handle: string, regionId?: string) => {
         handle,
         region_id: region?.id,
         fields:
-          "*variants.calculated_price,+variants.inventory_quantity,+metadata,+tags,*company",
+          "*variants.calculated_price,+variants.inventory_quantity,+metadata,+tags,*companies",
       },
       headers,
       next,
@@ -134,12 +134,14 @@ export const listPriceListProducts = async ({
   pageParam = 1,
   queryParams,
   countryCode = 'ph',
-  priceListId
+  priceListId,
+  customerGroupId
 }: {
   pageParam?: number
   queryParams?: HttpTypes.FindParams & HttpTypes.StoreProductParams
   countryCode: string
   priceListId?: any
+  customerGroupId?: any
 }): Promise<{
   response: { products: HttpTypes.StoreProduct[]; count: number }
   nextPage: number | null
@@ -175,6 +177,7 @@ export const listPriceListProducts = async ({
           limit,
           offset,
           region_id: region.id,
+          customer_group_id: customerGroupId,
           fields: "*variants.calculated_price",
           ...queryParams,
         },

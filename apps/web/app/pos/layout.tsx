@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { PosClientProvider } from "./_components/pos-client-provider";
 import { PosLayoutContent } from "./_components/pos-layout-content";
 import { Spinner } from "@/components/ui/spinner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 // This is a Server Component by default (no "use client" directive)
 export const metadata = {
@@ -16,12 +17,12 @@ interface PosLayoutProps {
 
 export default function PosLayout({ children }: PosLayoutProps) {
   return (
-    <PosClientProvider>
       <Suspense fallback={<Spinner />}>
+        <TooltipProvider>
         <PosLayoutContent>
           {children}
         </PosLayoutContent>
+        </TooltipProvider>
       </Suspense>
-    </PosClientProvider>
   );
 }

@@ -1,7 +1,6 @@
 // app/orders/page.tsx (Server Component)
 import { Suspense } from 'react';
-import { OrdersClient } from '@/components/orders/orders-client';
-import { listOrders } from '@/lib/data/orders';
+import { OrdersClientWrapper } from '../_components/orders-client-wrapper';
 import { OrderTableSkeleton } from '@/components/ui/table-skeleton';
 import { retrieveUser } from '@/lib/data';
 
@@ -19,6 +18,7 @@ interface PageProps {
     max_total?: string;
     payment_status?: string;
     customer_id?: string;
+    type?: 'orders' | 'drafts';
     [key: string]: string | undefined;
   }>;
 }
@@ -26,6 +26,7 @@ interface PageProps {
 export default async function OrdersPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const user = await retrieveUser();
+  const orderType = params.type || 'orders';
   
   // Parse pagination
   const limit = parseInt(params.limit || '10');
@@ -75,51 +76,26 @@ export default async function OrdersPage({ searchParams }: PageProps) {
     filters.customer_id = params.customer_id;
   }
   
-  // Seller filter based on user role
-  if (user && user?.id) {
-    filters.seller_id = user.id;
-   
-  }
-   if(user?.employee?.company?.id){
-    filters.company_id = user?.employee?.company?.id;
-   }
-  // Customer group filter based on user role
-  const customerGroupId = user?.metadata?.role === 'company' 
-    ? user.employee?.company?.customer_group_id 
-    : user?.driver?.customer_group_id;
-  
-  // if (customerGroupId) {
-  //   filters.customer_group_id = customerGroupId;
+  // // Seller filter based on user role
+  // if (user && user?.id) {
+  //   filters.seller_id = user.id;
   // }
   
-  // Additional dynamic filters from URL (exclude known params)
-  const excludeParams = ['page', 'limit', 'sort_field', 'sort_order', 'search', 'status', 
-                         'date_from', 'date_to', 'min_total', 'max_total', 'payment_status', 'customer_id'];
-  Object.keys(params).forEach(key => {
-    if (!excludeParams.includes(key) && params[key]) {
-      filters[key] = params[key];
-    }
-  });
-
-  if(user){
-    filters.seller_id = user?.id
+  if(user?.employee?.company?.id){
+    filters.company_id = user?.employee?.company?.id;
   }
-
-  // Fetch initial data on the server
-  const initialData = await listOrders(limit, offset, filters);
-console.log(initialData, 'inittials')
+  
   return (
     <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">Orders</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Orders Management</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Manage and track all customer orders
+          Manage customer orders and create draft orders
         </p>
       </div>
 
       <Suspense fallback={<OrderTableSkeleton />}>
-        <OrdersClient 
-          initialData={initialData}
+        <OrdersClientWrapper 
           initialPage={page}
           initialLimit={limit}
           initialSortField={sortField}
@@ -133,6 +109,10 @@ console.log(initialData, 'inittials')
           initialMaxTotal={params.max_total || ''}
           initialCustomerId={params.customer_id || ''}
           user={user}
+          initialOrderType={orderType}
+          filters={filters}
+          limit={limit}
+          offset={offset}
         />
       </Suspense>
     </div>

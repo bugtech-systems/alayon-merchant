@@ -43,7 +43,6 @@ export default async function CustomersPage({ searchParams }: PageProps) {
   // Fetch initial data on the server
   const initialData = await listCustomerGroupCustomers(customerGroupId);
 
-  console.log(initialData, customerGroupId, 'INITTIT')
 
   return (
     <div className="container mx-auto py-10 px-4 sm:px-6 lg:px-8">

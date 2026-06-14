@@ -134,6 +134,17 @@ export const getAdminClient = () => {
   });
 };
 
+// For server-side usage (API routes, server components)
+export const getMedusaServerClient = () => {
+  return new Medusa({
+    baseUrl: MEDUSA_BACKEND_URL,
+    apiKey: process.env.MEDUSA_SECRET_KEY!,
+    auth: {
+      type: 'session'   
+    }
+  });
+};
+
 // Type exports (optional)
 export type { StoreProduct, StoreRegion };
 export default sdk

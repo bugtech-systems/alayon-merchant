@@ -50,8 +50,8 @@ import { useMedusaAuth } from "@/providers/MedusaAuthProvider";
 
 // Navigation Items (static, can be moved to separate file)
 const navItems: NavItem[] = [
-  { icon: Building2, label: "Products", href: "/pos" },
-  { icon: Layers, label: "Tables", href: "/pos/tables" },
+  { icon: Building2, label: "Home", href: "/pos" },
+  { icon: Layers, label: "Products", href: "/pos/products" },
   { icon: Users, label: "Customers", href: "/pos/customers", disabled: false },
   { icon: History, label: "Orders", href: "/pos/orders", disabled: false },
   { icon: FileText, label: "Reports", href: "/pos/reports", disabled: false },
@@ -260,12 +260,12 @@ const { logout } = useMedusaAuth() as any;
 
 
   const getActiveNav = () => {
-    if (pathname?.includes("/pos/tables")) return "Tables";
+    if (pathname?.includes("/pos/products")) return "Products";
     if (pathname?.includes("/pos/customers")) return "Customers";
     if (pathname?.includes("/pos/orders")) return "Orders";
     if (pathname?.includes("/pos/reports")) return "Reports";
     if (pathname?.includes("/pos/settings")) return "Settings";
-    return "Products";
+    return "Home";
   };
 
   // Get draft count from localStorage for badge
@@ -472,7 +472,6 @@ export function PosLayoutContent({ children }: { children: React.ReactNode }) {
     <PosContext.Provider value={contextValue}>
       <div className="flex h-screen flex-col overflow-hidden bg-background">
         {/* Offline Status Bar - Shows at top */}
-        <OfflineStatusBar />
         
         {/* Mobile Header */}
         <MobileHeader 

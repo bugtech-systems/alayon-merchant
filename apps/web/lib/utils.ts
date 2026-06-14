@@ -21,28 +21,44 @@ export const getInitials = (str: string): string => {
   );
 };
 
-export function formatCurrency(
-  amount: number,
-  opts?: {
-    currency?: string;
-    locale?: string;
-    minimumFractionDigits?: number;
-    maximumFractionDigits?: number;
-    noDecimals?: boolean;
-  },
-) {
-  const { currency = "PHP", locale = "en-US", minimumFractionDigits, maximumFractionDigits, noDecimals } = opts ?? {};
 
-  const formatOptions: Intl.NumberFormatOptions = {
-    style: "currency",
-    currency,
-    minimumFractionDigits: noDecimals ? 0 : minimumFractionDigits,
-    maximumFractionDigits: noDecimals ? 0 : maximumFractionDigits,
-  };
 
-  return new Intl.NumberFormat(locale, formatOptions).format(amount);
+export function formatDate(date: string | Date): string {
+  const d = new Date(date);
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
+export function formatCurrency(amount: number, currency: string = "PHP"): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency,
+  }).format(amount);
+}
+
+export function truncate(str: string, length: number): string {
+  if (str.length <= length) return str;
+  return str.slice(0, length) + "...";
+}
+
+/**
+ * Returns the currency symbol for a given currency code.
+ * @example getCurrencySymbol("usd") // returns "$"
+ */
+export const getCurrencySymbol = (currencyCode: string): string => {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currencyCode.toUpperCase() || 'PHP',
+    currencyDisplay: "narrowSymbol",
+  })
+    .formatToParts(0)
+    .find(part => part.type === "currency")?.value || "";
+};
 
 // Helper function to fetch price list with variants
 export async function fetchPriceListWithVariants(priceListId: string, currencyCode: string): Promise<Map<string, number>> {
@@ -50,8 +66,8 @@ export async function fetchPriceListWithVariants(priceListId: string, currencyCo
   
   try {
     // Fetch price list with its prices
-    const priceList = await listPriceListProducts({priceListId, countryCode: 'ph'});
-
+    const priceList = await listPriceListProducts({priceListId, countryCode: 'ph'}) as any;
+    console.log(priceList, 'PRICCCLL')
     let prices = [] as any;
     if(!priceList || !priceList?.products?.length) return priceMap
     priceList?.products.map((a: any) => {

@@ -1050,8 +1050,8 @@ export function CartSidebar({
         )}
       </div>
       
-      <div className="flex-1 overflow-hidden">
-        <ScrollArea className="h-[40vh]">
+      <div className="flex-1 overflow-auto">
+        <ScrollArea className="max-h-[40vh]">
           <div className="space-y-2 p-3">
             {isLoading ? (
               <div className="flex justify-center py-8">

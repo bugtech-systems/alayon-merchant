@@ -1,4 +1,3 @@
-// lib/services/cart-sync.service.ts
 import { sdk } from "@/lib/medusa/config"
 import { getAuthHeaders, getCartId } from "@/lib/medusa/data/cookies"
 

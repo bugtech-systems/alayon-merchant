@@ -917,7 +917,7 @@ const processCartItemsWithPricing = useCallback(async (
       console.warn('Failed to fetch price list:', error);
     }
   }
-  
+  console.log(cartData, 'CARRT', priceListPrices)
   // Process each item with same pricing logic
   return cartData.items?.map((item: any) => {
     let unitPrice = item.unit_price;
@@ -1085,7 +1085,7 @@ const initCart = useCallback(async (options?: {
     
     // Get custom prices
     const customPrices = options?.customPricing || cartData?.metadata?.custom_prices || {};
-    
+      
     // Process items with shared pricing logic
     const transformedItems = await processCartItemsWithPricing(
       cartData,
@@ -1105,7 +1105,6 @@ const initCart = useCallback(async (options?: {
 
     // Update state
 
-    console.log(total, 'TOTTTS', cartData, storedCartId, cartId)
     setCartItems(transformedItems);
     setCartTotal(total);
 
@@ -1283,7 +1282,7 @@ const initCart = useCallback(async (options?: {
     
     setIsLoadingProducts(true);
     try {
-      const response = await listPriceListProducts({ countryCode, priceListId });
+      const response = await listPriceListProducts({ countryCode, priceListId, customerGroupId });
       setProducts(response.products || []);
       
       const initialVariants: Record<string, string> = {};
