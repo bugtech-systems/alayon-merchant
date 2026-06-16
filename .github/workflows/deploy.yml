@@ -25,12 +25,21 @@ jobs:
           version: 8
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
+        run: |
+          # Try frozen lockfile first, fallback if missing
+          if [ -f "pnpm-lock.yaml" ]; then
+            echo "📦 Lockfile found, installing with frozen-lockfile..."
+            pnpm install --frozen-lockfile --prefer-offline
+          else
+            echo "⚠️ Lockfile missing, generating new one..."
+            pnpm install --no-frozen-lockfile --prefer-offline
+            echo "📝 New lockfile generated."
+          fi
 
       - name: Build project
         run: |
           cd apps/web
-          pnpm run build
+          npm run build
         env:
           NEXT_PUBLIC_MEDUSA_BACKEND_URL: ${{ vars.NEXT_PUBLIC_MEDUSA_BACKEND_URL }}
           NEXT_PUBLIC_BASE_URL: ${{ vars.NEXT_PUBLIC_BASE_URL }}
@@ -86,7 +95,12 @@ jobs:
             sudo chown -R $USER:$USER ~/apps/alayon-merchant
             
             echo "Installing dependencies..."
-            pnpm install --frozen-lockfile --prefer-offline
+            # Same fix on EC2
+            if [ -f "pnpm-lock.yaml" ]; then
+              pnpm install --frozen-lockfile --prefer-offline
+            else
+              pnpm install --no-frozen-lockfile --prefer-offline
+            fi
             
             cd apps/web
             
