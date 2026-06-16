@@ -67,7 +67,7 @@ jobs:
             
             cd ~/apps/alayon-merchant
             
-            git pull origin development
+            git pull origin development --no-rebase
             sudo chown -R $USER:$USER ~/apps/alayon-merchant
             
             # Always use --no-frozen-lockfile
@@ -91,5 +91,5 @@ jobs:
             
             pm2 restart alayon-merchant || pm2 start "npm run start" --name "alayon-merchant" --cwd ~/apps/alayon-merchant/apps/web
             pm2 save
-            
+             
             echo "=== Deployment completed! ==="
