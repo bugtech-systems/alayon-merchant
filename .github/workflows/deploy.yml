@@ -27,10 +27,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --prefer-offline
 
-      - name: Build storefront (GitHub Actions)
+      - name: Build Alayon Merchant (GitHub Actions)
         run: |
           cd apps/web
-          pnpm run build
+          npm run build
         env:
           NEXT_PUBLIC_MEDUSA_BACKEND_URL: ${{ vars.NEXT_PUBLIC_MEDUSA_BACKEND_URL }}
           NEXT_PUBLIC_BASE_URL: ${{ vars.NEXT_PUBLIC_BASE_URL }}
