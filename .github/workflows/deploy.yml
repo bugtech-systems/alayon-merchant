@@ -35,7 +35,7 @@ jobs:
             pnpm install --no-frozen-lockfile --prefer-offline
             echo "📝 New lockfile generated."
           fi
- 
+  
       - name: Build project
         run: |
           cd apps/web
