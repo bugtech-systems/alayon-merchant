@@ -129,8 +129,8 @@ export const getAdminClient = () => {
   // Dynamically import medusa-js or js-sdk with admin key
   const { Medusa } = require("@medusajs/js-sdk");
   return Medusa({
-    baseUrl: process.env.MEDUSA_BACKEND_URL!,
-    apiKey: process.env.MEDUSA_SECRET_KEY!,
+    baseUrl: process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL!,
+    apiKey: process.env.NEXT_PUBLIC_MEDUSA_SECRET_KEY!,
   });
 };
 
@@ -138,7 +138,7 @@ export const getAdminClient = () => {
 export const getMedusaServerClient = () => {
   return new Medusa({
     baseUrl: MEDUSA_BACKEND_URL,
-    apiKey: process.env.MEDUSA_SECRET_KEY!,
+    apiKey: process.env.NEXT_PUBLIC_MEDUSA_SECRET_KEY!,
     auth: {
       type: 'session'   
     }

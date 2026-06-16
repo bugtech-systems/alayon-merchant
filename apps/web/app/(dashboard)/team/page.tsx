@@ -24,7 +24,6 @@ const teamWidget = {
 
 export default function Page() {
   const handleRowClick = (row: any) => {
-    console.log("Row clicked:", row);
     // Navigate to details or open dialog
   };
 

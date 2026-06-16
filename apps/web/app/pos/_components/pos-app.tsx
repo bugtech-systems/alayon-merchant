@@ -1,1637 +1,310 @@
+// components/pos-app.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Search,
-  Plus,
-  Trash2,
-  ShoppingCart,
-  Package,
-  RefreshCw,
-  X,
-  Loader2,
-  MapPin,
-  UserPlus,
-  User,
-  CreditCard,
-  Save,
-  History,
-  DollarSign,
-  Tag,
-  Printer,
-  ChevronDown,
-  Minus,
-} from "lucide-react";
-import { cn, fetchPriceListWithVariants } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent } from "@/components/ui/card";
-import Image from "next/image";
-import { sdk } from "@/lib/config";
-import { getAuthHeaders, removeCartId } from "@/lib/data/cookies";
-import { listPriceListProducts } from "@/lib/data/products";
-import { CartSidebar } from "./sidebar-cart";
-import { initiatePaymentSession } from "@/lib/data/cart";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Search, RefreshCw, History, ShoppingCart, Save, Tag, Users, Star } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
+import { CartSidebar } from "./sidebar-cart";
+import { ProductCard } from "./product-card";
+import { DraftsDialog } from "./drafts-dialog";
+import { PaymentDialog } from "./payment-dialog";
 import { PrintDialog } from "./print-dialog";
-import { updateLineItemPrice } from "@/lib/actions";
-import { assignCustomerToCart } from "@/lib/data/customer";
-
-// ============================================
-// TYPES
-// ============================================
-
-export interface CartItem {
-  id: string;
-  product_id: string;
-  variant_id: string;
-  title: string;
-  thumbnail: string | null;
-  quantity: number;
-  unit_price: number;
-  original_unit_price?: number;
-  variant_title?: string;
-  subtotal: number;
-  is_custom_priced?: boolean;
-  price_list_id?: string;
-  metadata?: any;
-}
-
-export interface SimpleTable {
-  id: string;
-  name: string;
-  capacity: number;
-  status: "available" | "occupied" | "reserved" | "cleaning";
-  current_order_ids?: string[];
-  current_order_numbers?: number[];
-  customer_name?: string;
-  occupied_since?: Date;
-  order_total?: number;
-}
-
-export interface Region {
-  id: string;
-  name: string;
-  currency_code: string;
-  tax_rate: number;
-}
-
-export interface MedusaProduct {
-  id: string;
-  title: string;
-  thumbnail: string | null;
-  variants: MedusaProductVariant[];
-  categories?: { id: string; name: string }[];
-}
-
-export interface MedusaProductVariant {
-  id: string;
-  title: string;
-  prices: { amount: number; currency_code: string }[];
-  inventory_quantity: number;
-  calculated_price?: {
-    calculated_amount: number;
-    original_amount: number;
-    currency_code: string;
-  };
-}
-
-export interface Customer {
-  id: string;
-  first_name: string;
-  last_name?: string;
-  email: string;
-  phone?: string;
-  customer_group_id?: string;
-}
-
-export interface DraftOrder {
-  id: string;
-  cart_id: string;
-  created_at: Date;
-  updated_at: Date;
-  items: CartItem[];
-  total: number;
-  customer_id?: string;
-  customer_name?: string;
-  table_ids?: string[];
-  notes?: string;
-}
-
-// ============================================
-// CUSTOM PRICE DIALOG
-// ============================================
-
-function CustomPriceDialog({ 
-  open, 
-  onOpenChange, 
-  item, 
-  onApplyCustomPrice, 
-  region 
-}: any) {
-  const [customPrice, setCustomPrice] = useState<number>(item?.unit_price || 0);
-
-  useEffect(() => {
-    if (item) {
-      setCustomPrice(item.unit_price);
-    }
-  }, [item]);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Set Custom Price</DialogTitle>
-          <DialogDescription>
-            Override the price for {item?.title} {item?.variant_title && `(${item.variant_title})`}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Custom Unit Price</label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                {region?.currency_code?.toUpperCase() || "PHP"}
-              </span>
-              <Input
-                type="number"
-                value={customPrice}
-                onChange={(e) => setCustomPrice(parseFloat(e.target.value))}
-                className="pl-12"
-                step="0.01"
-                min="0"
-              />
-            </div>
-            {item?.original_unit_price && item.original_unit_price !== customPrice && (
-              <p className="text-xs text-muted-foreground">
-                Original price: {region?.currency_code?.toUpperCase() || "PHP"} {item.original_unit_price.toFixed(2)}
-              </p>
-            )}
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={() => {
-            onApplyCustomPrice(item.id, item.variant_id, customPrice);
-            onOpenChange(false);
-          }}>
-            Apply Custom Price
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ============================================
-// PRODUCT CARD
-// ============================================
-
-const ProductCard = ({ 
-  product, 
-  onAddToCart, 
-  region, 
-  isLoading, 
-  selectedVariantId, 
-  onVariantChange, 
-  showCustomPrice 
-}: any) => {
-  const {toast} = useToast()
-  const [isAdding, setIsAdding] = useState(false);
-  const [showVariantDialog, setShowVariantDialog] = useState(false);
-  const [quantity, setQuantity] = useState(1);
-  const [localSelectedVariantId, setLocalSelectedVariantId] = useState(selectedVariantId);
-  
-  const hasVariants = product.variants && product.variants.length > 0;
-  const hasMultipleVariants = product.variants && product.variants.length > 1;
-  
-  // Get selected variant
-  const selectedVariant = product.variants?.find((v: any) => v.id === localSelectedVariantId) || product.variants?.[0];
-  
-  // Get inventory quantity
-  const getInventoryQuantity = () => {
-    if (!selectedVariant) return 0;
-    return selectedVariant.inventory_quantity || 
-           selectedVariant.manage_inventory?.quantity || 
-           selectedVariant.inventory?.quantity || 
-           selectedVariant.stock_quantity ||
-           999;
-  };
-  
-  const inventoryQuantity = getInventoryQuantity();
-  const isOutOfStock = inventoryQuantity <= 0;
-  const isLowStock = inventoryQuantity > 0 && inventoryQuantity <= 5;
-  
-  // Get price with proper fallbacks
-  const getPrice = () => {
-    if (!selectedVariant) return 0;
-    
-    if (selectedVariant.calculated_price) {
-      return selectedVariant.calculated_price.calculated_amount;
-    }
-    
-    if (selectedVariant.prices && selectedVariant.prices.length > 0) {
-      const variantPrice = selectedVariant.prices.find(
-        (p: any) => p.currency_code === region?.currency_code || p.currency_code === 'php'
-      );
-      if (variantPrice) return variantPrice.amount;
-      return selectedVariant.prices[0].amount;
-    }
-    
-    if (selectedVariant.unit_price) return selectedVariant.unit_price;
-    if (product.unit_price) return product.unit_price;
-    
-    return 0;
-  };
-  
-  const price = getPrice();
-  const originalPrice = selectedVariant?.calculated_price?.original_amount || 
-                        selectedVariant?.original_price || 
-                        price;
-  
-  const hasDiscount = originalPrice > price;
-  const discountPercent = hasDiscount ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0;
-  
-  // Handle variant selection
-  const handleVariantChange = (variantId: string) => {
-    setLocalSelectedVariantId(variantId);
-    if (onVariantChange) {
-      onVariantChange(product.id, variantId);
-    }
-    setQuantity(1);
-  };
-  
-  // Handle add to cart - only called from button click
-  const handleAddToCart = async (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent event bubbling
-    
-    if (!selectedVariant) {
-      toast({
-        title: "Error",
-        description: "Please select a variant",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (isOutOfStock) {
-      toast({
-        title: "Out of Stock",
-        description: `${selectedVariant.title || product.title} is out of stock`,
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (quantity > inventoryQuantity) {
-      toast({
-        title: "Insufficient Stock",
-        description: `Only ${inventoryQuantity} available`,
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    setIsAdding(true);
-    try {
-      await onAddToCart({
-        variantId: selectedVariant.id,
-        quantity: quantity,
-        variantTitle: selectedVariant.title,
-        productTitle: product.title,
-        unitPrice: price,
-        originalPrice: originalPrice,
-      });
-      
-      toast({
-        title: "Added to Cart",
-        description: `${quantity}x ${product.title}${hasVariants ? ` (${selectedVariant.title})` : ''} added`,
-      });
-      
-      setQuantity(1);
-    } catch (error) {
-      console.error('Error adding to cart:', error);
-      toast({
-        title: "Error",
-        description: "Failed to add item to cart",
-        variant: "destructive",
-      });
-    } finally {
-      setIsAdding(false);
-    }
-  };
-  
-  // Open variant dialog - only called from button click
-  const handleOpenVariantDialog = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowVariantDialog(true);
-  };
-  
-  // Variant selection dialog
-  const VariantSelectionDialog = () => (
-    <Dialog open={showVariantDialog} onOpenChange={setShowVariantDialog}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Select {product.title} Variant</DialogTitle>
-          <DialogDescription>
-            Choose the variant you want to add to cart
-          </DialogDescription>
-        </DialogHeader>
-        <ScrollArea className="h-96 pr-4">
-          <div className="space-y-2">
-            {product.variants.map((variant: any) => {
-              const variantPrice = variant.calculated_price?.calculated_amount || 
-                                  variant.prices?.[0]?.amount || 
-                                  variant.unit_price || 0;
-              const variantInventory = variant.inventory_quantity || 999;
-              const isVariantOutOfStock = variantInventory <= 0;
-              
-              return (
-                <button
-                  key={variant.id}
-                  onClick={() => {
-                    handleVariantChange(variant.id);
-                    setShowVariantDialog(false);
-                  }}
-                  disabled={isVariantOutOfStock}
-                  className={cn(
-                    "w-full p-4 rounded-lg border text-left transition-all",
-                    localSelectedVariantId === variant.id && "border-primary bg-primary/5",
-                    isVariantOutOfStock && "opacity-50 cursor-not-allowed bg-muted"
-                  )}
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <p className="font-medium">{variant.title}</p>
-                      {variant.sku && (
-                        <p className="text-xs text-muted-foreground mt-1">SKU: {variant.sku}</p>
-                      )}
-                      {isVariantOutOfStock ? (
-                        <Badge variant="destructive" className="mt-2">Out of Stock</Badge>
-                      ) : variantInventory <= 5 && (
-                        <Badge variant="secondary" className="mt-2 bg-yellow-100 text-yellow-800">
-                          Only {variantInventory} left
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="text-right ml-4">
-                      <p className="text-lg font-bold text-primary">
-                        {region?.currency_code?.toUpperCase() || "PHP"} {variantPrice.toFixed(2)}
-                      </p>
-                      {variant.calculated_price?.original_amount > variantPrice && (
-                        <p className="text-xs text-muted-foreground line-through">
-                          {region?.currency_code?.toUpperCase() || "PHP"} {variant.calculated_price.original_amount.toFixed(2)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </ScrollArea>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setShowVariantDialog(false)}>
-            Cancel
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-  
-  // Quantity selector component
-  const QuantitySelector = () => (
-    <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 w-full justify-between">
-      <Button
-        variant="outline"
-        size="icon"
-        className="h-8 w-8"
-        onClick={(e) => {
-          e.stopPropagation();
-          setQuantity(prev => Math.max(1, prev - 1));
-        }}
-        disabled={quantity <= 1}
-      >
-        <Minus className="h-4 w-4" />
-      </Button>
-      <span className="w-10 text-center text-base font-semibold">{quantity}</span>
-      <Button
-        variant="outline"
-        size="icon"
-        className="h-8 w-8"
-        onClick={(e) => {
-          e.stopPropagation();
-          setQuantity(prev => Math.min(inventoryQuantity, prev + 1));
-        }}
-        disabled={quantity >= inventoryQuantity}
-      >
-        <Plus className="h-4 w-4" />
-      </Button>
-    </div>
-  );
-  
-  const currencySymbol = region?.currency_code?.toUpperCase() || "PHP";
-  
-  return (
-    <>
-      <Card className={cn(
-        "overflow-hidden transition-all hover:shadow-xl",
-        isOutOfStock && "opacity-60"
-      )}>
-        <CardContent className="p-0">
-          {/* Image Section - No click handler */}
-          <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
-            {product.thumbnail ? (
-              <Image 
-                src={product.thumbnail} 
-                alt={product.title} 
-                fill 
-                className="object-cover transition-transform duration-300" 
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center">
-                <Package className="h-16 w-16 text-muted-foreground/50" />
-              </div>
-            )}
-            
-            {/* Badges */}
-            <div className="absolute top-3 left-3 flex flex-col gap-1">
-              {hasDiscount && (
-                <Badge className="bg-red-500 hover:bg-red-600 text-white px-2 py-1 text-xs font-semibold">
-                  -{discountPercent}% OFF
-                </Badge>
-              )}
-              {isLowStock && !isOutOfStock && (
-                <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-100 px-2 py-1 text-xs font-semibold">
-                  Low Stock
-                </Badge>
-              )}
-            </div>
-            
-            {isOutOfStock && (
-              <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
-                <Badge variant="destructive" className="text-sm px-3 py-1.5 font-semibold">
-                  Out of Stock
-                </Badge>
-              </div>
-            )}
-            
-            {/* {showCustomPrice && (
-              <Badge variant="secondary" className="absolute top-3 right-3 bg-purple-100 text-purple-700 text-xs px-2 py-1">
-                <DollarSign className="h-3 w-3 mr-1 inline" />
-                Custom Price
-              </Badge>
-            )} */}
-          </div>
-          
-          {/* Content Section - No click handler on the whole card */}
-          <div className="p-2 space-y-3">
-            {/* Product Title */}
-            <div>
-              <h3 className="font-semibold text-base line-clamp-2 min-h-[28px]">
-                {product.title}
-              </h3>
-            </div>
-            
-            {/* Variant Selector */}
-            {hasVariants && (
-              <div>
-                {hasMultipleVariants ? (
-                  <Button
-                    variant="outline"
-                    size="default"
-                    className="w-full justify-between text-sm"
-                    onClick={handleOpenVariantDialog}
-                  >
-                    <span className="truncate">
-                      {selectedVariant?.title || "Select Variant"}
-                    </span>
-                    <ChevronDown className="h-4 w-4 ml-2 opacity-50" />
-                  </Button>
-                ) : (
-                  <div className="text-sm text-muted-foreground px-3 py-2 bg-muted/50 rounded-md">
-                    {selectedVariant?.title}
-                  </div>
-                )}
-              </div>
-            )}
-            
-            {/* Price Section */}
-            <div className="space-y-2 pt-2">
-              <div className="flex items-baseline gap-2 flex-wrap">
-                <span className="text-xl font-bold text-primary">
-                  {currencySymbol} {price.toFixed(2)}
-                </span>
-                {hasDiscount && (
-                  <>
-                    <span className="text-sm text-muted-foreground line-through">
-                      {currencySymbol} {originalPrice.toFixed(2)}
-                    </span>
-                    <Badge variant="secondary" className="bg-green-100 text-green-700 text-xs">
-                      Save {currencySymbol} {(originalPrice - price).toFixed(2)}
-                    </Badge>
-                  </>
-                )}
-              </div>
-              
-              {/* {quantity > 1 && (
-                <div className="text-sm text-muted-foreground">
-                  Total: {currencySymbol} {(price * quantity).toFixed(2)}
-                </div>
-              )} */}
-            </div>
-            
-            {/* Action Section - Only buttons trigger actions */}
-            {!isOutOfStock && (
-              <div className="space-y-3 pt-2">
-                {/* Quantity Selector */}
-                <div className="w-full flex items-center justify-between">
-                  <QuantitySelector />
-                </div>
-                
-                {/* Add to Cart Button - Primary action */}
-                <Button 
-                  size="lg"
-                  className="w-full gap-2"
-                  onClick={handleAddToCart}
-                  disabled={isAdding || isLoading || !selectedVariant}
-                >
-                  {isAdding ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Adding...
-                    </>
-                  ) : (
-                    <>
-                      <ShoppingCart className="h-4 w-4" />
-                      Add to Cart
-                      {quantity > 1 && (
-                        <Badge variant="secondary" className="ml-2 bg-white/20">
-                          {quantity}x
-                        </Badge>
-                      )}
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-      
-      <VariantSelectionDialog />
-    </>
-  );
-};
-
-// ============================================
-// DRAFTS DIALOG
-// ============================================
-
-function DraftsDialog({ open, onOpenChange, drafts, onLoadDraft, onDeleteDraft, region }: any) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Saved Drafts</DialogTitle>
-          <DialogDescription>Load or delete saved draft orders</DialogDescription>
-        </DialogHeader>
-        <ScrollArea className="h-96">
-          <div className="space-y-2">
-            {drafts.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">No saved drafts</div>
-            ) : (
-              drafts.map((draft: DraftOrder) => (
-                <div key={draft.id} className="p-3 rounded-lg border">
-                  <div className="flex items-center justify-between mb-2">
-                    <Badge variant="outline" className="text-xs">
-                      {new Date(draft.created_at).toLocaleString()}
-                    </Badge>
-                    <div className="flex gap-1">
-                      <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => onLoadDraft(draft)}>
-                        Load
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive" onClick={() => onDeleteDraft(draft.id)}>
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                  {draft.table_ids && draft.table_ids.length > 0 && (
-                    <div className="text-xs text-muted-foreground mb-1">Tables: {draft.table_ids.join(', ')}</div>
-                  )}
-                  {draft.customer_name && (
-                    <div className="text-xs text-muted-foreground mb-1">Customer: {draft.customer_name}</div>
-                  )}
-                  <div className="flex justify-between text-xs">
-                    <span>{draft.items.length} items</span>
-                    <span className="font-semibold">
-                      {region?.currency_code?.toUpperCase() || "PHP"} {draft?.total?.toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </ScrollArea>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ============================================
-// PAYMENT DIALOG
-// ============================================
-
-function PaymentDialog({ open, onOpenChange, cartTotal, region, onComplete }: any) {
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "other">("cash");
-  const [cashAmount, setCashAmount] = useState<number>(cartTotal);
-  const [isProcessing, setIsProcessing] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setCashAmount(cartTotal);
-    }
-  }, [open, cartTotal]);
-
-  const handlePayment = async () => {
-    setIsProcessing(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      onComplete({ 
-        paymentMethod, 
-        amount: cartTotal, 
-        change: paymentMethod === "cash" ? cashAmount - cartTotal : 0 
-      });
-      onOpenChange(false);
-    } catch (error) {
-      console.error("Payment error:", error);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const change = cashAmount - cartTotal;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Payment Collection</DialogTitle>
-          <DialogDescription>Complete the payment for this order</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="flex justify-between text-lg font-bold">
-            <span>Total Amount:</span>
-            <span>{region?.currency_code?.toUpperCase() || "PHP"} {cartTotal.toFixed(2)}</span>
-          </div>
-          
-          <Separator />
-          
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Payment Method</label>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant={paymentMethod === "cash" ? "default" : "outline"}
-                className="flex-1"
-                onClick={() => setPaymentMethod("cash")}
-              >
-                Cash
-              </Button>
-              <Button
-                type="button"
-                disabled
-                variant={paymentMethod === "card" ? "default" : "outline"}
-                className="flex-1"
-                onClick={() => setPaymentMethod("card")}
-              >
-                Card
-              </Button>
-              <Button
-                type="button"
-                disabled
-                variant={paymentMethod === "other" ? "default" : "outline"}
-                className="flex-1"
-                onClick={() => setPaymentMethod("other")}
-              >
-                Other
-              </Button>
-            </div>
-          </div>
-          
-          {paymentMethod === "cash" && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Cash Amount</label>
-              <Input
-                type="number"
-                value={cashAmount}
-                onChange={(e) => setCashAmount(parseFloat(e.target.value))}
-                className="text-lg"
-                step="0.01"
-                min="0"
-              />
-              {change >= 0 && (
-                <div className="text-sm text-green-600">
-                  Change: {region?.currency_code?.toUpperCase() || "PHP"} {change.toFixed(2)}
-                </div>
-              )}
-              {change < 0 && (
-                <div className="text-sm text-red-600">
-                  Insufficient: Need {region?.currency_code?.toUpperCase() || "PHP"} {Math.abs(change).toFixed(2)} more
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button 
-            onClick={handlePayment} 
-            disabled={isProcessing || (paymentMethod === "cash" && cashAmount < cartTotal)}
-          >
-            {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Complete Order
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ============================================
-// MAIN POS COMPONENT
-// ============================================
+import { usePosCart } from "@/hooks/use-pos-cart";
+import { usePosProducts } from "@/hooks/use-pos-products";
+import { usePosDrafts } from "@/hooks/use-pos-drafts";
+import { usePosTables } from "@/hooks/use-pos-tables";
+import { Region, Customer } from "@/types";
+import { Badge } from "@/components/ui/badge";
+import sdk from "@/lib/config";
+import { processPOSPayment } from "@/lib/actions/capture-payments";
+import { useToast } from "@/hooks/use-toast";
 
 interface PosAppProps {
-  region?: any;
+  region?: Region;
   user?: any;
   countryCode?: string;
 }
 
 export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps) {
-  const { toast } = useToast();
   const [isMobile, setIsMobile] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  
-  // Cart state
-  const [cart, setCart] = useState<any>(null);
-  const [cartId, setCartId] = useState<string | null>(null);
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [cartTotal, setCartTotal] = useState(0);
-  const [isLoadingCart, setIsLoadingCart] = useState(false);
-  
-  // Order assignment
   const [selectedTableIds, setSelectedTableIds] = useLocalStorage<string[]>("current_order_table_ids", []);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [orderNotes, setOrderNotes] = useState("");
-  
-  // Draft state
-  const [drafts, setDrafts] = useState<DraftOrder[]>([]);
-  const [draftsDialogOpen, setDraftsDialogOpen] = useState(false);
-  
-  // Payment state
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [isCheckingOut, setIsCheckingOut] = useState(false);
-  const [printOpen, setPrintOpen] = useState(false);
-  const [currentReceiptData, setCurrentReceiptData] = useState<any>(null);
-  
-  // UI state
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [draftsDialogOpen, setDraftsDialogOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
+  const  {toast} = useToast();
+ 
+
+  // Pricing strategy from user context
+  const pricingContext = useMemo(() => ({
+    priceListId: user?.metadata?.role === 'company' 
+      ? user.employee?.company?.price_list_id 
+      : user?.driver?.price_list_id,
+    customerGroupId: user?.metadata?.role === 'company' 
+      ? user.employee?.company?.customer_group_id 
+      : user?.driver?.customer_group_id,
+    customerId: user?.id,
+    pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
+  }), [user]);
   
-  // Products state
-  const [categories, setCategories] = useState<any[]>([]);
-  const [products, setProducts] = useState<MedusaProduct[]>([]);
-  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
-  const [productVariants, setProductVariants] = useState<Record<string, string>>({});
-  
-  // Custom pricing state
-  const [customPriceDialogOpen, setCustomPriceDialogOpen] = useState(false);
-  const [selectedItemForCustomPrice, setSelectedItemForCustomPrice] = useState<CartItem | null>(null);
-  
-  // Get customer group and price list from user
-  const customerGroupId = user?.metadata?.role === 'company' 
-    ? user.employee?.company?.customer_group_id 
-    : user?.driver?.customer_group_id;
-    
-  const priceListId = user?.metadata?.role === 'company' 
-    ? user.employee?.company?.price_list_id 
-    : user?.driver?.price_list_id;
-
-  // ============================================
-  // HELPER FUNCTIONS
-  // ============================================
-
-  const calculateOrderTotals = (items: CartItem[]) => {
-    const subtotal = items.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
-    const tax = subtotal * (region?.tax_rate || 0) / 100;
-    const total = subtotal + tax;
-    
-    return {
-      subtotal,
-      tax,
-      total,
-      currency_code: region?.currency_code || "php"
-    };
-  };
-
-  const calculateTotalDiscount = (items: CartItem[]) => {
-    return items.reduce((total, item) => {
-      if (item.original_unit_price && item.original_unit_price > item.unit_price) {
-        const discount = (item.original_unit_price - item.unit_price) * item.quantity;
-        return total + discount;
-      }
-      return total;
-    }, 0);
-  };
-
-
-  const handleCustomerChange = async (data: any) => {
-      console.log(data, 'DATAAA')
-        await assignCustomerToCart(cartId, data)
-        setSelectedCustomer(data)
-        // refreshCart()
-  }
-
-
-  useEffect(() => {
-    const stored = localStorage.getItem("pos-drafts");
-    if (stored) {
-      setDrafts(JSON.parse(stored));
-    }
-  }, []);
-
-  // Save drafts to localStorage
-  const saveDrafts = useCallback((newDrafts: DraftOrder[]) => {
-    setDrafts(newDrafts);
-    localStorage.setItem("pos-drafts", JSON.stringify(newDrafts));
-  }, []);
-
-// ============================================
-// SHARED PRICING LOGIC (DRY)
-// ============================================
-
-const processCartItemsWithPricing = useCallback(async (
-  cartData: any,
-  customPrices: Record<string, number>,
-  appliedPriceListId?: string,
-  appliedCustomerGroupId?: string
-): Promise<CartItem[]> => {
-  // Fetch price list if needed
-  let priceListPrices = new Map();
-  if (appliedPriceListId && cartData.items?.length) {
-    try {
-      const priceListData = await fetchPriceListWithVariants(appliedPriceListId, cartData.currency_code);
-      priceListPrices = priceListData;
-    } catch (error) {
-      console.warn('Failed to fetch price list:', error);
-    }
-  }
-  console.log(cartData, 'CARRT', priceListPrices)
-  // Process each item with same pricing logic
-  return cartData.items?.map((item: any) => {
-    let unitPrice = item.unit_price;
-    let originalUnitPrice = unitPrice;
-    let isCustomPriced = false;
-    
-    // Priority 1: Custom pricing
-    if (customPrices[item.variant_id] !== undefined) {
-      unitPrice = customPrices[item.variant_id];
-      originalUnitPrice = item.unit_price;
-      isCustomPriced = true;
-    }
-    // Priority 2: Price list pricing
-    else if (appliedPriceListId) {
-      const priceListKey = `${item.variant_id}-${cartData.currency_code}`;
-      const priceListPrice = priceListPrices.get(priceListKey);
-      if (priceListPrice !== undefined) {
-        unitPrice = priceListPrice;
-        originalUnitPrice = item.unit_price;
-      }
-    }
-    // Priority 3: Customer group pricing
-    else if (appliedCustomerGroupId && !appliedPriceListId) {
-      // Add customer group pricing logic here
-    }
-    
-    // Calculate totals
-    const subtotal = unitPrice * item.quantity;
-    const taxRate = (region?.tax_rate || 0) / 100;
-    const taxAmount = subtotal * taxRate;
-    
-    return {
-      id: item.id,
-      product_id: item.product_id,
-      variant_id: item.variant_id,
-      title: item.title,
-      thumbnail: item.thumbnail,
-      quantity: item.quantity,
-      unit_price: unitPrice,
-      original_unit_price: originalUnitPrice,
-      is_custom_priced: isCustomPriced,
-      variant_title: item.variant_title,
-      variant_sku: item.variant_sku,
-      subtotal: subtotal,
-      tax_total: taxAmount,
-      total: subtotal + taxAmount,
-    };
-  }) || [];
-}, [region?.tax_rate]);
-
-// ============================================
-// REFRESH CART - Using shared logic
-// ============================================
-
-const refreshCart = useCallback(async (cartIdToRefresh?: string) => {
-  const targetCartId = cartIdToRefresh || cartId;
-  if (!targetCartId) return
-  
-  
-  try {
-    setIsLoadingCart(true);
-    console.log('refftres')
-    // 1. Retrieve existing cart
-    const updatedCart = await sdk.store.cart.retrieve(targetCartId);
-    
-    const cartData = updatedCart.cart || updatedCart;
-    
-    // 2. Get pricing context from cart metadata
-    const customPrices = cartData.metadata?.custom_prices || {};
-    const appliedPriceListId = priceListId;
-    const appliedCustomerGroupId = customerGroupId;
-    if(!cartData) return
-    // 3. Process items with shared pricing logic
-    const transformedItems = await processCartItemsWithPricing(
-      cartData,
-      customPrices,
-      appliedPriceListId,
-      appliedCustomerGroupId
-    );
-    
-    // 4. Calculate totals
-    const subtotal = transformedItems.reduce((sum, item) => sum + item.subtotal, 0);
-    const taxTotal = transformedItems.reduce((sum, item) => sum + (item.tax_total || 0), 0);
-    const total = subtotal + taxTotal;
-    
-    // 5. Update state (repopulate, not replace)
-
-
-    setCart({
-      ...cartData,
-      items: transformedItems,
-      subtotal,
-      tax_total: taxTotal,
-      total,
+  // Hooks
+  const { 
+    cart, cartItems, cartTotal, isLoading: isLoadingCart,
+    refreshCart, createCart, addToCart, updateQuantity, removeFromCart, clearCart, 
+    attachCustomer, updateMetadata, applyCustomPrice, removeCustomPrice, prepareCartForCheckout
+  } = usePosCart({ 
+    region, 
+    priceListId: pricingContext.priceListId,
+    customerGroupId: pricingContext.customerGroupId,
+    userId: user?.id,
+    customerId: selectedCustomer?.id
+  }) as any;
+   
+  const { categories, products, isLoading: isLoadingProducts, productVariants, handleVariantChange, refreshProducts } = 
+    usePosProducts({ 
+      countryCode, 
+      priceListId: pricingContext.priceListId,
+      customerGroupId: pricingContext.customerGroupId,
+      regionId: region?.id,
+      customerId: selectedCustomer?.id
     });
-    setCartItems(transformedItems);
-    setCartTotal(total);
-    
-    console.log('Cart refreshed:', {
-      cartId: targetCartId,
-      itemsCount: transformedItems.length,
-      total
-    });
-    
-
-            
-    // // Restore metadata state
-    if (cartData.metadata) {
-      if (cartData.metadata.table_ids) setSelectedTableIds(cartData.metadata.table_ids);
-      if (cartData.metadata.customer_id && cartData.metadata.customer_name) {
-        setSelectedCustomer({
-          id: cartData.customer_id,
-          first_name: cartData.metadata.customer_name,
-          email: cartData.metadata.customer_email || "",
-        });
-      }
-      if (cartData.metadata.notes) setOrderNotes(cartData.metadata.notes);
-    }
-
-    
-  } catch (error) {
-    console.error("Error refreshing cart:", error);
-  } finally {
-    setIsLoadingCart(false);
-  }
-}, [cartId, processCartItemsWithPricing]);
-
-// ============================================
-// INIT CART - Using the same shared logic
-// ============================================
-
-const initCart = useCallback(async (options?: { 
-  priceListId?: string; 
-  customerGroupId?: string; 
-  customPricing?: Record<string, number>;
-}) => {
-  setIsLoadingCart(true);
-  try {
-    const storedCartId = localStorage.getItem("pos_cart_id");
-    let activeCart;
-    
-    // Retrieve or create cart (only difference from refreshCart)
-    if (storedCartId) {
-      try {
-        activeCart = await sdk.store.cart.retrieve(storedCartId);
-        if (activeCart.cart.metadata?.is_draft) {
-          activeCart = null;
-        }
-      } catch {
-        activeCart = null;
-      }
-    } 
-    
-    const cartData = activeCart?.cart || activeCart as any;
-    if(!cartData){
-    setCartTotal(0)
-    setCartItems([])
-    return  
-    }
-    // Apply pricing strategy
-    const appliedPriceListId = options?.priceListId || priceListId;
-    const appliedCustomerGroupId = options?.customerGroupId || customerGroupId;
-    
-
-    
-    // Get custom prices
-    const customPrices = options?.customPricing || cartData?.metadata?.custom_prices || {};
-      
-    // Process items with shared pricing logic
-    const transformedItems = await processCartItemsWithPricing(
-      cartData,
-      customPrices,
-      appliedPriceListId,
-      appliedCustomerGroupId
-    );
-    
-
-    // Calculate totals
-    const subtotal = transformedItems.reduce((sum, item) => sum + item.subtotal, 0);
-    const taxTotal = transformedItems.reduce((sum, item) => sum + (item.tax_total || 0), 0);
-    const total = subtotal + taxTotal;
-
-
-
-
-    // Update state
-
-    setCartItems(transformedItems);
-    setCartTotal(total);
-
-    
-  } catch (error) {
-    console.error("Error initializing cart:", error);
-  } finally {
-    setIsLoadingCart(false);
-  }
-}, [region, customerGroupId, priceListId, processCartItemsWithPricing]);
-
-
-  // Delete a draft
-  const deleteDraft = useCallback((draftId: string) => {
-    const updatedDrafts = drafts.filter(d => d.id !== draftId);
-    saveDrafts(updatedDrafts);
-    toast({ title: "Draft deleted", description: "Draft order removed" });
-  }, [drafts, saveDrafts, toast]);
-
-  // Save current cart as draft
-  const saveAsDraft = useCallback(async () => {
-    if (cartItems.length === 0 && selectedTableIds.length === 0 && !selectedCustomer) {
-      toast({ title: "Cannot save", description: "Add items or assign table/customer first", variant: "destructive" });
-      return;
-    }
-
-    const draftData: DraftOrder = {
-      id: cartId!,
-      cart_id: cartId!,
-      created_at: new Date(),
-      updated_at: new Date(),
-      items: [...cartItems],
-      total: cartTotal,
-      customer_id: selectedCustomer?.id,
-      customer_name: selectedCustomer?.first_name,
-      table_ids: selectedTableIds || [],
-      notes: orderNotes,
-    };
-
-    if (cartId) {
-      try {
-        await sdk.store.cart.update(cartId, {
-          metadata: {
-            ...cart?.metadata,
-            is_draft: true,
-          },
-        });
-      } catch (error) {
-        console.error("Error updating cart metadata:", error);
-      }
-    }
-
-    const existingDraftIndex = drafts.findIndex(draft => draft.id === draftData.id);
-    let updatedDrafts;
-    
-    if (existingDraftIndex !== -1) {
-      updatedDrafts = [...drafts];
-      updatedDrafts[existingDraftIndex] = draftData;
-    } else {
-      updatedDrafts = [draftData, ...drafts];
-    }
-    
-    saveDrafts(updatedDrafts);
-    
-    localStorage.removeItem("pos_cart_id");
-    setCart(null);
-    setCartId(null);
-    setCartItems([]);
-    setCartTotal(0);
-    setSelectedTableIds([]);
-    setSelectedCustomer(null);
-    setOrderNotes("");
-    
-    await initCart();
-    
-    toast({ title: "Draft saved", description: "Order saved as draft" });
-  }, [cartItems, selectedTableIds, selectedCustomer, orderNotes, cartTotal, cartId, cart?.metadata, drafts, saveDrafts, toast, initCart]);
-
-  // Load a draft
-  const loadDraft = useCallback(async (draft: DraftOrder) => {
-    try {
-      const activeCart = await sdk.store.cart.retrieve(draft.cart_id);
-      const cartData = activeCart.cart || activeCart;
-      
-      setCart(cartData);
-      setCartId(cartData.id);
-      localStorage.setItem('pos_cart_id', draft.cart_id);
-      
-      const transformedItems: CartItem[] = cartData.items?.map((item: any) => ({
-        id: item.id,
-        product_id: item.product_id,
-        variant_id: item.variant_id,
-        title: item.title,
-        thumbnail: item.thumbnail,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        variant_title: item.variant_title,
-        subtotal: item.subtotal || (item.unit_price * item.quantity),
-      })) || [];
-      
-      setCartItems(transformedItems);
-      setCartTotal(cartData.total || 0);
-      
-      if (draft.table_ids) setSelectedTableIds(draft.table_ids);
-      if (draft.customer_id && draft.customer_name) {
-        setSelectedCustomer({
-          id: draft.customer_id,
-          first_name: draft.customer_name,
-          email: "",
-        });
-      }
-      if (draft.notes) setOrderNotes(draft.notes);
-      
-      toast({ title: "Draft loaded", description: `Draft from ${new Date(draft.created_at).toLocaleString()}` });
-      setDraftsDialogOpen(false);
-    } catch (error) {
-      console.error("Error loading draft:", error);
-      toast({ title: "Error", description: "Failed to load draft", variant: "destructive" });
-    }
-  }, [setSelectedTableIds, toast]);
-
-  useEffect(() => {
-    initCart();
-  }, [initCart]);
-
-  // Update cart metadata
-  const updateCartMetadata = useCallback(async () => {
-    if (!cartId) return;
-    try {
-      // await sdk.store.cart.update(cartId, {
-      //   customer_id: selectedCustomer?.id,
-      //   metadata: {
-      //     ...cart?.metadata,
-      //     table_ids: selectedTableIds,
-      //     customer_name: selectedCustomer?.first_name,
-      //     customer_email: selectedCustomer?.email,
-      //     notes: orderNotes,
-      //   },
-      // });
-    } catch (error) {
-      console.error("Error updating cart metadata:", error);
-    }
-  }, [cartId, selectedTableIds, selectedCustomer, orderNotes, cart?.metadata]);
   
+  const { drafts, saveAsDraft, deleteDraft, loadDraft } = usePosDrafts();
+  const { occupiedTableIds, updateTableOccupancy } = usePosTables();
+  
+  // Initialize cart
   useEffect(() => {
-    if (cartId) {
-      updateCartMetadata();
-    }
-  }, [selectedTableIds, selectedCustomer, orderNotes, updateCartMetadata]);
-
-  // ============================================
-  // PRODUCT MANAGEMENT
-  // ============================================
-
-  // Fetch categories
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const headers = await getAuthHeaders();
-        const response = await sdk.client.fetch("/store/product-categories", {
-          method: "GET",
-          headers,
-        });
-        setCategories(response.product_categories || []);
-      } catch (error) {
-        console.error("Error fetching categories:", error);
+    const init = async () => {
+      const storedCartId = localStorage.getItem("pos_cart_id");
+      if (storedCartId) {
+        await refreshCart(storedCartId);
+      } else {
+        await createCart();
       }
     };
-    fetchCategories();
-  }, []);
-
-  // Fetch products with price list
-  const fetchProducts = useCallback(async () => {
-    if (isLoadingProducts) return;
-    
-    setIsLoadingProducts(true);
-    try {
-      const response = await listPriceListProducts({ countryCode, priceListId, customerGroupId });
-      setProducts(response.products || []);
-      
-      const initialVariants: Record<string, string> = {};
-      (response.products || []).forEach((product: MedusaProduct) => {
-        if (product.variants?.[0]) {
-          initialVariants[product.id] = product.variants[0].id;
-        }
-      });
-      setProductVariants(initialVariants);
-    } catch (error) {
-      console.error("Error fetching products:", error);
-      toast({ title: "Error", description: "Failed to load products", variant: "destructive" });
-    } finally {
-      setIsLoadingProducts(false);
-    }
-  }, [priceListId, countryCode]);
-
+    init();
+  }, [createCart, refreshCart]);
+  
+  // Update cart metadata when pricing context changes
   useEffect(() => {
-    if (priceListId) {
-      fetchProducts();
-    }
-  }, [selectedCategoryId, searchQuery, priceListId]);
-
-  // Filter products
-  const filteredProducts = products.filter(product => {
-    const matchesCategory = selectedCategoryId === "all" || 
-      product.categories?.some(cat => cat.id === selectedCategoryId);
-    const matchesSearch = searchQuery === "" || 
-      product.title.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
-
-  // ============================================
-  // CART OPERATIONS
-  // ============================================
-
-  // Add to cart
-  const addToCart = async ({ variantId, quantity }: { variantId: string; quantity: number }) => {
-   let storedCartId = localStorage.getItem("pos_cart_id") || cartId;
-   const existingItems = cartItems ?? [];
-    if (!storedCartId) {
-    let activeCart = await sdk.store.cart.create({
-        currency_code: region?.currency_code || "php",
-        metadata: {
-          seller_id: user?.id
-        }
+    if (cart?.id && pricingContext) {
+      updateMetadata({
+        price_list_id: pricingContext.priceListId,
+        customer_group_id: pricingContext.customerGroupId,
+        pricing_strategy: pricingContext.pricingStrategy
       });
-
-
-      console.log(activeCart, 'acct')
-      localStorage.setItem("pos_cart_id", activeCart.cart.id);
-      setCartId(activeCart.cart.id)
-      setCart(activeCart.cart)
-      setCartItems([])
-      storedCartId = activeCart.cart.id
     }
+  }, [pricingContext, cart?.id, updateMetadata]);
+  
+  // Handle customer change
+  const handleCustomerChange = useCallback(async (customer: Customer | null) => {
+    setSelectedCustomer(customer);
+    await attachCustomer(customer);
     
-
-    console.log(storedCartId, 'storrree', existingItems)
-    try {
-      const existingItem = existingItems.find(item => item.variant_id === variantId);
-          console.log(storedCartId, existingItem, storedCartId, 'ssssss')
-
-      if (existingItem) {
-        await sdk.store.cart.updateLineItem(storedCartId, existingItem.id, {
-          quantity: existingItem.quantity + quantity,
-        });
-      } else {
-      const priceListData = await fetchPriceListWithVariants(priceListId, 'php');
-        
-      
-      let updatedCart = await sdk.store.cart.createLineItem(storedCartId, {
-          variant_id: variantId,
-          quantity,
-        }) as any;
-
-      let priceListKey = `${variantId}-php`
-      let customUnitPrice = priceListData.get(priceListKey)
-        console.log(updatedCart, 'cAAAT', customUnitPrice)
-      
-      let lineItem = updatedCart?.cart.items.find(a => a.variant_id == variantId);
-      console.log(lineItem, customUnitPrice, 'lineee', quantity)
-      if(lineItem && customUnitPrice){
-        await updateLineItemPrice(lineItem.id, { cartId: storedCartId, variantId, customUnitPrice, quantity, priceListId, customerGroupId});
-
-      const currentCustomPrices = cart?.metadata?.custom_prices || {};
-      const updatedCustomPrices = {
-        ...currentCustomPrices,
-        [variantId]: customUnitPrice
-      };
-      
-
-
-      await sdk.store.cart.update(storedCartId, {
-        metadata: {
-          ...cart?.metadata,
-          custom_prices: updatedCustomPrices,
-          custom_prices_enabled: true,
-          last_price_update: new Date().toISOString()
-        }
+    // Update pricing context for customer-specific pricing
+    if (customer?.customer_group_id) {
+      await updateMetadata({
+        customer_group_id: customer.customer_group_id,
+        pricing_strategy: 'customer_group'
       });
-      }
-
-      }
-      
-      await refreshCart(storedCartId);
-      toast({ title: "Added", description: "Item added to cart" });
-    } catch (error) {
-      console.error("Error adding to cart:", error);
-      toast({ title: "Error", description: "Failed to add item", variant: "destructive" });
     }
-  };
+  }, [attachCustomer, updateMetadata]);
   
-  // Update quantity
-  const updateQuantity = async (lineId: string, quantity: number) => {
-    if (!cartId) return;
-    try {
-      if (quantity <= 0) {
-        await sdk.store.cart.deleteLineItem(cartId, lineId);
-      } else {
-        await sdk.store.cart.updateLineItem(cartId, lineId, { quantity });
+  // Handle notes change with debounce
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (orderNotes) {
+        updateMetadata({ notes: orderNotes });
       }
-      await refreshCart();
-    } catch (error) {
-      console.error("Error updating quantity:", error);
-      toast({ title: "Error", description: "Failed to update", variant: "destructive" });
-    }
-  };
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [orderNotes, updateMetadata]);
   
-  // Remove from cart
-  const removeFromCart = async (lineId: string) => {
-    if (!cartId) return;
-    try {
-      await sdk.store.cart.deleteLineItem(cartId, lineId);
-      await refreshCart();
-      toast({ title: "Removed", description: "Item removed" });
-    } catch (error) {
-      console.error("Error removing item:", error);
-      toast({ title: "Error", description: "Failed to remove", variant: "destructive" });
-    }
-  };
-  
-  // Apply custom price to item
-  const applyCustomPrice = async (itemId: string, variantId: string, customUnitPrice: number, quantity: any) => {
-    if (!cartId) return;
-    
-    try {
-      await updateLineItemPrice(itemId, { cartId, variantId, customUnitPrice, quantity, priceListId, customerGroupId});
-      
-      const currentCustomPrices = cart?.metadata?.custom_prices || {};
-      const updatedCustomPrices = {
-        ...currentCustomPrices,
-        [variantId]: customUnitPrice
-      };
-      
-      await sdk.store.cart.update(cartId, {
-        metadata: {
-          ...cart?.metadata,
-          custom_prices: updatedCustomPrices,
-          custom_prices_enabled: true,
-          last_price_update: new Date().toISOString()
-        }
-      });
-
-
-
-
-      await refreshCart();
-      
-      toast({ title: "Price Updated", description: `Custom price of ${region?.currency_code?.toUpperCase()} ${customUnitPrice.toFixed(2)} applied` });
-    } catch (error) {
-      console.error("Error applying custom price:", error);
-      toast({ title: "Error", description: "Failed to apply custom price", variant: "destructive" });
-    }
-  };
-  
-  // Clear cart
-  const clearCart = async () => {
-console.log(cartId, 'CAARRT')
-      removeCartId();
-      localStorage.removeItem('pos_cart_id');
-    try {
-          if (cartId) {
-      for (const item of cartItems) {
-        await sdk.store.cart.deleteLineItem(cartId, item.id);
-      }
-  }
-
-      await initCart();
-      await refreshCart();
-      setSelectedTableIds([]);
-      setSelectedCustomer(null);
-      setOrderNotes("");
-      toast({ title: "Cleared", description: "Cart cleared" });
-    } catch (error) {
-      console.error("Error clearing cart:", error);
-    }
-  };
-
-  // ============================================
-  // CHECKOUT & PAYMENT
-  // ============================================
-
-  const handlePaymentComplete = async (paymentData: any) => {
-       let storedCartId = localStorage.getItem("pos_cart_id") || cartId;
-
-    if (!storedCartId) return;
-    
-    setIsCheckingOut(true);
-    try {
-
-
-      
-      const orderTotals = calculateOrderTotals(cartItems);
-      
-      const orderItemsWithPricing = cartItems.map(item => ({
-        id: item.id,
-        product_id: item.product_id,
-        variant_id: item.variant_id,
-        title: item.title,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        original_unit_price: item.original_unit_price,
-        is_custom_priced: item.is_custom_priced || !!(cart?.metadata?.custom_prices?.[item.variant_id]),
-        subtotal: item.unit_price * item.quantity,
-        metadata: {
-          price_list_id: item.price_list_id || cart?.metadata?.price_list_id,
-          customer_group_id: cart?.metadata?.customer_group_id,
-          pricing_strategy: cart?.metadata?.pricing_strategy,
-          custom_price_applied: !!(cart?.metadata?.custom_prices?.[item.variant_id]),
-        }
-      }));
-      
-      await sdk.store.cart.update(storedCartId, {
-        metadata: {
-          ...cart?.metadata,
-          order_pricing_snapshot: {
-            items: orderItemsWithPricing,
-            totals: orderTotals,
-            applied_at: new Date().toISOString(),
-            pricing_strategy: cart?.metadata?.pricing_strategy,
-            price_list_id: cart?.metadata?.price_list_id,
-            customer_group_id: cart?.metadata?.customer_group_id,
-          }
-        }
-      });
-      
-      let paymentProviderId = "pp_system_default";
-      switch (paymentData.paymentMethod) {
-        case "cash": paymentProviderId = "pp_system_default"; break;
-        case "card": paymentProviderId = "pp_stripe_stripe"; break;
-        default: paymentProviderId = "pp_system_default";
-      }
-      
-      await initiatePaymentSession(cart, {
-        provider_id: paymentProviderId
-      });
-      
-      const completeResult = await sdk.store.cart.complete(storedCartId);
-
-      console.log(completeResult, 'comppp')
-      if (!completeResult.order) throw new Error("Failed to create order");
-      
-      const createdOrder = completeResult.order;
-      
-      // Clean up
-
-  
-      // Save to order history
-      const orders = JSON.parse(localStorage.getItem("pos_order_history") || "[]");
-      orders.unshift({
-        id: createdOrder.id,
-        cart_id: cartId,
-        order_number: createdOrder.display_id,
-        table_ids: selectedTableIds,
-        customer_id: selectedCustomer?.id,
-        customer_name: selectedCustomer?.first_name,
-        notes: orderNotes,
-        totals: orderTotals,
-        payment: {
-          method: paymentData.paymentMethod,
-          amount: paymentData.amount,
-          change: paymentData.change || 0,
-          timestamp: new Date().toISOString()
-        },
-        items: orderItemsWithPricing,
-        pricing_summary: {
-          strategy: cart?.metadata?.pricing_strategy,
-          price_list_id: cart?.metadata?.price_list_id,
-          customer_group_id: cart?.metadata?.customer_group_id,
-          custom_prices_count: Object.keys(cart?.metadata?.custom_prices || {}).length,
-          total_discount: calculateTotalDiscount(cartItems)
-        },
-        created_at: new Date().toISOString(),
-      });
-      localStorage.setItem("pos_order_history", JSON.stringify(orders.slice(0, 100)));
-      
-      // Update table occupancy
+  // Handle table change with debounce
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
       if (selectedTableIds.length > 0) {
-        const tables = JSON.parse(localStorage.getItem("simple-tables") || "[]");
-        const updatedTables = tables.map((table: any) => {
-          if (selectedTableIds.includes(table.id)) {
-            return {
-              ...table,
-              status: "occupied",
-              current_order_ids: [...(table.current_order_ids || []), createdOrder.id],
-              current_order_numbers: [...(table.current_order_numbers || []), createdOrder.display_id],
-              customer_name: selectedCustomer?.first_name || table.customer_name,
-              occupied_since: new Date(),
-              order_total: orderTotals.total,
-              order_items_count: cartItems.length,
-            };
-          }
-          return table;
-        });
-        localStorage.setItem("simple-tables", JSON.stringify(updatedTables));
+        updateMetadata({ table_ids: selectedTableIds });
       }
-      
-
-      setPaymentDialogOpen(false);
-      setMobileCartOpen(false);
-      removeCartId();
-      localStorage.removeItem("pos_cart_id");
-      setSelectedTableIds([]);
-      setSelectedCustomer(null);
-      setOrderNotes('');
-      setCart(null)
-      setCartId(null)
-      setCartItems([])
-      setCartTotal(0)
-
-      // await initCart()
-
-        const updatedDrafts = drafts.filter(d => d.id !== cartId);
-      saveDrafts(updatedDrafts);
-      refreshCart();
-
-    } catch (error) {
-      console.error("Error completing order:", error);
-      toast({ title: "Error", description: "Failed to complete order", variant: "destructive" });
-    } finally {
-      setIsCheckingOut(false);
-    }
-  };
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [selectedTableIds, updateMetadata]);
   
-  const handleVariantChange = (productId: string, variantId: string) => {
-    setProductVariants(prev => ({ ...prev, [productId]: variantId }));
-  };
 
+const handleCheckout = useCallback(async () => {
+  if (!cart?.id) return;
+  
+  try {
+    // Prepare cart with pricing metadata before opening payment dialog
+    await prepareCartForCheckout();
+    setPaymentDialogOpen(true);
+  } catch (error) {
+    console.error("Error preparing cart:", error);
+    toast({ 
+      title: "Error", 
+      description: "Failed to prepare order. Please try again.", 
+      variant: "destructive" 
+    });
+  }
+}, [cart, prepareCartForCheckout, toast]);
+
+
+  // Handle add to cart with pricing strategy tracking
+  const handleAddToCart = useCallback(async (params: {
+    variantId: string;
+    quantity: number;
+    variantTitle: string;
+    productTitle: string;
+    unitPrice: number;
+    originalPrice: number;
+    pricingStrategy: string;
+  }) => {
+    await addToCart({
+      ...pricingContext,
+      ...params,
+      variantId: params.variantId,
+      quantity: params.quantity,
+      metadata: {
+        variant_title: params.variantTitle,
+        original_price: params.originalPrice,
+        pricing_strategy: params.pricingStrategy,
+        price_list_id: pricingContext.priceListId,
+        applied_by: user?.id,
+        applied_at: new Date().toISOString()
+      }
+    });
+  }, [addToCart, pricingContext.priceListId, user?.id]);
+  
+  // Handle custom price application
+  const handleApplyCustomPrice = useCallback(async (
+    lineId: string, 
+    variantId: string, 
+    price: number, 
+    reason?: string
+  ) => {
+    await applyCustomPrice(lineId, variantId, price, {
+      ...pricingContext,
+      reason,
+      applied_by: user?.id,
+      applied_at: new Date().toISOString()
+    });
+    console.log(lineId, variantId, price, {
+      ...pricingContext,
+      reason,
+      applied_by: user?.id,
+      applied_at: new Date().toISOString()
+    }, 'APPLI PRICES')
+
+  }, [applyCustomPrice, user?.id]);
+  
+  // Handle remove custom price
+  const handleRemoveCustomPrice = useCallback(async (lineId: string, variantId: string) => {
+    await removeCustomPrice(lineId, variantId);
+  }, [removeCustomPrice]);
+  
+  // Handle checkout
+// Fix the typo in handleCheckout function
+// const handleCheckout = useCallback(async (paymentData: any) => {
+//   const storedCartId = localStorage.getItem("pos_cart_id") || cart?.id;
+//   if (!storedCartId) return;
+  
+//   try {
+//     // Calculate final totals including custom prices
+
+//     // await updateMetadata({
+//     //   is_draft: false,
+//     //   completed_at: new Date().toISOString(),
+//     //   table_ids: selectedTableIds,
+//     //   notes: orderNotes,
+//     //   payment_method: paymentData.paymentMethod,
+//     //   final_subtotal: finalSubtotal,
+//     //   final_total: finalTotal,
+//     //   custom_prices_applied: cartItems.filter(i => i.metadata?.is_custom_priced).length
+//     // });
+    
+   
+//     // ✅ Fix: Correct function name - updateTableOccupancy (not updateTableOccupality)
+//     updateTableOccupancy(selectedTableIds, paymentData.id, selectedCustomer?.first_name);
+    
+//     // Reset POS state
+//     localStorage.removeItem("pos_cart_id");
+//     setSelectedTableIds([]);
+//     setSelectedCustomer(null);
+//     setOrderNotes("");
+//     setPaymentDialogOpen(false);
+//     setMobileCartOpen(false);
+    
+//     // Create new cart
+//     await createCart();
+    
+//     // Show success message
+//     console.log("Order completed successfully:", paymentData);
+//   } catch (error) {
+//     console.error("Error completing order:", error);
+//   }
+// }, [cart, cartItems, selectedTableIds, selectedCustomer, orderNotes, region, updateMetadata, updateTableOccupancy, createCart]);
+  
+  // Handle save draft with pricing context
+  const handleSaveDraft = useCallback(async () => {
+    if (cart?.id) {
+      await updateMetadata({ 
+        is_draft: true, 
+        draft_name: `Draft - ${new Date().toLocaleString()}`,
+        saved_pricing_strategy: pricingContext.pricingStrategy,
+        saved_price_list_id: pricingContext.priceListId
+      });
+      await saveAsDraft(
+        cart.id, 
+        cartItems, 
+        cartTotal, 
+        selectedCustomer, 
+        selectedTableIds, 
+        orderNotes, 
+        cart?.metadata
+      );
+    }
+  }, [cart, cartItems, cartTotal, selectedCustomer, selectedTableIds, orderNotes, pricingContext, updateMetadata, saveAsDraft]);
+  
+  // Handle load draft with pricing restoration
+  const handleLoadDraft = useCallback(async (draft: any) => {
+    localStorage.setItem("pos_cart_id", draft.cart_id);
+    await refreshCart(draft.cart_id);
+    
+    // Restore draft state
+    if (draft.table_ids) setSelectedTableIds(draft.table_ids);
+    if (draft.customer_id && draft.customer_name) {
+      setSelectedCustomer({ id: draft.customer_id, first_name: draft.customer_name, email: "" });
+    }
+    if (draft.notes) setOrderNotes(draft.notes);
+    
+    // Restore pricing context if available
+    if (draft.saved_price_list_id) {
+      await updateMetadata({
+        price_list_id: draft.saved_price_list_id,
+        pricing_strategy: draft.saved_pricing_strategy || 'price_list'
+      });
+    }
+    
+    setDraftsDialogOpen(false);
+  }, [refreshCart, setSelectedTableIds, updateMetadata]);
+  
+  // Filter products
+  const filteredProducts = useMemo(() => {
+    return products.filter(product => {
+      const matchesCategory = selectedCategoryId === "all" || product.categories?.some(cat => cat.id === selectedCategoryId);
+      const matchesSearch = searchQuery === "" || product.title.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [products, selectedCategoryId, searchQuery]);
+  
   // Check mobile
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -1639,201 +312,102 @@ console.log(cartId, 'CAARRT')
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
+  
 
-  // ============================================
-  // MOBILE LAYOUT
-  // ============================================
+
+console.log(cart, 'CAAART')
+
+
+  // Pricing info component for header
+  const PricingInfoBadge = () => (
+    <div className="flex items-center gap-2">
+      {pricingContext.pricingStrategy === 'price_list' && pricingContext.priceListId && (
+        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+          <Tag className="h-3 w-3 mr-1" />
+          Promo Pricing Active
+        </Badge>
+      )}
+      {pricingContext.pricingStrategy === 'customer_group' && pricingContext.customerGroupId && (
+        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+          <Users className="h-3 w-3 mr-1" />
+          Group Pricing Active
+        </Badge>
+      )}
+      {selectedCustomer && (
+        <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+          <Star className="h-3 w-3 mr-1" />
+          Customer: {selectedCustomer.first_name}
+        </Badge>
+      )}
+    </div>
+  );
+  
+  const cartSidebarProps = {
+    cart,
+    region,
+    selectedTableIds,
+    selectedCustomer,
+    orderNotes,
+    isLoading: isLoadingCart,
+    onUpdateQuantity: updateQuantity,
+    onRemoveFromCart: removeFromCart,
+    onClearCart: clearCart,
+    onTablesChange: setSelectedTableIds,
+    onCustomerChange: handleCustomerChange,
+    onNotesChange: setOrderNotes,
+    onCheckout: () => handleCheckout(),
+    onSaveDraft: handleSaveDraft,
+    onApplyCustomPrice: handleApplyCustomPrice,
+    onRemoveCustomPrice: handleRemoveCustomPrice,
+    onLoadDraft: handleLoadDraft,
+    user,
+    occupiedTableIds
+  };
+
+  
+  // Mobile Layout
   if (isMobile) {
     return (
       <>
-        <div className="flex flex-col h-full overflow-hidden pb-14">
-          <div className="sticky top-0 z-10 bg-background border-b">
-            <div className="p-2">
-              <div className="flex gap-2 mb-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-                  <Input 
-                    placeholder="Search products..." 
-                    value={searchQuery} 
-                    onChange={(e) => setSearchQuery(e.target.value)} 
-                    className="pl-7 h-8 text-sm" 
-                  />
-                </div>
-                <Button size="sm" variant="outline" className="h-8 px-2" onClick={fetchProducts}>
+        <div className="flex flex-col h-full pb-14">
+          {/* Header */}
+          <div className="sticky top-0 z-10 bg-background border-b p-2">
+            <div className="flex justify-between items-center mb-2">
+              <PricingInfoBadge />
+              <div className="flex gap-1">
+                <Button size="sm" variant="outline" className="h-7 px-2" onClick={refreshProducts}>
                   <RefreshCw className="h-3 w-3" />
                 </Button>
-                <Button size="sm" variant="outline" className="h-8 px-2" onClick={() => setDraftsDialogOpen(true)}>
+                <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setDraftsDialogOpen(true)}>
                   <History className="h-3 w-3" />
                 </Button>
               </div>
-              
-              <div className="flex gap-1 overflow-x-auto pb-1">
-                <button 
-                  onClick={() => setSelectedCategoryId("all")} 
-                  className={cn("px-2 py-1 rounded text-xs whitespace-nowrap", 
-                    selectedCategoryId === "all" ? "bg-primary text-primary-foreground" : "bg-muted"
-                  )}
-                >
-                  All
-                </button>
-                {categories.map((cat) => (
-                  <button 
-                    key={cat.id} 
-                    onClick={() => setSelectedCategoryId(cat.id)} 
-                    className={cn("px-2 py-1 rounded text-xs whitespace-nowrap", 
-                      selectedCategoryId === cat.id ? "bg-primary text-primary-foreground" : "bg-muted"
-                    )}
-                  >
-                    {cat.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto p-2">
-            <div className="grid grid-cols-2 gap-2">
-              {filteredProducts.map((product) => (
-                <ProductCard 
-                  key={product.id} 
-                  product={product} 
-                  onAddToCart={addToCart} 
-                  region={region}
-                  isLoading={isLoadingProducts}
-                  selectedVariantId={productVariants[product.id]}
-                  onVariantChange={handleVariantChange}
-                  showCustomPrice={!!priceListId}
-                />
-              ))}
-            </div>
-            {isLoadingProducts && <Loader2 className="h-6 w-6 animate-spin mx-auto my-4" />}
-            {!isLoadingProducts && filteredProducts.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">No products found</div>
-            )}
-          </div>
-
-          <div className="fixed bottom-0 left-0 right-0 border-t bg-card p-2">
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={saveAsDraft} className="flex-1">
-                <Save className="mr-1 h-3 w-3" />
-                Draft
-              </Button>
-              <Button variant="default" className="flex-1" onClick={() => setMobileCartOpen(true)}>
-                <ShoppingCart className="mr-1 h-3 w-3" />
-                Cart • {cartTotal.toFixed(2)}
-              </Button>
-            </div>
-          </div>
-
-          <Sheet open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
-            <SheetContent side="bottom" className="rounded-t-xl p-0 h-[85vh]">
-              <SheetHeader className="border-b p-3">
-                <SheetTitle className="text-sm">Your Order</SheetTitle>
-              </SheetHeader>
-              <div className="flex-1 overflow-auto">
-                <CartSidebar
-                  cartItems={cartItems}
-                  cartTotal={cartTotal}
-                  isLoading={isLoadingCart}
-                  region={region}
-                  selectedTableIds={selectedTableIds}
-                  selectedCustomer={selectedCustomer}
-                  orderNotes={orderNotes}
-                  onUpdateQuantity={updateQuantity}
-                  onRemoveFromCart={removeFromCart}
-                  onClearCart={clearCart}
-                  onTablesChange={setSelectedTableIds}
-                  onCustomerChange={handleCustomerChange}
-                  onNotesChange={setOrderNotes}
-                  onCheckout={() => setPaymentDialogOpen(true)}
-                  onSaveDraft={saveAsDraft}
-                  onCustomPrice={applyCustomPrice}
-                  cart={cart}
-                  user={user}
-
-                />
-              </div>
-            </SheetContent>
-          </Sheet>
-        </div>
-        
-        <DraftsDialog
-          open={draftsDialogOpen}
-          onOpenChange={setDraftsDialogOpen}
-          drafts={drafts}
-          onLoadDraft={loadDraft}
-          onDeleteDraft={deleteDraft}
-          region={region}
-        />
-        
-        <PaymentDialog
-          open={paymentDialogOpen}
-          onOpenChange={setPaymentDialogOpen}
-          cartTotal={cartTotal}
-          region={region}
-          onComplete={handlePaymentComplete}
-        />
-        
-        <CustomPriceDialog
-          open={customPriceDialogOpen}
-          onOpenChange={setCustomPriceDialogOpen}
-          item={selectedItemForCustomPrice}
-          onApplyCustomPrice={applyCustomPrice}
-          region={region}
-        />
-
-        <PrintDialog
-          open={printOpen}
-          onOpenChange={setPrintOpen}
-          cart={cart}
-          receiptData={currentReceiptData}
-          region={region}
-        />
-      </>
-    );
-  }
-
-  // ============================================
-  // DESKTOP LAYOUT
-  // ============================================
-
-  return (
-    <div className="flex h-full overflow-hidden">
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="sticky top-0 z-10 bg-background border-b flex-shrink-0">
-          <div className="p-3">
-            <div className="flex gap-2 mb-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-                <Input 
-                  placeholder="Search products..." 
-                  value={searchQuery} 
-                  onChange={(e) => setSearchQuery(e.target.value)} 
-                  className="pl-7 h-8 text-sm" 
-                />
-              </div>
-              <Button variant="outline" size="sm" className="h-8 px-2" onClick={fetchProducts}>
-                <RefreshCw className="h-3 w-3" />
-              </Button>
-              <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => setDraftsDialogOpen(true)}>
-                <History className="h-3 w-3" />
-              </Button>
             </div>
             
-            <div className="flex gap-1 overflow-x-auto pb-1">
+            <div className="relative mb-2">
+              <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2" />
+              <Input 
+                placeholder="Search products..." 
+                value={searchQuery} 
+                onChange={(e) => setSearchQuery(e.target.value)} 
+                className="pl-7 h-8 text-sm" 
+              />
+            </div>
+            
+            <div className="flex gap-1 overflow-x-auto">
               <button 
                 onClick={() => setSelectedCategoryId("all")} 
-                className={cn("px-3 py-1 rounded text-xs whitespace-nowrap", 
+                className={cn("px-2 py-1 rounded text-xs whitespace-nowrap", 
                   selectedCategoryId === "all" ? "bg-primary text-primary-foreground" : "bg-muted"
                 )}
               >
                 All
               </button>
-              {categories.map((cat) => (
+              {categories.map(cat => (
                 <button 
                   key={cat.id} 
                   onClick={() => setSelectedCategoryId(cat.id)} 
-                  className={cn("px-3 py-1 rounded text-xs whitespace-nowrap", 
+                  className={cn("px-2 py-1 rounded text-xs whitespace-nowrap", 
                     selectedCategoryId === cat.id ? "bg-primary text-primary-foreground" : "bg-muted"
                   )}
                 >
@@ -1842,79 +416,205 @@ console.log(cartId, 'CAARRT')
               ))}
             </div>
           </div>
+          
+          {/* Products Grid */}
+          <div className="flex-1 overflow-y-auto p-2">
+            <div className="grid grid-cols-2 gap-2">
+              {filteredProducts.map(product => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  onAddToCart={handleAddToCart}
+                  region={region}
+                  isLoading={isLoadingProducts}
+                  selectedVariantId={productVariants[product.id]}
+                  onVariantChange={handleVariantChange}
+                  priceListId={pricingContext.priceListId}
+                  customerGroupId={pricingContext.customerGroupId}
+                />
+              ))}
+            </div>
+          </div>
+          
+          {/* Bottom Bar */}
+          <div className="fixed bottom-0 left-0 right-0 border-t bg-card p-2">
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="flex-1" onClick={handleSaveDraft}>
+                <Save className="h-3 w-3 mr-1" />Draft
+              </Button>
+              <Button variant="default" className="flex-1" onClick={() => setMobileCartOpen(true)}>
+                <ShoppingCart className="h-3 w-3 mr-1" />
+                Cart • {cartTotal.toFixed(2)}
+              </Button>
+            </div>
+          </div>
+          
+          {/* Mobile Cart Sheet */}
+          <Sheet open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
+            <SheetContent side="bottom" className="rounded-t-xl p-0 h-[85vh]">
+              <SheetHeader className="border-b p-3">
+                <SheetTitle>Your Order</SheetTitle>
+              </SheetHeader>
+              <CartSidebar {...cartSidebarProps} />
+            </SheetContent>
+          </Sheet>
         </div>
         
+        <DraftsDialog 
+          open={draftsDialogOpen} 
+          onOpenChange={setDraftsDialogOpen} 
+          drafts={drafts} 
+          onLoadDraft={handleLoadDraft} 
+          onDeleteDraft={deleteDraft} 
+          region={region} 
+        />
+        <PaymentDialog 
+          cart={cart}
+          cartItems={cart?.items ?? []}
+          open={paymentDialogOpen} 
+          onOpenChange={setPaymentDialogOpen} 
+          cartTotal={cartTotal} 
+          region={region} 
+          onComplete={async (order) => {
+            console.log("Order completed:", order);
+            // Reset POS state
+            await createCart();
+            setSelectedTableIds([]);
+            setSelectedCustomer(null);
+            setOrderNotes("");
+            setPaymentDialogOpen(false);
+            setMobileCartOpen(false);
+            
+            toast({ 
+              title: "Success", 
+              description: `Order #${order.display_id} completed successfully` 
+            });
+  }} 
+        />
+        <PrintDialog 
+          open={printOpen} 
+          onOpenChange={setPrintOpen} 
+          cart={cart} 
+          region={region} 
+        />
+      </>
+    );
+  }
+  // Desktop Layout
+  return (
+    <div className="flex h-full overflow-hidden">
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-background border-b p-3">
+          <div className="flex justify-between items-center mb-3">
+            <PricingInfoBadge />
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={refreshProducts}>
+                <RefreshCw className="h-3 w-3 mr-1" /> Refresh
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setDraftsDialogOpen(true)}>
+                <History className="h-3 w-3 mr-1" /> Drafts
+              </Button>
+            </div>
+          </div>
+          
+          <div className="relative mb-3">
+            <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2" />
+            <Input 
+              placeholder="Search products..." 
+              value={searchQuery} 
+              onChange={(e) => setSearchQuery(e.target.value)} 
+              className="pl-7 h-9" 
+            />
+          </div>
+          
+          <div className="flex gap-1 overflow-x-auto">
+            <button 
+              onClick={() => setSelectedCategoryId("all")} 
+              className={cn("px-3 py-1 rounded text-sm whitespace-nowrap", 
+                selectedCategoryId === "all" ? "bg-primary text-primary-foreground" : "bg-muted"
+              )}
+            >
+              All Products
+            </button>
+            {categories.map(cat => (
+              <button 
+                key={cat.id} 
+                onClick={() => setSelectedCategoryId(cat.id)} 
+                className={cn("px-3 py-1 rounded text-sm whitespace-nowrap", 
+                  selectedCategoryId === cat.id ? "bg-primary text-primary-foreground" : "bg-muted"
+                )}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        {/* Products Grid */}
         <div className="flex-1 overflow-y-auto p-3">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {filteredProducts.map((product) => (
-              <ProductCard 
-                key={product.id} 
-                product={product} 
-                onAddToCart={addToCart} 
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {filteredProducts.map(product => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                onAddToCart={handleAddToCart}
                 region={region}
                 isLoading={isLoadingProducts}
                 selectedVariantId={productVariants[product.id]}
                 onVariantChange={handleVariantChange}
-                showCustomPrice={!!priceListId}
+                priceListId={pricingContext.priceListId}
+                customerGroupId={pricingContext.customerGroupId}
               />
             ))}
           </div>
-          {isLoadingProducts && <Loader2 className="h-8 w-8 animate-spin mx-auto my-8" />}
-          {!isLoadingProducts && filteredProducts.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">No products found</div>
-          )}
         </div>
       </div>
       
+      {/* Cart Sidebar */}
       <aside className="hidden w-96 flex-col border-l bg-card lg:flex">
-        <CartSidebar
-          cartItems={cartItems}
-          cartTotal={cartTotal}
-          isLoading={isLoadingCart}
-          region={region}
-          selectedTableIds={selectedTableIds}
-          selectedCustomer={selectedCustomer}
-          orderNotes={orderNotes}
-          onUpdateQuantity={updateQuantity}
-          onRemoveFromCart={removeFromCart}
-          onClearCart={clearCart}
-          onTablesChange={setSelectedTableIds}
-          onCustomerChange={handleCustomerChange}
-          onNotesChange={setOrderNotes}
-          onCheckout={() => setPaymentDialogOpen(true)}
-          onSaveDraft={saveAsDraft}
-          onCustomPrice={applyCustomPrice}
-          cart={cart}
-          user={user}
-        />
+        <CartSidebar {...cartSidebarProps} />
       </aside>
       
-      <DraftsDialog
-        open={draftsDialogOpen}
-        onOpenChange={setDraftsDialogOpen}
-        drafts={drafts}
-        onLoadDraft={loadDraft}
-        onDeleteDraft={deleteDraft}
-        region={region}
+      {/* Dialogs */}
+      <DraftsDialog 
+        open={draftsDialogOpen} 
+        onOpenChange={setDraftsDialogOpen} 
+        drafts={drafts} 
+        onLoadDraft={handleLoadDraft} 
+        onDeleteDraft={deleteDraft} 
+        region={region} 
       />
-      
-      <PaymentDialog
-        open={paymentDialogOpen}
-        onOpenChange={setPaymentDialogOpen}
-        cartTotal={cartTotal}
-        region={region}
-        onComplete={handlePaymentComplete}
+            <PaymentDialog
+          cart={cart}
+          cartItems={cart?.items ?? []}
+          open={paymentDialogOpen} 
+          onOpenChange={setPaymentDialogOpen} 
+          cartTotal={cartTotal} 
+          region={region} 
+          onComplete={async (order) => {
+            console.log("Order completed:", order);
+            // Reset POS state
+            await createCart();
+            setSelectedTableIds([]);
+            setSelectedCustomer(null);
+            setOrderNotes("");
+            setPaymentDialogOpen(false);
+            setMobileCartOpen(false);
+            
+            toast({ 
+              title: "Success", 
+              description: `Order #${order.display_id} completed successfully` 
+            });
+          }}
+        />
+      <PrintDialog 
+        open={printOpen} 
+        onOpenChange={setPrintOpen} 
+        cart={cart} 
+        region={region} 
       />
-      
-      <CustomPriceDialog
-        open={customPriceDialogOpen}
-        onOpenChange={setCustomPriceDialogOpen}
-        item={selectedItemForCustomPrice}
-        onApplyCustomPrice={applyCustomPrice}
-        region={region}
-      />
-
-
     </div>
   );
 }

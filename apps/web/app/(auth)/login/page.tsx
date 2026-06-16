@@ -95,7 +95,6 @@ export default function LoginPage() {
     
     try {
       // Pass user type to login function
-      console.log(formData, 'ffor')
       await login({}, formData)
     } catch (error: any) {
       console.error("Login error:", error)

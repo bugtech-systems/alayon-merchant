@@ -68,7 +68,6 @@ function AccountBadgeWrapper({ data, type }: { data: any; type: string }) {
 // Main content component that fetches data
 async function DashboardContent() {
   const userData = (await retrieveUser()) as RestaurantAdminDTO | any;
-  console.log(userData, 'UISSRD')
   if (!userData || !userData?.employee?.id.includes("emp_")) {
     redirect("/login");
   }
@@ -81,7 +80,6 @@ async function DashboardContent() {
   const company = await retrieveCompany(companyId);
   const { name, deliveries, is_open } = company as any;
 
-  console.log(companyId, company, 'Company data fetched');
 
   return (
     <>

@@ -8,7 +8,6 @@ export default async function Page() {
   const user = await retrieveUser() || {} as any;
   
 
-  console.log(user, 'USER TYPEE')
   
 
   if (!user?.id) {

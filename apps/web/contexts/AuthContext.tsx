@@ -212,7 +212,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   
 
        let customer = await fetchAuthSession()
-       console.log(customer, 'ccccss')
     if (!customer) {
         throw new Error('Failed to retrieve customer data');
       }

@@ -63,8 +63,7 @@ export async function initiatePaymentSession(
     return sdk.store.payment
     .initiatePaymentSession(cart as any, data, {}, headers)
     .then(async (resp) => {
-      const cartCacheTag = await getCacheOptions("carts")
-      revalidateTag(cartCacheTag)
+      revalidateTag('carts', 'max')
       return resp
     })
     .catch(medusaError);

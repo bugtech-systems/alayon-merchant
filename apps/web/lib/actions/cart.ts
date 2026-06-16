@@ -27,18 +27,12 @@ interface QueuedCartOperation {
   retryCount: number
 }
 
-const CART_QUEUE_KEY = 'offline_cart_queue'
-const LOCAL_CART_KEY = 'offline_cart'
 
 export async function retrieveCart(id?: string): Promise<B2BCart | null> {
   const cartId = id || (await getCartId())
   
   if (!cartId) {
-    // Try to load from offline storage
-    const offlineCart = await getOfflineCart()
-    if (offlineCart) {
-      return offlineCart as B2BCart
-    }
+
     return null
   }
 
@@ -62,13 +56,13 @@ export async function retrieveCart(id?: string): Promise<B2BCart | null> {
     })
     
     // Sync offline cart if exists
-    await syncOfflineCartToServer(cart as B2BCart)
+    // await syncOfflineCartToServer(cart as B2BCart)
     
     return cart as B2BCart
   } catch (error) {
     // Return cached offline cart if available
-    const offlineCart = await getOfflineCart()
-    return offlineCart as B2BCart || null
+    // const offlineCart = await getOfflineCart()
+    return  null
   }
 }
 
@@ -101,11 +95,12 @@ export async function getOrSetCart(countryCode: string): Promise<B2BCart | null>
       revalidateTag(cartCacheTag, "max")
 
       cart = await retrieveCart()
+      return cart
     } catch (error) {
       // Create offline cart when offline
-      const offlineCart = await createOfflineCart(region.id, customer?.employee?.company_id)
-      await saveOfflineCart(offlineCart)
-      return offlineCart as B2BCart
+      // const offlineCart = await createOfflineCart(region.id, customer?.employee?.company_id)
+      // await saveOfflineCart(offlineCart)
+      return null
     }
   }
 
@@ -169,17 +164,17 @@ export async function addToCartBulk({
     revalidateTag(cartCacheTag, "max")
     
     // Update offline cart
-    await updateOfflineCartWithItems(lineItems, 'add')
+    // await updateOfflineCartWithItems(lineItems, 'add')
   } catch (error) {
     // Queue operation for offline
     for (const item of lineItems) {
-      await queueCartOperation({
-        type: 'add_item',
-        payload: { cartId: cart.id, variantId: item.variant_id, quantity: item.quantity }
-      })
+      // await queueCartOperation({
+      //   type: 'add_item',
+      //   payload: { cartId: cart.id, variantId: item.variant_id, quantity: item.quantity }
+      // })
     }
     // Update local offline cart
-    await updateOfflineCartWithItems(lineItems, 'add')
+    // await updateOfflineCartWithItems(lineItems, 'add')
     medusaError(error)
   }
 }
@@ -214,13 +209,13 @@ export async function updateLineItem({
     revalidateTag(cartCacheTag, "max")
     
     // Update offline cart
-    await updateOfflineCartItem(lineId, data.quantity)
+    // await updateOfflineCartItem(lineId, data.quantity)
   } catch (error) {
-    await queueCartOperation({
-      type: 'update_item',
-      payload: { cartId, lineId, quantity: data.quantity }
-    })
-    await updateOfflineCartItem(lineId, data.quantity)
+    // await queueCartOperation({
+    //   type: 'update_item',
+    //   payload: { cartId, lineId, quantity: data.quantity }
+    // })
+    // await updateOfflineCartItem(lineId, data.quantity)
     medusaError(error)
   }
 }
@@ -243,7 +238,7 @@ export async function updateLineItemPrice(lineId: string, data: any) {
 
   try {
     console.log({ unit_price: data.customUnitPrice, custom_price: data.customUnitPrice, variant_id: data.variantId, customer_group_id: data.customerGroupId, price_list_id: data.priceListId, quantity: data.quantity }, 'prricee')
-      await sdk.client.fetch(`/dashboard/carts/${data?.cartId}/line-items/${lineId}/custom`, {
+     return await sdk.client.fetch(`/dashboard/carts/${data?.cartId}/line-items/${lineId}/custom`, {
       method: "POST",
       headers,
       body: { unit_price: data.customUnitPrice, custom_price: data.customUnitPrice, variant_id: data.variantId, customer_group_id: data.customerGroupId, price_list_id: data.priceListId, quantity: data.quantity }
@@ -284,181 +279,8 @@ export async function deleteLineItem(lineId: string) {
     revalidateTag(cartCacheTag, "max")
     
     // Update offline cart
-    await removeOfflineCartItem(lineId)
   } catch (error) {
-    await queueCartOperation({
-      type: 'remove_item',
-      payload: { cartId, lineId }
-    })
-    await removeOfflineCartItem(lineId)
+ 
     medusaError(error)
   }
-}
-
-export async function syncOfflineCartOperations() {
-  const queue = await getCartQueue()
-  if (queue.length === 0) return
-
-  const headers = await getAuthHeaders()
-  const cartId = await getCartId()
-  
-  if (!cartId) return
-
-  for (const operation of queue) {
-    try {
-      switch (operation.type) {
-        case 'add_item':
-          await sdk.store.cart.createLineItem(
-            cartId,
-            { variant_id: operation.payload.variantId, quantity: operation.payload.quantity },
-            {},
-            headers
-          )
-          break
-        case 'update_item':
-          await sdk.store.cart.updateLineItem(
-            cartId,
-            operation.payload.lineId,
-            { quantity: operation.payload.quantity },
-            {},
-            headers
-          )
-          break
-        case 'remove_item':
-          await sdk.store.cart.deleteLineItem(cartId, operation.payload.lineId, {}, headers)
-          break
-        case 'update_cart':
-          await sdk.store.cart.update(cartId, operation.payload, {}, headers)
-          break
-      }
-      
-      // Remove successful operation from queue
-      await removeFromCartQueue(operation.id)
-    } catch (error) {
-      console.error(`Failed to sync operation ${operation.id}:`, error)
-    }
-  }
-}
-
-// Helper functions for offline cart management
-async function getOfflineCart(): Promise<any> {
-  if (typeof window === 'undefined') return null
-  const cart = localStorage.getItem(LOCAL_CART_KEY)
-  return cart ? JSON.parse(cart) : null
-}
-
-async function saveOfflineCart(cart: any): Promise<void> {
-  if (typeof window === 'undefined') return
-  // localStorage.setItem(LOCAL_CART_KEY, JSON.stringify(cart))
-}
-
-async function createOfflineCart(regionId: string, companyId?: string): Promise<any> {
-  return {
-    id: `offline_${Date.now()}`,
-    region_id: regionId,
-    items: [],
-    metadata: { company_id: companyId, is_offline: true },
-    created_at: new Date(),
-    updated_at: new Date()
-  }
-}
-
-async function updateOfflineCartWithItems(lineItems: any[], action: 'add' | 'remove'): Promise<void> {
-  const offlineCart = await getOfflineCart()
-  if (!offlineCart) return
-
-  for (const item of lineItems) {
-    const existingItem = offlineCart.items?.find((i: any) => i.variant_id === item.variant_id)
-    
-    if (existingItem) {
-      existingItem.quantity += item.quantity
-    } else {
-      offlineCart.items.push({
-        id: `item_${Date.now()}_${Math.random()}`,
-        variant_id: item.variant_id,
-        quantity: item.quantity,
-        ...item
-      })
-    }
-  }
-  
-  await saveOfflineCart(offlineCart)
-}
-
-async function updateOfflineCartItem(lineId: string, quantity: number): Promise<void> {
-  const offlineCart = await getOfflineCart()
-  if (!offlineCart) return
-
-  const item = offlineCart.items?.find((i: any) => i.id === lineId)
-  if (item) {
-    item.quantity = quantity
-    await saveOfflineCart(offlineCart)
-  }
-}
-
-async function removeOfflineCartItem(lineId: string): Promise<void> {
-  const offlineCart = await getOfflineCart()
-  if (!offlineCart) return
-
-  offlineCart.items = offlineCart.items?.filter((i: any) => i.id !== lineId) || []
-  await saveOfflineCart(offlineCart)
-}
-
-async function getCartQueue(): Promise<QueuedCartOperation[]> {
-  if (typeof window === 'undefined') return []
-  const queue = localStorage.getItem(CART_QUEUE_KEY)
-  return queue ? JSON.parse(queue) : []
-}
-
-async function queueCartOperation(operation: Omit<QueuedCartOperation, 'id' | 'timestamp' | 'retryCount'>): Promise<void> {
-  const queue = await getCartQueue()
-  const newOperation: QueuedCartOperation = {
-    id: `op_${Date.now()}_${Math.random()}`,
-    ...operation,
-    timestamp: Date.now(),
-    retryCount: 0
-  }
-  queue.push(newOperation)
-  // localStorage.setItem(CART_QUEUE_KEY, JSON.stringify(queue))
-}
-
-async function removeFromCartQueue(operationId: string): Promise<void> {
-  const queue = await getCartQueue()
-  const updatedQueue = queue.filter(op => op.id !== operationId)
-  localStorage.setItem(CART_QUEUE_KEY, JSON.stringify(updatedQueue))
-}
-
-async function syncOfflineCartToServer(serverCart: B2BCart): Promise<void> {
-  const offlineCart = await getOfflineCart()
-  if (!offlineCart || !offlineCart.is_offline) return
-
-  // Merge offline items with server cart
-  const headers = await getAuthHeaders()
-  
-  for (const offlineItem of offlineCart.items || []) {
-    const existingItem = serverCart.items?.find(
-      (item: any) => item.variant_id === offlineItem.variant_id
-    )
-    
-    if (existingItem) {
-      const newQuantity = existingItem.quantity + offlineItem.quantity
-      await sdk.store.cart.updateLineItem(
-        serverCart.id,
-        existingItem.id,
-        { quantity: newQuantity },
-        {},
-        headers
-      )
-    } else {
-      await sdk.store.cart.createLineItem(
-        serverCart.id,
-        { variant_id: offlineItem.variant_id, quantity: offlineItem.quantity },
-        {},
-        headers
-      )
-    }
-  }
-  
-  // Clear offline cart after sync
-  localStorage.removeItem(LOCAL_CART_KEY)
 }

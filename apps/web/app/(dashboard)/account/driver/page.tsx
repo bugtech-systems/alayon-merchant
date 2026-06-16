@@ -15,14 +15,12 @@ export default async function DriverDashboardPage() {
   if (!userData) {
     redirect("/login");
   }
-console.log(userData, 'USSR')
   const driver = await retrieveDriver(userData?.driver?.id);
 
   const deliveries = await listDeliveries({
     driver_id: driver.id,
     delivery_status: 'company_accepted'
   });
-  console.log(deliveries, 'DRVVVR DDD')
 
   return (
     <div className="flex flex-col gap-20">

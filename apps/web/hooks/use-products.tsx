@@ -297,7 +297,6 @@ export const useProduct = (id: string, enabled?: boolean) => {
         
         const response = await client.admin.product.retrieve(id, { fields });
         const product = response.product || response;
-        console.log(response, 'RESPPONSE')
         if (!product) throw new Error(`Product with ID ${id} not found`);
         return product;
       } catch (error) {

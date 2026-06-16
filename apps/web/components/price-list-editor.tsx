@@ -128,15 +128,12 @@ export const usePriceList = (
         }
       }
 
-     console.log(pricesByVariant, 'vARIANT PRICES')
 
 
       // For each variant, select the best matching price
       for (const [variantId, prices] of pricesByVariant) {
         // Filter by currency
-        console.log(prices, 'vARIANT PRICES')
         let candidates = prices.filter(p => p.currency_code === currencyCode || 'php');
-      console.log(candidates, 'caaaassssss', sortedPrices)
 
         if (candidates.length === 0) {
           // No price for this currency – skip
@@ -153,7 +150,6 @@ export const usePriceList = (
         // If multiple candidates remain, select the "latest" – here we pick the highest amount
         // (you could sort by created_at if available, or by amount, or a custom logic)
         const selected = candidates[0] as any;
-        console.log(selected, variantId, 'SSELECTEDD', selected.amount)
         variantPriceMap.set(variantId, selected.amount);
         variantPriceObjects.set(variantId, selected);
 

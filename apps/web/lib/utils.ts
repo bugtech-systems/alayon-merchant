@@ -173,3 +173,27 @@ interface PricingStrategy {
   customerGroupId?: string;
   hasCustomPrices: boolean;
 }
+
+export function getFinalPrice(priceData: any) {
+  // If price is a number, return it directly
+  if (typeof priceData === 'number') {
+    return priceData;
+  }
+  
+  // If price is an object, extract the appropriate price
+  if (priceData && typeof priceData === 'object') {
+    // Check for custom_unit_price first (manual override)
+    if (priceData.custom_unit_price !== undefined && priceData.custom_unit_price !== null) {
+      return priceData.custom_unit_price;
+    }
+    
+    // Then check for original_unit_price
+    if (priceData.original_unit_price !== undefined && priceData.original_unit_price !== null) {
+      return priceData.original_unit_price;
+    }
+  }
+  
+  // Default fallback
+  return 0;
+}
+

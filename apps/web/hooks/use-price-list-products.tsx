@@ -32,7 +32,7 @@ export const usePriceListProducts = (
     const params = new URLSearchParams({
       limit: limit.toString(),
       offset: offset.toString(),
-      fields: "id,title,thumbnail,status,handle,*variants,*variants.prices,*variants.inventory_quantity,*images,*categories,*collection",
+      fields: "id,title,thumbnail,status,handle,*variants,*variants.prices,*images,*categories,*collection",
     });
 
     // Add price list ID filter

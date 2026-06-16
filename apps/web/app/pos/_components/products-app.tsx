@@ -69,10 +69,10 @@ export function ProductsApp({ region, user }: ProductsAppProps) {
   });
 
 
-  const products = data?.products.map((item) => item.product) || [];
+  const products = data?.products || [];
   const totalCount = data?.count || 0;
   const totalPages = Math.ceil(totalCount / limit);
-
+  console.log(data?.products, 'PRODDS')
   // Update URL when search or page changes
   const updateUrl = useCallback(
     (newSearch: string, newPage: number) => {

@@ -322,7 +322,6 @@ export async function getOrSetCart(id: any) {
     }
 
     const {cart: cartData} = await sdk.store.cart.create(body, {}, headers)
-    console.log(cartData, 'carrt resp')
 
     const cartCacheTag = await getCacheTag("carts")
     revalidateTag(cartCacheTag, "max")
@@ -365,20 +364,26 @@ export async function updateCart(data: any, id?: any) {
 }
 
 
-export async function addToCart({
+export async function addToPosCart({
   variantId,
   quantity,
   countryCode = 'ph',
+  unit_price,
+  cart_id,
+  regionId
 }: {
   variantId: string
   quantity: number
   countryCode: string
+  unit_price?: number
+  regionId?: string
+  cart_id?: string
 }) {
   if (!variantId) {
     throw new Error("Missing variant ID when adding to cart")
   }
   
-  const cart = await getOrSetCart(countryCode)
+  const cart = await getOrSetCart(cart_id)
   if (!cart) {
     throw new Error("Error retrieving or creating cart")
   }
@@ -387,23 +392,27 @@ export async function addToCart({
     ...(await getAuthHeaders()),
   }
 
-  await sdk.store.cart
-    .createLineItem(
-      cart.id,
-      {
-        variant_id: variantId,
-        quantity,
-      },
-      {},
-      headers
-    )
-    .then(async () => {
+  let newCart = await sdk.client.fetch(`/dashboard/carts/custom`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...headers,
+        },
+        body: {
+          cart_id: cart_id,
+          variant_id: variantId,
+          quantity: quantity,
+          custom_price: unit_price,
+          region_id: regionId
+        },
+      });
+   
       const fullfillmentCacheTag = await getCacheTag("fulfillment")
       revalidateTag(fullfillmentCacheTag, "max")
       const cartCacheTag = await getCacheTag("carts")
       revalidateTag(cartCacheTag, "max")
-    })
-    .catch(medusaError)
+    console.log(newCart, 'new carrt')
+    return newCart
 }
 
 export async function addToCartBulk({

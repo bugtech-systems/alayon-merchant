@@ -2,6 +2,7 @@
 
 import { sdk } from "@/lib/config";
 import { getAuthHeaders } from "@/lib/data/cookies";
+import { capturePayment } from "../data/cart";
 
 // ============================================================================
 // TYPES
@@ -54,15 +55,11 @@ export async function captureOrderPayment(
   const headers = await getAuthHeaders();
 
   try {
-    const response = await fetch("/api/store/custom/capture-payment", {
+    const response = await  sdk.client.fetch("/dashboard/capture-payment", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...headers,
-      },
-      body: JSON.stringify(params),
+      body: params,
     });
-
+console.log(response, 'cappptue')
     const data = await response.json();
 
     if (!response.ok) {
@@ -140,14 +137,13 @@ export async function capturePaymentWithSDK(data: any): Promise<any> {
  * Initiate a payment session for a cart
  */
 export async function initiatePaymentSession(
-  cartId: string,
+  cart: any,
   params: InitiatePaymentSessionParams
 ): Promise<PaymentSessionResponse> {
   const headers = await getAuthHeaders();
-
   try {
     const response = await sdk.store.payment.initiatePaymentSession(
-      cartId,
+      cart,
       {
         provider_id: params.provider_id,
         context: params.context,
@@ -327,8 +323,8 @@ export async function refundPayment(
  * Process complete payment flow for POS
  */
 export async function processPOSPayment(params: {
-  cartId: string;
-  orderId: string;
+  cart: any;
+  orderId?: string;
   paymentMethod: "cash" | "card" | "other";
   amount: number;
   cashAmount?: number;
@@ -340,7 +336,8 @@ export async function processPOSPayment(params: {
   payment: any;
   message: string;
 }> {
-  const { cartId, orderId, paymentMethod, amount, cashAmount, change, customerId } = params;
+  const { cart, orderId, paymentMethod, amount, cashAmount, change, customerId } = params;
+  const headers = await getAuthHeaders();
 
   try {
     // Step 1: Determine payment provider
@@ -357,50 +354,31 @@ export async function processPOSPayment(params: {
     }
 
     // Step 2: Initiate payment session on cart
-    await initiatePaymentSession(cartId, {
+   let payment = await initiatePaymentSession(cart, {
+      cart_id: cart?.id,
       provider_id: providerId,
-      context: {
-        amount,
-        currency_code: "php",
-        cash_amount: cashAmount,
-        change,
-        customer_id: customerId,
-      },
     });
 
-    // Step 3: Authorize payment session
-    await authorizePaymentSession(cartId, {
-      amount,
-      payment_method: paymentMethod,
-    });
 
     // Step 4: Complete the cart
-    const orderResult = await sdk.store.cart.complete(cartId);
-    
+    const orderResult = await sdk.store.cart.complete(cart?.id, {}, headers);
+
     if (!orderResult.order) {
       throw new Error("Failed to create order");
     }
 
     // Step 5: Capture the payment
-    const captureResult = await captureOrderPayment({
-      order_id: orderResult.order.id,
-      payment_method: paymentMethod,
-      payment_data: {
-        amount,
-        change,
-        cash_amount: cashAmount,
-        provider_id: providerId,
-      },
-    });
-
-    if (!captureResult.success) {
-      throw new Error("Payment capture failed");
-    }
+    const captureResult = await capturePayment({order_id: orderResult?.order?.id, payment_method: 'cash', payment_data: {amount, change, cash_amount: cashAmount}  });
+    console.log(orderResult, 'CAPPT RESSSS')
+    // if (!captureResult.success) {
+    //   throw new Error("Payment capture failed");
+    // }
 
     return {
       success: true,
-      order: captureResult.order,
-      payment: captureResult.payment,
+      order: orderResult.order,
+      payment: captureResult,
+      // payment: captureResult.payment,
       message: "Payment processed successfully",
     };
   } catch (error: any) {

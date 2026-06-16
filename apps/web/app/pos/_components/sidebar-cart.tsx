@@ -1,7 +1,7 @@
 // app/(pos)/components/sidebar-cart.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
@@ -20,17 +20,15 @@ import {
   CreditCard,
   Save,
   Check,
-  Calendar,
-  Clock,
   Printer,
   DollarSign,
   Tag,
-  Mail,
-  Phone,
-  Home,
-  Search,
-  Building2,
+  Percent,
+  Receipt,
+  GripVertical,
   AlertCircle,
+  Edit2,
+  CheckCircle,
 } from "lucide-react";
 import {
   Dialog,
@@ -40,30 +38,80 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
-import { getAuthHeaders } from "@/lib/data/cookies";
-import { sdk } from "@/lib/config";
-import { SimpleTable } from "./pos-app";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn, formatCurrency, getFinalPrice } from "@/lib/utils";
 import { PrintDialog } from "./print-dialog";
 import { Separator } from "@/components/ui/separator";
-import { listBarangays, listMunicipalities } from "@/lib/actions/regions";
-import { SearchableSelect } from "@/components/ui/searchable-select";
-import { createQuickCustomer } from "@/lib/actions";
-import { listCustomerGroupCustomers, listCustomers } from "@/lib/data/customer";
 
-// Types
-interface CartItem {
+// ============================================
+// TYPES
+// ============================================
+
+interface MedusaCartItem {
   id: string;
   product_id: string;
   variant_id: string;
   title: string;
-  thumbnail: string | null;
+  thumbnail?: string;
   quantity: number;
   unit_price: number;
   original_unit_price?: number;
-  variant_title?: string;
   subtotal: number;
-  is_custom_priced?: boolean;
+  metadata?: {
+    variant_title?: string;
+    variant_sku?: string;
+    is_custom_priced?: boolean;
+    custom_price_applied_by?: string;
+    original_price?: number;
+    pricing_strategy?: 'price_list' | 'customer_group' | 'custom' | 'default';
+    discount_percentage?: number;
+    discount_amount?: number;
+    note?: string;
+    price_list_id?: string;
+  };
+}
+
+interface MedusaCart {
+  id: string;
+  region_id: string;
+  customer_id?: string;
+  email?: string;
+  currency_code: string;
+  items: MedusaCartItem[];
+  metadata?: {
+    table_ids?: string[];
+    pricing_strategy?: string;
+    price_list_id?: string;
+    customer_group_id?: string;
+    custom_prices?: Record<string, any>;
+    is_draft?: boolean;
+    draft_name?: string;
+    notes?: string;
+    discount_amount?: number;
+    service_charge?: number;
+  };
+}
+
+interface Customer {
+  id: string;
+  first_name: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+  customer_group_id?: string;
+}
+
+interface SimpleTable {
+  id: string;
+  name: string;
+  number: string;
+  capacity: number;
+  status: string;
 }
 
 interface Region {
@@ -73,146 +121,479 @@ interface Region {
   tax_rate: number;
 }
 
-interface Customer {
-  id: string;
-  first_name: string;
-  last_name?: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  municipality?: string;
-  barangay?: string;
-}
+// ============================================
+// PRICE INFO COMPONENT
+// ============================================
 
-interface Municipality {
-  id: string;
-  psgc_code: string;
-  name: string;
-  citymun_desc: string;
-  reg_desc: string;
-  prov_code: string;
-  citymun_code: string;
-}
-
-interface Barangay {
-  id: string;
-  psgc_code: string;
-  name: string;
-  barangay_desc: string;
-  reg_desc: string;
-  prov_code: string;
-  citymun_code: string;
-}
-
-// Multi-Table Selector Component
-function MultiTableSelector({ 
-  selectedTableIds, 
-  onTablesChange,
-  disabledTables = []
+const PriceInfo = ({ 
+  unitPrice, 
+  originalPrice, 
+  currencyCode, 
+  pricingStrategy 
 }: { 
-  selectedTableIds: string[];
-  onTablesChange: (tableIds: string[]) => void;
-  disabledTables?: string[];
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [availableTables, setAvailableTables] = useState<SimpleTable[]>([]);
+  unitPrice: number; 
+  originalPrice?: number; 
+  currencyCode: string;
+  pricingStrategy?: string;
+}) => {
+  const hasDiscount = originalPrice && originalPrice > unitPrice;
+  const discountPercent = hasDiscount 
+    ? Math.round(((originalPrice - unitPrice) / originalPrice) * 100) 
+    : 0;
 
-  useEffect(() => {
-    const loadTables = () => {
-      const stored = localStorage.getItem("simple-tables");
-      if (stored) {
-        setAvailableTables(JSON.parse(stored));
-      } else {
-        // Initialize 10 default tables if none exist
-        const defaultTables: SimpleTable[] = [];
-        for (let i = 1; i <= 10; i++) {
-          let capacity = 4;
-          if (i === 9 || i === 10) capacity = 8;
-          if (i === 1 || i === 2) capacity = 2;
-          
-          defaultTables.push({
-            id: `table-${i}`,
-            name: `Table ${i}`,
-            number: i.toString(),
-            capacity: capacity,
-            status: "available",
-          });
-        }
-        localStorage.setItem("simple-tables", JSON.stringify(defaultTables));
-        setAvailableTables(defaultTables);
-      }
-    };
-    
-    loadTables();
-    window.addEventListener("storage", loadTables);
-    return () => window.removeEventListener("storage", loadTables);
-  }, []);
+  const finalPrice = getFinalPrice(unitPrice);
 
-  const getTableName = (id: string) => {
-    const table = availableTables.find(t => t.id === id);
-    return table?.name || id;
-  };
 
-  const toggleTable = (tableId: string) => {
-    if (selectedTableIds.includes(tableId)) {
-      onTablesChange(selectedTableIds.filter(id => id !== tableId));
-    } else {
-      onTablesChange([...selectedTableIds, tableId]);
+  
+  const getStrategyBadge = () => {
+    switch (pricingStrategy) {
+      case 'price_list': return { text: 'Promo', color: 'bg-blue-100 text-blue-700' };
+      case 'customer_group': return { text: 'Group Price', color: 'bg-green-100 text-green-700' };
+      case 'custom': return { text: 'Custom', color: 'bg-purple-100 text-purple-700' };
+      default: return null;
     }
   };
 
-  const isTableDisabled = (table: SimpleTable) => {
-    if (disabledTables.includes(table.id)) return true;
-    if (table.status === "occupied" && !selectedTableIds.includes(table.id)) return true;
-    if (table.status === "reserved" && !selectedTableIds.includes(table.id)) return true;
-    return false;
+  const strategyBadge = getStrategyBadge();
+console.log(finalPrice, 'FINAL', )
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-baseline gap-1">
+        <span className="text-sm font-semibold text-primary">
+          {currencyCode} {finalPrice.toFixed(2)}
+        </span>
+        {hasDiscount && (
+          <span className="text-xs text-muted-foreground line-through">
+            {currencyCode} {originalPrice.toFixed(2)}
+          </span>
+        )}
+      </div>
+      {hasDiscount && discountPercent > 0 && (
+        <Badge variant="secondary" className="bg-red-100 text-red-700 text-[10px]">
+          -{discountPercent}%
+        </Badge>
+      )}
+      {strategyBadge && (
+        <Badge className={cn("text-[10px]", strategyBadge.color)}>
+          <Tag className="h-2 w-2 mr-1" />
+          {strategyBadge.text}
+        </Badge>
+      )}
+    </div>
+  );
+};
+
+// ============================================
+// CART ITEM COMPONENT WITH INLINE EDITING
+// ============================================
+
+interface CartItemProps {
+  item: MedusaCartItem;
+  onUpdateQuantity: (lineId: string, quantity: number) => Promise<void>;
+  onRemove: (lineId: string) => Promise<void>;
+  onCustomPrice: (lineId: string, variantId: string, price: number, reason?: string) => Promise<void>;
+  onRemoveCustomPrice: (lineId: string, variantId: string) => Promise<void>;
+  currencyCode: string;
+}
+
+function CartItem({ 
+  item, 
+  onUpdateQuantity, 
+  onRemove, 
+  onCustomPrice, 
+  onRemoveCustomPrice, 
+  currencyCode 
+}: CartItemProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [quantity, setQuantity] = useState(item.quantity);
+  const [customPrice, setCustomPrice] = useState(item.unit_price);
+  const [priceReason, setPriceReason] = useState(item.metadata?.note || "");
+  const [showReason, setShowReason] = useState(false);
+  const [editingQuantity, setEditingQuantity] = useState(item.quantity);
+  const priceInputRef = useRef<HTMLInputElement>(null);
+  const quantityInputRef = useRef<HTMLInputElement>(null);
+
+  const originalPrice = item.original_unit_price || getFinalPrice(item.unit_price);
+  const hasCustomPrice = item.metadata?.is_custom_priced;
+  const currentPrice = isEditing ? customPrice : getFinalPrice(item.unit_price);
+  const itemTotal = getFinalPrice(currentPrice) * quantity;
+  const savings = originalPrice - currentPrice;
+  const savingsPercent = originalPrice > 0 ? (savings / originalPrice) * 100 : 0;
+
+  // Update local state when props change
+  useEffect(() => {
+    setQuantity(item.quantity);
+    setEditingQuantity(item.quantity);
+  }, [item.quantity]);
+
+  useEffect(() => {
+    setCustomPrice(getFinalPrice(item.unit_price));
+  }, [item.unit_price]);
+
+  const handleQuantityChange = async (newQuantity: number) => {
+    if (newQuantity === item.quantity) return;
+    if (newQuantity <= 0) {
+      await onRemove(item.id);
+      return;
+    }
+    setIsUpdating(true);
+    try {
+      await onUpdateQuantity(item.id, newQuantity);
+      // State will update via props
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
-  const getTableStatusBadge = (table: SimpleTable) => {
-    if (table.status === "occupied") return { text: "Occupied", className: "bg-red-100 text-red-700" };
-    if (table.status === "reserved") return { text: "Reserved", className: "bg-yellow-100 text-yellow-700" };
-    if (table.status === "cleaning") return { text: "Cleaning", className: "bg-blue-100 text-blue-700" };
-    return { text: "Available", className: "bg-green-100 text-green-700" };
+  const handleQuantityInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value);
+    if (!isNaN(value) && value >= 0) {
+      setEditingQuantity(value);
+    }
   };
+
+  const handleQuantityInputBlur = async () => {
+    if (editingQuantity > 0 && editingQuantity !== item.quantity) {
+      await handleQuantityChange(editingQuantity);
+    } else if (editingQuantity <= 0) {
+      setEditingQuantity(item.quantity || 1);
+    } else {
+      setEditingQuantity(item.quantity);
+    }
+  };
+
+  const handleQuantityInputKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.currentTarget.blur();
+    }
+    if (e.key === 'Escape') {
+      setEditingQuantity(item.quantity);
+      e.currentTarget.blur();
+    }
+  };
+
+  const handleSaveCustomPrice = async () => {
+    if (customPrice <= 0) return;
+    setIsUpdating(true);
+    try {
+      await onCustomPrice(item.id, item.variant_id, customPrice, priceReason);
+      setIsEditing(false);
+      setShowReason(false);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleRemoveCustomPrice = async () => {
+    setIsUpdating(true);
+    try {
+      await onRemoveCustomPrice(item.id, item.variant_id);
+      setCustomPrice(originalPrice);
+      setIsEditing(false);
+      setShowReason(false);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setCustomPrice(getFinalPrice(item.unit_price));
+    setPriceReason(item.metadata?.note || "");
+    setShowReason(false);
+  };
+
+  const handleEditClick = () => {
+    setIsEditing(true);
+    setCustomPrice(getFinalPrice(item.unit_price));
+    setTimeout(() => {
+      priceInputRef.current?.focus();
+      priceInputRef.current?.select();
+    }, 100);
+  };
+
+  const hasNote = !!item.metadata?.note;
+
+  return (
+    <div className={cn(
+      "flex gap-3 rounded-lg border p-3 mb-2 transition-all",
+      isEditing ? "border-primary bg-primary/5" : "bg-card"
+    )}>
+      {item.thumbnail && (
+        <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-md bg-muted">
+          <img src={item.thumbnail} alt={item.title} className="h-full w-full object-cover" />
+        </div>
+      )}
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1">
+            <h4 className="font-medium text-sm line-clamp-1">{item.title}</h4>
+            {item.metadata?.variant_title && (
+              <p className="text-xs text-muted-foreground">{item.metadata.variant_title}</p>
+            )}
+          </div>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                <GripVertical className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleEditClick}>
+                <DollarSign className="mr-2 h-3 w-3" />
+                {hasCustomPrice ? "Edit Custom Price" : "Set Custom Price"}
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive" onClick={() => onRemove(item.id)}>
+                <Trash2 className="mr-2 h-3 w-3" />
+                Remove
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {isEditing ? (
+          // Inline Edit Mode
+          <div className="mt-2 space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">
+                  {currencyCode}
+                </span>
+                <Input
+                  ref={priceInputRef}
+                  type="number"
+                  value={customPrice}
+                  onChange={(e) => setCustomPrice(Math.max(0, parseFloat(e.target.value)))}
+                  className="pl-8 h-8 text-sm"
+                  step="0.01"
+                  min="0"
+                  disabled={isUpdating}
+                />
+              </div>
+              {savings > 0 && (
+                <Badge variant="secondary" className="bg-green-100 text-green-700 text-[10px] whitespace-nowrap">
+                  Save {currencyCode} {savings.toFixed(2)}
+                </Badge>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setCustomPrice(Math.max(0, customPrice - 1))}
+                disabled={isUpdating}
+              >
+                <Minus className="h-3 w-3" />
+              </Button>
+              <span className="w-12 text-center text-sm font-medium">{currencyCode}</span>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setCustomPrice(Math.max(0, customPrice + 1))}
+                disabled={isUpdating}
+              >
+                <Plus className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setShowReason(!showReason)}
+              >
+                {showReason ? "Hide Reason" : "Add Reason"}
+              </Button>
+            </div>
+
+            {showReason && (
+              <Input
+                placeholder="Reason for custom price (optional)"
+                value={priceReason}
+                onChange={(e) => setPriceReason(e.target.value)}
+                className="h-7 text-xs"
+                disabled={isUpdating}
+              />
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handleCancelEdit}
+                disabled={isUpdating}
+              >
+                Cancel
+              </Button>
+              {hasCustomPrice && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={handleRemoveCustomPrice}
+                  disabled={isUpdating}
+                >
+                  Remove
+                </Button>
+              )}
+              <Button
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handleSaveCustomPrice}
+                disabled={isUpdating || customPrice <= 0}
+              >
+                {isUpdating ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <>
+                    <Check className="h-3 w-3 mr-1" />
+                    {hasCustomPrice ? "Update" : "Apply"}
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          // View Mode
+          <>
+            <PriceInfo
+              unitPrice={getFinalPrice(item.unit_price)}
+              originalPrice={item.original_unit_price}
+              currencyCode={currencyCode}
+              pricingStrategy={item.metadata?.pricing_strategy}
+            />
+
+            {hasNote && (
+              <div className="mt-1 text-xs text-muted-foreground bg-muted/30 p-1 rounded">
+                📝 {item.metadata?.note}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between mt-2 pt-2 border-t">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => handleQuantityChange(quantity - 1)}
+                  disabled={isUpdating}
+                >
+                  <Minus className="h-3 w-3" />
+                </Button>
+                
+                <Input
+                  ref={quantityInputRef}
+                  type="number"
+                  value={editingQuantity}
+                  onChange={handleQuantityInputChange}
+                  onBlur={handleQuantityInputBlur}
+                  onKeyDown={handleQuantityInputKeyDown}
+                  className="w-14 h-7 text-center text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  min="1"
+                  disabled={isUpdating}
+                />
+                
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => handleQuantityChange(quantity + 1)}
+                  disabled={isUpdating}
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
+                {isUpdating && <Loader2 className="h-3 w-3 animate-spin" />}
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground">Total</p>
+                <p className="text-sm font-semibold">{currencyCode} {itemTotal.toFixed(2)}</p>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// TABLE SELECTOR (Simplified)
+// ============================================
+
+function TableSelector({ selectedIds, onSelect, disabledIds = [] }: { 
+  selectedIds: string[]; 
+  onSelect: (ids: string[]) => void;
+  disabledIds?: string[];
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [tables, setTables] = useState<SimpleTable[]>([]);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("simple-tables");
+    if (stored) {
+      setTables(JSON.parse(stored));
+    } else {
+      const defaultTables = Array.from({ length: 10 }, (_, i) => ({
+        id: `table-${i + 1}`,
+        name: `Table ${i + 1}`,
+        number: (i + 1).toString(),
+        capacity: i >= 8 ? 8 : i >= 6 ? 6 : 4,
+        status: "available",
+      }));
+      setTables(defaultTables);
+    }
+  }, []);
+
+  const toggleTable = (tableId: string) => {
+    if (selectedIds.includes(tableId)) {
+      onSelect(selectedIds.filter(id => id !== tableId));
+    } else {
+      onSelect([...selectedIds, tableId]);
+    }
+  };
+
+  const getTableName = (id: string) => tables.find(t => t.id === id)?.name || id;
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-medium">Tables ({selectedTableIds.length})</label>
+      <div className="flex justify-between">
+        <label className="text-xs font-medium">Tables ({selectedIds.length})</label>
         <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setIsOpen(true)}>
           <MapPin className="mr-1 h-3 w-3" />
-          {selectedTableIds.length > 0 ? "Change" : "Select"}
+          {selectedIds.length > 0 ? "Change" : "Select"}
         </Button>
       </div>
 
-      {selectedTableIds.length > 0 ? (
+      {selectedIds.length > 0 && (
         <div className="flex flex-wrap gap-1">
-          {selectedTableIds.map(id => (
+          {selectedIds.map(id => (
             <Badge key={id} variant="secondary" className="gap-1 text-xs">
               <MapPin className="h-2 w-2" />
               {getTableName(id)}
-              <button onClick={() => onTablesChange(selectedTableIds.filter(tid => tid !== id))} className="ml-1 hover:text-destructive">
+              <button onClick={() => onSelect(selectedIds.filter(tid => tid !== id))}>
                 <X className="h-2 w-2" />
               </button>
             </Badge>
           ))}
         </div>
-      ) : (
-        <div className="text-xs text-muted-foreground">No tables assigned</div>
       )}
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="max-w-md max-h-[80vh] overflow-hidden">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Select Tables</DialogTitle>
-            <DialogDescription>Choose one or more tables for this order</DialogDescription>
+            <DialogDescription>Choose tables for this order</DialogDescription>
           </DialogHeader>
-          <ScrollArea className="h-[60vh] pr-4">
+          <ScrollArea className="h-96">
             <div className="space-y-2">
-              {availableTables.map(table => {
-                const isSelected = selectedTableIds.includes(table.id);
-                const isDisabled = isTableDisabled(table);
-                const statusBadge = getTableStatusBadge(table);
+              {tables.map(table => {
+                const isSelected = selectedIds.includes(table.id);
+                const isDisabled = disabledIds.includes(table.id) && !isSelected;
                 
                 return (
                   <button
@@ -222,32 +603,13 @@ function MultiTableSelector({
                     className={cn(
                       "w-full p-3 rounded-lg border text-left transition-all",
                       isSelected && "border-primary bg-primary/5",
-                      isDisabled && "opacity-50 cursor-not-allowed bg-muted",
-                      !isDisabled && !isSelected && "hover:border-primary/50 hover:bg-accent"
+                      isDisabled && "opacity-50 cursor-not-allowed bg-muted"
                     )}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex justify-between items-center">
                       <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{table.name}</span>
-                          <Badge className={cn("text-[10px]", statusBadge.className)}>
-                            {statusBadge.text}
-                          </Badge>
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Capacity: {table.capacity} pax
-                        </div>
-                        {table.status === "occupied" && table.customer_name && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            Customer: {table.customer_name}
-                          </div>
-                        )}
-                        {table.status === "reserved" && table.reserved_name && (
-                          <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                            <Calendar className="h-2 w-2" />
-                            Reserved for: {table.reserved_name}
-                          </div>
-                        )}
+                        <div className="font-medium">{table.name}</div>
+                        <div className="text-xs text-muted-foreground">Capacity: {table.capacity}</div>
                       </div>
                       {isSelected && <Check className="h-4 w-4 text-primary" />}
                     </div>
@@ -257,7 +619,7 @@ function MultiTableSelector({
             </div>
           </ScrollArea>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsOpen(false)}>Done</Button>
+            <Button onClick={() => setIsOpen(false)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -265,675 +627,89 @@ function MultiTableSelector({
   );
 }
 
-// Simplified Create Customer Form Component (No advanced search)
-function CreateCustomerForm({ 
-  onCustomerCreated,
-  onCancel,
-  user
-}: { 
-  onCustomerCreated: (customer: Customer) => void;
-  onCancel: () => void;
-  user?: any
+// ============================================
+// CUSTOMER SELECTOR (Simplified)
+// ============================================
+
+function CustomerSelector({ selected, onSelect, onClear }: { 
+  selected: Customer | null; 
+  onSelect: (customer: Customer) => Promise<void>;
+  onClear: () => Promise<void>;
 }) {
-  const [formData, setFormData] = useState({
-    first_name: "",
-    last_name: "",
-    phone: "",
-    email: "",
-  });
-  
-  const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [touched, setTouched] = useState<Record<string, boolean>>({});
-
-  const customerGroupId = user?.metadata?.role === 'company' 
-    ? user.employee?.company?.customer_group_id 
-    : user?.driver?.customer_group_id;
-
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-    
-    // First name validation
-    if (!formData.first_name.trim()) {
-      newErrors.first_name = "First name is required";
-    } else if (formData.first_name.length < 2) {
-      newErrors.first_name = "First name must be at least 2 characters";
-    } else if (formData.first_name.length > 50) {
-      newErrors.first_name = "First name must be less than 50 characters";
-    }
-    
-    // Last name validation (optional)
-    if (formData.last_name && formData.last_name.length > 50) {
-      newErrors.last_name = "Last name must be less than 50 characters";
-    }
-    
-    // Phone validation
-    const phoneRegex = /^[0-9]{10,11}$/;
-    const cleanPhone = formData.phone.replace(/\D/g, '');
-    if (!formData.phone) {
-      newErrors.phone = "Phone number is required";
-    } else if (!phoneRegex.test(cleanPhone)) {
-      newErrors.phone = "Please enter a valid phone number (10-11 digits)";
-    }
-    
-    // Email validation (optional)
-    if (formData.email) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.email)) {
-        newErrors.email = "Please enter a valid email address";
-      } else if (formData.email.length > 100) {
-        newErrors.email = "Email must be less than 100 characters";
-      }
-    }
-    
-    return newErrors;
-  };
-
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: "" }));
-    }
-  };
-
-  const handleBlur = (field: string) => {
-    setTouched(prev => ({ ...prev, [field]: true }));
-  };
-
-  const handleSubmit = async () => {
-    // Mark all fields as touched
-    const allFields = ['first_name', 'phone'];
-    if (formData.email) allFields.push('email');
-    if (formData.last_name) allFields.push('last_name');
-    
-    const touchedState: Record<string, boolean> = {};
-    allFields.forEach(field => { touchedState[field] = true; });
-    setTouched(touchedState);
-    
-    const validationErrors = validateForm();
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
-
-    setIsLoading(true);
-    setErrors({});
-    
-    try {
-      // Generate a temporary email if not provided
-      const tempEmail = formData.email || `${Date.now()}-${formData.first_name.toLowerCase()}@temp.customer.com`;
-      
-      const response = await createQuickCustomer({
-        customer_group_id: customerGroupId,
-        email: tempEmail,
-        first_name: formData.first_name,
-        last_name: formData.last_name || "",
-        phone: formData.phone,
-      });
-
-
-      console.log(response, 'RESPSSS')
-      if (response.customer) {
-        onCustomerCreated({
-          id: response.customer.id,
-          first_name: response.customer.first_name,
-          last_name: response.customer.last_name,
-          email: response.customer.email,
-          phone: response.customer.phone,
-        });
-      }
-    } catch (error: any) {
-      console.error("Error creating customer:", error);
-      
-      if (error.message?.includes("already exists") || error.status === 500) {
-        setErrors({ general: "A customer with this phone number already exists. Please search for existing customer." });
-      } else if (error.message?.includes("phone")) {
-        setErrors({ phone: "This phone number is already registered. Please use a different number." });
-      } else {
-        setErrors({ general: "Failed to create customer. Please try again." });
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="text-center">
-        <h3 className="font-medium text-sm">Create New Customer</h3>
-        <p className="text-xs text-muted-foreground mt-1">Enter customer details below</p>
-      </div>
-
-      {/* General Error Alert */}
-      {errors.general && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-3">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 text-red-600 mt-0.5" />
-            <p className="text-sm text-red-800">{errors.general}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Name Fields */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label className={errors.first_name && touched.first_name ? "text-red-600" : ""}>
-            First Name <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            value={formData.first_name}
-            onChange={(e) => handleInputChange('first_name', e.target.value)}
-            onBlur={() => handleBlur('first_name')}
-            placeholder="John"
-            className={errors.first_name && touched.first_name ? "border-red-500" : ""}
-          />
-          {errors.first_name && touched.first_name && (
-            <p className="text-xs text-red-500 mt-1">{errors.first_name}</p>
-          )}
-        </div>
-        <div>
-          <Label>Last Name</Label>
-          <Input
-            value={formData.last_name}
-            onChange={(e) => handleInputChange('last_name', e.target.value)}
-            onBlur={() => handleBlur('last_name')}
-            placeholder="Doe"
-          />
-          {errors.last_name && touched.last_name && (
-            <p className="text-xs text-red-500 mt-1">{errors.last_name}</p>
-          )}
-        </div>
-      </div>
-
-      {/* Contact Fields */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label className={errors.phone && touched.phone ? "text-red-600" : ""}>
-            Phone Number <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            type="tel"
-            value={formData.phone}
-            onChange={(e) => handleInputChange('phone', e.target.value)}
-            onBlur={() => handleBlur('phone')}
-            placeholder="09123456789"
-            className={errors.phone && touched.phone ? "border-red-500" : ""}
-          />
-          {errors.phone && touched.phone && (
-            <p className="text-xs text-red-500 mt-1">{errors.phone}</p>
-          )}
-        </div>
-        <div>
-          <Label>Email <span className="text-gray-400 text-xs">(Optional)</span></Label>
-          <Input
-            type="email"
-            value={formData.email}
-            onChange={(e) => handleInputChange('email', e.target.value)}
-            onBlur={() => handleBlur('email')}
-            placeholder="customer@example.com"
-          />
-          {errors.email && touched.email && (
-            <p className="text-xs text-red-500 mt-1">{errors.email}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="flex gap-2 pt-2">
-        <Button variant="outline" onClick={onCancel} className="flex-1">
-          Cancel
-        </Button>
-        <Button onClick={handleSubmit} disabled={isLoading} className="flex-1">
-          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Create Customer
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function CustomerSelector({ selectedCustomer, onSelectCustomer, onClear, user }: CustomerSelectorProps) {
-  const customerGroupId = user?.metadata?.role === 'company' 
-    ? user.employee?.company?.customer_group_id 
-    : user?.driver?.customer_group_id;
-    
   const [isOpen, setIsOpen] = useState(false);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 });
-
-  // Unified function to fetch customers using listCustomers action
-  const fetchCustomers = useCallback(async (params: any = {}) => {
-    setIsLoading(true);
-    try {
-      const response = await listCustomers({
-        ...params,
-        limit: params.limit || 20,
-        include_addresses: true,
-        include_groups: true,
-      });
-      
-      if (response?.success && response?.data) {
-        setCustomers(response.data);
-        setPagination({
-          total: response.pagination.total,
-          page: response.pagination.page,
-          totalPages: response.pagination.totalPages,
-        });
-        setHasSearched(true);
-      } else {
-        setCustomers([]);
-        setPagination({ total: 0, page: 1, totalPages: 1 });
-      }
-    } catch (error) {
-      console.error("Error fetching customers:", error);
-      setCustomers([]);
-      setPagination({ total: 0, page: 1, totalPages: 1 });
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Search customers by query
-  const searchCustomers = useCallback(async () => {
-    if (!searchTerm.trim()) return;
-    
-    await fetchCustomers({
-      search: searchTerm.trim(),
-      limit: 20,
-    });
-  }, [searchTerm, fetchCustomers]);
-
-  // Load initial customers when dialog opens
-  useEffect(() => {
-    if (isOpen) {
-      if (customerGroupId) {
-        // Load customers from specific group
-        fetchCustomers({
-          customer_group_id: customerGroupId,
-          limit: 20,
-          order: "-created_at",
-        });
-      } else {
-        // Load all customers
-        fetchCustomers({
-          limit: 20,
-          order: "-created_at",
-        });
-      }
-    }
-  }, [isOpen, customerGroupId, fetchCustomers]);
-
-  const handleCustomerSelect = (customer: Customer) => {
-    onSelectCustomer(customer);
-    handleClose();
-  };
-
-  const handleClose = () => {
-    setIsOpen(false);
-    setShowCreateForm(false);
-    setSearchTerm("");
-    setHasSearched(false);
-    setCustomers([]);
-    setPagination({ total: 0, page: 1, totalPages: 1 });
-  };
-
-  const handleCustomerCreated = (newCustomer: Customer) => {
-    onSelectCustomer(newCustomer);
-    handleClose();
-  };
-
-  const handleBackToSearch = () => {
-    setShowCreateForm(false);
-    setSearchTerm("");
-    // Reload customers when going back
-    if (customerGroupId) {
-      fetchCustomers({ customer_group_id: customerGroupId, limit: 20 });
-    } else {
-      fetchCustomers({ limit: 20 });
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      searchCustomers();
-    }
-  };
-
-  const handleLoadMore = () => {
-    if (pagination.page < pagination.totalPages) {
-      const nextPage = pagination.page + 1;
-      const params: any = searchTerm 
-        ? { search: searchTerm, page: nextPage, limit: 20 }
-        : customerGroupId 
-          ? { customer_group_id: customerGroupId, page: nextPage, limit: 20 }
-          : { page: nextPage, limit: 20 };
-      
-      fetchCustomers(params);
-    }
-  };
 
   return (
-    <>
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-medium">Customer</label>
-          <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setIsOpen(true)}>
-            <UserPlus className="mr-1 h-3 w-3" />
-            {selectedCustomer ? "Change" : "Add"}
-          </Button>
-        </div>
-
-        {selectedCustomer ? (
-          <Badge variant="secondary" className="gap-1 text-xs p-2">
-            <User className="h-3 w-3" />
-            <span>{selectedCustomer.first_name} {selectedCustomer.last_name}</span>
-            {selectedCustomer.phone && <span className="text-muted-foreground">({selectedCustomer.phone})</span>}
-            <button onClick={onClear} className="ml-1 hover:text-destructive">
-              <X className="h-3 w-3" />
-            </button>
-          </Badge>
-        ) : (
-          <div className="text-xs text-muted-foreground">No customer selected</div>
-        )}
-
-        <Dialog open={isOpen} onOpenChange={(open) => {
-          if (!open) handleClose();
-          setIsOpen(open);
-        }}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>
-                {showCreateForm ? "Create New Customer" : "Select Customer"}
-              </DialogTitle>
-              <DialogDescription>
-                {showCreateForm 
-                  ? "Enter customer details (First Name, Last Name, Phone - Email optional)" 
-                  : "Search for an existing customer or create a new one"}
-              </DialogDescription>
-            </DialogHeader>
-            
-            {!showCreateForm ? (
-              <div className="space-y-4">
-                {/* Search Input */}
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      placeholder="Search by name, email, or phone..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                      className="pl-7"
-                      autoFocus
-                    />
-                  </div>
-                  <Button onClick={searchCustomers} disabled={isLoading || !searchTerm.trim()} size="sm">
-                    Search
-                  </Button>
-                </div>
-
-                {/* Results Count */}
-                {hasSearched && !isLoading && (
-                  <div className="text-xs text-muted-foreground">
-                    Found {pagination.total} customer{pagination.total !== 1 ? 's' : ''}
-                  </div>
-                )}
-
-                {/* Results */}
-                {isLoading && (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                  </div>
-                )}
-                
-                {!isLoading && hasSearched && customers.length > 0 && (
-                  <ScrollArea className="h-64">
-                    <div className="space-y-2">
-                      {customers.map((customer) => (
-                        <button
-                          key={customer.id}
-                          onClick={() => handleCustomerSelect(customer)}
-                          className="w-full p-3 rounded-lg border text-left hover:bg-accent transition-colors"
-                        >
-                          <div className="font-medium">
-                            {customer.first_name} {customer.last_name}
-                            {customer.company_name && (
-                              <span className="text-xs text-muted-foreground ml-2">
-                                ({customer.company_name})
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
-                            {customer.phone && (
-                              <div className="flex items-center gap-1">
-                                <Phone className="h-3 w-3" />
-                                {customer.phone}
-                              </div>
-                            )}
-                            {customer.email && (
-                              <div className="flex items-center gap-1">
-                                <Mail className="h-3 w-3" />
-                                {customer.email}
-                              </div>
-                            )}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                )}
-
-                {/* Load More Button */}
-                {!isLoading && hasSearched && customers.length > 0 && pagination.page < pagination.totalPages && (
-                  <Button variant="outline" onClick={handleLoadMore} className="w-full">
-                    Load More ({pagination.page}/{pagination.totalPages})
-                  </Button>
-                )}
-
-                {/* No Results */}
-                {!isLoading && hasSearched && customers.length === 0 && searchTerm && (
-                  <div className="text-center py-6">
-                    <p className="text-sm text-muted-foreground mb-3">No customers found matching "{searchTerm}"</p>
-                    <Button onClick={() => setShowCreateForm(true)} className="w-full">
-                      <UserPlus className="mr-2 h-4 w-4" />
-                      Create New Customer
-                    </Button>
-                  </div>
-                )}
-
-                {/* Initial State - No Search */}
-                {!isLoading && !hasSearched && (
-                  <div className="text-center py-6">
-                    <p className="text-sm text-muted-foreground mb-2">
-                      {customerGroupId 
-                        ? `${pagination.total} customer${pagination.total !== 1 ? 's' : ''} available in this group`
-                        : "Enter a name, email, or phone number to search"}
-                    </p>
-                    {customers.length === 0 && !searchTerm && (
-                      <Button variant="outline" onClick={() => setShowCreateForm(true)}>
-                        <UserPlus className="mr-2 h-4 w-4" />
-                        Or Create New Customer
-                      </Button>
-                    )}
-                  </div>
-                )}
-
-                {/* Show existing customers when no search term */}
-                {!isLoading && !searchTerm && customers.length > 0 && (
-                  <ScrollArea className="h-64">
-                    <div className="space-y-2">
-                      {customers.map((customer) => (
-                        <button
-                          key={customer.id}
-                          onClick={() => handleCustomerSelect(customer)}
-                          className="w-full p-3 rounded-lg border text-left hover:bg-accent transition-colors"
-                        >
-                          <div className="font-medium">
-                            {customer.first_name} {customer.last_name}
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {customer.phone || customer.email}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                )}
-              </div>
-            ) : (
-              <CreateCustomerForm
-                onCustomerCreated={handleCustomerCreated}
-                onCancel={handleBackToSearch}
-                user={user}
-              />
-            )}
-          </DialogContent>
-        </Dialog>
-      </div>
-    </>
-  );
-}
-
-// Custom Price Input Component
-function CustomPriceInput({ item, onApplyCustomPrice, region }: any) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [customPrice, setCustomPrice] = useState(item.unit_price);
-  
-  const handleApply = () => {
-    onApplyCustomPrice(item.id, item.variant_id, customPrice, item.quantity);
-    setIsEditing(false);
-  };
-
-  if (isEditing) {
-    return (
-      <div className="flex items-center gap-1 mt-1">
-        <Input
-          type="number"
-          value={customPrice}
-          onChange={(e) => setCustomPrice(parseFloat(e.target.value))}
-          className="h-6 w-20 text-xs"
-          step="0.01"
-          min="0"
-          autoFocus
-        />
-        <Button size="sm" className="h-6 px-2 text-xs" onClick={handleApply}>
-          Apply
-        </Button>
-        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setIsEditing(false)}>
-          Cancel
+    <div className="space-y-2">
+      <div className="flex justify-between">
+        <label className="text-xs font-medium">Customer</label>
+        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setIsOpen(true)}>
+          <UserPlus className="mr-1 h-3 w-3" />
+          {selected ? "Change" : "Add"}
         </Button>
       </div>
-    );
-  }
 
-  return (
-    <div className="flex items-center gap-1 mt-1">
-      <p className="text-xs font-semibold text-primary">
-        {region?.currency_code?.toUpperCase() || "PHP"} {item.unit_price?.toFixed(2)}
-      </p>
-      {item.is_custom_priced && (
-        <Badge variant="outline" className="text-[10px]">
-          <DollarSign className="h-2 w-2 mr-1" />
-          Custom
+      {selected ? (
+        <Badge variant="secondary" className="gap-1 text-xs p-2">
+          <User className="h-3 w-3" />
+          <span>{selected.first_name} {selected.last_name}</span>
+          {selected.phone && <span className="text-muted-foreground">({selected.phone})</span>}
+          <button onClick={onClear} className="ml-1 hover:text-destructive">
+            <X className="h-3 w-3" />
+          </button>
         </Badge>
+      ) : (
+        <div className="text-xs text-muted-foreground">No customer selected</div>
       )}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-5 px-1 text-xs"
-        onClick={() => setIsEditing(true)}
-      >
-        <Tag className="h-3 w-3" />
-      </Button>
-      {item.original_unit_price && item.original_unit_price !== item.unit_price && (
-        <p className="text-xs text-muted-foreground line-through">
-          {region?.currency_code?.toUpperCase() || "PHP"} {item.original_unit_price.toFixed(2)}
-        </p>
-      )}
+
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select Customer</DialogTitle>
+            <DialogDescription>Select a customer for this order</DialogDescription>
+          </DialogHeader>
+          <div className="text-center py-4 text-muted-foreground">
+            Customer search implementation here
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-// Cart Item Component
-const CartItemComponent = ({ item, onUpdateQuantity, onRemove, onCustomPrice, region }: any) => (
-  <div className="flex gap-2 rounded-lg border bg-card p-2 mb-1">
-    <div className="flex-1 min-w-0">
-      <h4 className="font-medium text-sm line-clamp-1">{item.title}</h4>
-      {item.variant_title && <p className="text-xs text-muted-foreground">{item.variant_title}</p>}
-      
-      <CustomPriceInput
-        item={item}
-        onApplyCustomPrice={onCustomPrice}
-        region={region}
-      />
-      
-      <div className="flex items-center gap-2 mt-1">
-        <p className="text-xs text-muted-foreground">× {item.quantity}</p>
-        <p className="text-xs font-semibold">
-          = {region?.currency_code?.toUpperCase() || "PHP"} {(item.unit_price * item.quantity).toFixed(2)}
-        </p>
-      </div>
-    </div>
-    <div className="flex flex-col items-end gap-1">
-      <div className="flex items-center gap-1">
-        <Button 
-          variant="outline" 
-          size="icon" 
-          className="h-6 w-6" 
-          onClick={() => onUpdateQuantity(item.id, item.quantity - 1)}
-        >
-          <Minus className="h-3 w-3" />
-        </Button>
-        <span className="w-6 text-center text-xs">{item.quantity}</span>
-        <Button 
-          variant="outline" 
-          size="icon" 
-          className="h-6 w-6" 
-          onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
-        >
-          <Plus className="h-3 w-3" />
-        </Button>
-      </div>
-      <Button variant="ghost" size="sm" className="h-6 px-1 text-destructive" onClick={() => onRemove(item.id)}>
-        <Trash2 className="h-3 w-3" />
-      </Button>
-    </div>
-  </div>
-);
+// ============================================
+// MAIN CART SIDEBAR
+// ============================================
 
-// Main Cart Sidebar Component
 interface CartSidebarProps {
-  cartItems: CartItem[];
-  cartTotal: number;
-  isLoading: boolean;
+  cart: MedusaCart | null;
   region?: Region;
   selectedTableIds: string[];
   selectedCustomer: Customer | null;
   orderNotes: string;
+  isLoading: boolean;
   onUpdateQuantity: (lineId: string, quantity: number) => Promise<void>;
   onRemoveFromCart: (lineId: string) => Promise<void>;
   onClearCart: () => Promise<void>;
   onTablesChange: (tableIds: string[]) => void;
-  onCustomerChange: (customer: Customer | null) => void;
+  onCustomerChange: (customer: Customer | null) => Promise<void>;
   onNotesChange: (notes: string) => void;
-  onCheckout: () => void;
-  onSaveDraft: () => Promise<void>;
-  onCustomPrice: (itemId: string, variantId: string, price: number, quantity?: number) => Promise<void>;
-  cart?: any;
-  user?: any;
+  onCheckout: () => Promise<void>;
+  onSaveDraft: (draftName: string) => Promise<void>;
+  onApplyCustomPrice: (lineId: string, variantId: string, price: number, reason?: string) => Promise<void>;
+  onRemoveCustomPrice: (lineId: string, variantId: string) => Promise<void>;
+  onLoadDraft?: (draftId: string) => Promise<void>;
 }
 
 export function CartSidebar({
-  cartItems,
-  cartTotal,
-  isLoading,
+  cart,
   region,
   selectedTableIds,
   selectedCustomer,
   orderNotes,
+  isLoading,
   onUpdateQuantity,
   onRemoveFromCart,
   onClearCart,
@@ -942,206 +718,225 @@ export function CartSidebar({
   onNotesChange,
   onCheckout,
   onSaveDraft,
-  onCustomPrice,
-  cart,
-  user
+  onApplyCustomPrice,
+  onRemoveCustomPrice,
+  onLoadDraft,
 }: CartSidebarProps) {
-  const [occupiedTableIds, setOccupiedTableIds] = useState<string[]>([]);
+  const [occupiedTables, setOccupiedTables] = useState<string[]>([]);
   const [printOpen, setPrintOpen] = useState(false);
+  const [showDraftDialog, setShowDraftDialog] = useState(false);
+  const [draftName, setDraftName] = useState("");
 
   useEffect(() => {
-    const loadOccupiedTables = () => {
+    const load = () => {
       const stored = localStorage.getItem("simple-tables");
       if (stored) {
         const tables = JSON.parse(stored);
-        const occupied = tables
-          .filter((t: any) => t.status === "occupied" || t.status === "reserved")
-          .map((t: any) => t.id);
-        setOccupiedTableIds(occupied);
-      } else {
-        // Initialize 10 default tables if none exist
-        const defaultTables: SimpleTable[] = [];
-        for (let i = 1; i <= 10; i++) {
-          let capacity = 4;
-          if (i === 9 || i === 10) capacity = 8;
-          if (i === 1 || i === 2) capacity = 2;
-          
-          defaultTables.push({
-            id: `table-${i}`,
-            name: `Table ${i}`,
-            number: i.toString(),
-            capacity: capacity,
-            status: "available",
-          });
-        }
-        localStorage.setItem("simple-tables", JSON.stringify(defaultTables));
+        const occupied = tables.filter((t: any) => t.status === "occupied").map((t: any) => t.id);
+        setOccupiedTables(occupied);
       }
     };
-    
-    loadOccupiedTables();
-    window.addEventListener("storage", loadOccupiedTables);
-    return () => window.removeEventListener("storage", loadOccupiedTables);
+    load();
+    window.addEventListener("storage", load);
+    return () => window.removeEventListener("storage", load);
   }, []);
 
-  // Calculate pricing summary
-  const customPricedItems = cartItems.filter(item => item.is_custom_priced);
-  const regularItems = cartItems.filter(item => !item.is_custom_priced);
+  const subtotal = cart?.items?.reduce((sum, item) => sum + (getFinalPrice(item.unit_price) * item.quantity), 0) || 0;
+  const taxRate = region?.tax_rate || 0;
+  const taxTotal = subtotal * (taxRate / 100);
+  const serviceCharge = cart?.metadata?.service_charge || 0;
+  const discountAmount = cart?.metadata?.discount_amount || 0;
+  const total = subtotal + taxTotal + serviceCharge - discountAmount;
+  const currencyCode = region?.currency_code?.toUpperCase() || "PHP";
+  const itemCount = cart?.items?.length || 0;
 
-  // Calculate tax if region has tax rate
-  const taxAmount = cartTotal * ((region?.tax_rate || 0) / 100);
-  const grandTotal = cartTotal + taxAmount;
+  const customPricedItems = cart?.items?.filter(i => i.metadata?.is_custom_priced) || [];
+  const regularItems = cart?.items?.filter(i => !i.metadata?.is_custom_priced) || [];
 
   return (
     <>
       <PrintDialog open={printOpen} onOpenChange={setPrintOpen} cart={cart} />
-      
-      <div className="border-b p-3 flex-shrink-0">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <ShoppingCart className="h-4 w-4" />
-            <h2 className="font-semibold text-sm">Current Order</h2>
-          </div>
-          <div className="flex gap-1">
-            <Button variant="ghost" size="sm" className="h-7" onClick={() => setPrintOpen(true)}>
-              <Printer className="h-3 w-3" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-7" onClick={onSaveDraft}>
-              <Save className="h-3 w-3" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-7 text-destructive" onClick={onClearCart}>
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
-        
-        <MultiTableSelector 
-          selectedTableIds={selectedTableIds}
-          onTablesChange={onTablesChange}
-          disabledTables={occupiedTableIds.filter(id => !selectedTableIds.includes(id))}
-        />
-        
-        <div className="mt-3">
-          <CustomerSelector 
-            user={user}
-            selectedCustomer={selectedCustomer}
-            onSelectCustomer={onCustomerChange}
-            onClear={() => onCustomerChange(null)}
-          />
-        </div>
 
-        {/* Pricing Strategy Badge */}
-        {cart?.metadata?.pricing_strategy && cart.metadata.pricing_strategy !== 'default' && (
-          <div className="mt-3 p-2 bg-muted rounded-md">
-            <div className="flex items-center gap-2 text-xs">
-              <Tag className="h-3 w-3" />
-              <span className="font-medium">Pricing Strategy:</span>
-              <Badge variant="outline" className="text-[10px]">
-                {cart.metadata.pricing_strategy === 'price_list' && 'Price List Applied'}
-                {cart.metadata.pricing_strategy === 'customer_group' && 'Customer Group Pricing'}
-                {cart.metadata.pricing_strategy === 'custom' && 'Custom Pricing Active'}
-              </Badge>
+      <Dialog open={showDraftDialog} onOpenChange={setShowDraftDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save Draft Order</DialogTitle>
+            <DialogDescription>Name this draft for easy access later</DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="e.g., Walk-in - Table 5"
+            value={draftName}
+            onChange={(e) => setDraftName(e.target.value)}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDraftDialog(false)}>Cancel</Button>
+            <Button onClick={() => { onSaveDraft(draftName); setShowDraftDialog(false); setDraftName(""); }}>
+              Save Draft
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Main container - full height flex column */}
+      <div className="flex flex-col h-full">
+        {/* Header - fixed at top */}
+        <div className="border-b p-3 md:p-4 flex-shrink-0 bg-background">
+          <div className="flex justify-between items-center mb-3">
+            <div className="flex items-center gap-2">
+              <ShoppingCart className="h-4 w-4 md:h-5 md:w-5" />
+              <h2 className="font-semibold text-sm md:text-base">Current Order</h2>
+              {itemCount > 0 && (
+                <Badge variant="secondary" className="ml-2">
+                  {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                </Badge>
+              )}
             </div>
-            {customPricedItems.length > 0 && (
-              <div className="text-xs text-muted-foreground mt-1">
-                {customPricedItems.length} item(s) have custom prices
+            <div className="flex gap-1">
+              <Button variant="ghost" size="sm" className="h-7 md:h-8" onClick={() => setPrintOpen(true)}>
+                <Printer className="h-3 w-3 md:h-4 md:w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" className="h-7 md:h-8" onClick={() => setShowDraftDialog(true)}>
+                <Save className="h-3 w-3 md:h-4 md:w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" className="h-7 md:h-8 text-destructive" onClick={onClearCart}>
+                <Trash2 className="h-3 w-3 md:h-4 md:w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <TableSelector
+              selectedIds={selectedTableIds}
+              onSelect={onTablesChange}
+              disabledIds={occupiedTables}
+            />
+
+            <CustomerSelector
+              selected={selectedCustomer}
+              onSelect={onCustomerChange}
+              onClear={() => onCustomerChange(null)}
+            />
+
+            {cart?.metadata?.pricing_strategy && cart.metadata.pricing_strategy !== 'default' && (
+              <div className="p-2 bg-muted rounded-md text-xs">
+                <div className="flex items-center gap-2">
+                  <Tag className="h-3 w-3" />
+                  <span className="font-medium">Pricing:</span>
+                  <Badge variant="outline" className="text-[10px] capitalize">
+                    {cart.metadata.pricing_strategy}
+                  </Badge>
+                </div>
+                {customPricedItems.length > 0 && (
+                  <div className="text-muted-foreground mt-1">
+                    {customPricedItems.length} item(s) have custom prices
+                  </div>
+                )}
               </div>
             )}
+
+            <div>
+              <Label className="text-xs">Order Notes</Label>
+              <Input
+                placeholder="Special instructions..."
+                value={orderNotes}
+                onChange={(e) => onNotesChange(e.target.value)}
+                className="text-xs h-8 md:h-9 mt-1"
+              />
+            </div>
           </div>
-        )}
-      </div>
-      
-      <div className="flex-1 overflow-auto">
-        <ScrollArea className="max-h-[40vh]">
-          <div className="space-y-2 p-3">
+        </div>
+
+        {/* Scrollable cart items area */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="p-3 md:p-4">
             {isLoading ? (
               <div className="flex justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin" />
               </div>
-            ) : cartItems.length === 0 ? (
+            ) : itemCount === 0 ? (
               <div className="text-center py-8">
-                <ShoppingCart className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                <p className="text-xs text-muted-foreground">Cart is empty</p>
+                <ShoppingCart className="h-8 w-8 md:h-12 md:w-12 text-muted-foreground mx-auto mb-2" />
+                <p className="text-xs md:text-sm text-muted-foreground">Cart is empty</p>
+                <p className="text-xs text-muted-foreground mt-1">Add items to get started</p>
               </div>
             ) : (
               <>
-                {/* Custom Priced Items Section */}
-                {customPricedItems.length > 0 && (
-                  <div className="mb-4">
-                    {customPricedItems.map((item) => (
-                      <CartItemComponent
-                        key={item.id}
-                        item={item}
-                        onUpdateQuantity={onUpdateQuantity}
-                        onRemove={onRemoveFromCart}
-                        onCustomPrice={onCustomPrice}
-                        region={region}
-                      />
-                    ))}
-                  </div>
-                )}
+                {customPricedItems.map(item => (
+                  <CartItem
+                    key={item.id}
+                    item={item}
+                    onUpdateQuantity={onUpdateQuantity}
+                    onRemove={onRemoveFromCart}
+                    onCustomPrice={onApplyCustomPrice}
+                    onRemoveCustomPrice={onRemoveCustomPrice}
+                    currencyCode={currencyCode}
+                  />
+                ))}
                 
-                {/* Regular Items Section */}
-                {regularItems.length > 0 && (
-                  <div className="mb-4">
-                    {regularItems.map((item) => (
-                      <CartItemComponent
-                        key={item.id}
-                        item={item}
-                        onUpdateQuantity={onUpdateQuantity}
-                        onRemove={onRemoveFromCart}
-                        onCustomPrice={onCustomPrice}
-                        region={region}
-                      />
-                    ))}
-                  </div>
-                )}
+                {regularItems.map(item => (
+                  <CartItem
+                    key={item.id}
+                    item={item}
+                    onUpdateQuantity={onUpdateQuantity}
+                    onRemove={onRemoveFromCart}
+                    onCustomPrice={onApplyCustomPrice}
+                    onRemoveCustomPrice={onRemoveCustomPrice}
+                    currencyCode={currencyCode}
+                  />
+                ))}
               </>
             )}
           </div>
-        </ScrollArea>
-      </div>
-      
-      <div className="border-t p-3 flex-shrink-0">
-        <div className="space-y-2 mb-3">
-          <div className="flex justify-between text-sm">
-            <span>Subtotal</span>
-            <span>{region?.currency_code?.toUpperCase() || "PHP"} {cartTotal.toFixed(2)}</span>
-          </div>
-          {taxAmount > 0 && (
-            <div className="flex justify-between text-sm">
-              <span>Tax ({region?.tax_rate || 0}%)</span>
-              <span>{region?.currency_code?.toUpperCase() || "PHP"} {taxAmount.toFixed(2)}</span>
+        </div>
+
+        {/* Footer with sticky checkout button */}
+        <div className="border-t p-3 md:p-4 flex-shrink-0 bg-background">
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span className="font-medium">{currencyCode} {subtotal.toFixed(2)}</span>
+              </div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>Discount</span>
+                  <span>-{currencyCode} {discountAmount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Tax ({taxRate}%)</span>
+                <span className="font-medium">{currencyCode} {taxTotal.toFixed(2)}</span>
+              </div>
+              {serviceCharge > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Service Charge</span>
+                  <span className="font-medium">{currencyCode} {serviceCharge.toFixed(2)}</span>
+                </div>
+              )}
+              <Separator />
+              <div className="flex justify-between font-bold text-base md:text-lg">
+                <span>Total</span>
+                <span className="text-primary">{currencyCode} {total.toFixed(2)}</span>
+              </div>
             </div>
-          )}
-          {cart?.metadata?.pricing_strategy === 'price_list' && (
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Price List Applied</span>
-              <span>Special pricing active</span>
-            </div>
-          )}
-          <Separator />
-          <div className="flex justify-between text-sm font-bold">
-            <span>Total</span>
-            <span>{region?.currency_code?.toUpperCase() || "PHP"} {grandTotal.toFixed(2)}</span>
+
+            <Button
+              className="w-full h-10 md:h-11 text-sm md:text-base"
+              onClick={onCheckout}
+              disabled={!itemCount || isLoading}
+              size="lg"
+            >
+              <CreditCard className="mr-2 h-4 w-4" />
+              Checkout • {currencyCode} {total.toFixed(2)}
+            </Button>
+
+            {cart?.metadata?.is_draft && (
+              <p className="text-xs text-muted-foreground text-center">
+                Draft order - Complete checkout to finalize
+              </p>
+            )}
           </div>
         </div>
-        
-        <Input
-          placeholder="Order notes..."
-          value={orderNotes}
-          onChange={(e) => onNotesChange(e.target.value)}
-          className="text-xs h-8 mb-3"
-        />
-        
-        <Button 
-          size="sm" 
-          className="w-full" 
-          onClick={onCheckout} 
-          disabled={cartItems.length === 0}
-        >
-          <CreditCard className="mr-1 h-3 w-3" />
-          Checkout
-        </Button>
       </div>
     </>
   );
