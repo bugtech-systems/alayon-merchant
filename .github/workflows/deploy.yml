@@ -77,13 +77,13 @@ jobs:
             echo "Node version: $(node --version)"
             echo "pnpm version: $(pnpm --version)"
             
-            cd ~/apps/alayon-dashboard
+            cd ~/apps/alayon-merchant
             
             echo "Pulling latest changes..."
             git pull origin development
             
             echo "Fixing permissions..."
-            sudo chown -R $USER:$USER ~/apps/alayon-dashboard
+            sudo chown -R $USER:$USER ~/apps/alayon-merchant
             
             echo "Installing dependencies..."
             pnpm install --frozen-lockfile --prefer-offline
