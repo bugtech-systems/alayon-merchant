@@ -107,7 +107,7 @@ export function PaymentDialog({
       }
       
       // Complete the cart to create the order
-      const completeResult = await processPOSPayment({cart, paymentMethod: 'other', amount: cartTotal});
+      const completeResult = await processPOSPayment({cart, paymentMethod: 'other', amount: cartTotal, });
       
       if (!completeResult.order) {
         throw new Error("Failed to create order");

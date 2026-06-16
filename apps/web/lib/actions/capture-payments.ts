@@ -40,6 +40,7 @@ export interface PaymentSessionResponse {
   data: Record<string, any>;
   amount: number;
   currency_code: string;
+  headers?: any;
 }
 
 // ============================================================================
@@ -136,23 +137,24 @@ export async function capturePaymentWithSDK(data: any): Promise<any> {
 /**
  * Initiate a payment session for a cart
  */
-export async function initiatePaymentSession(
+export async function initiateCapturePaymentSession(
   cart: any,
-  params: InitiatePaymentSessionParams
+  params: InitiatePaymentSessionParams,
+  headers?: any
 ): Promise<PaymentSessionResponse> {
-  const headers = await getAuthHeaders();
+  const headersAuth = await getAuthHeaders();
   try {
     const response = await sdk.store.payment.initiatePaymentSession(
       cart,
       {
-        provider_id: params.provider_id,
-        context: params.context,
+        provider_id: params?.provider_id || "pp_system_default",
+        context: params?.context,
       },
       {},
-      headers
+      {...headersAuth, ...headers}
     );
 
-    return response;
+    return response?.payment_collection?.payment_sessions[0] || null;
   } catch (error) {
     console.error("Error initiating payment session:", error);
     throw error;
@@ -318,7 +320,6 @@ export async function refundPayment(
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
 /**
  * Process complete payment flow for POS
  */
@@ -337,60 +338,240 @@ export async function processPOSPayment(params: {
   message: string;
 }> {
   const { cart, orderId, paymentMethod, amount, cashAmount, change, customerId } = params;
-  const headers = await getAuthHeaders();
-
-  try {
-    // Step 1: Determine payment provider
-    let providerId = "pp_system_default";
-    switch (paymentMethod) {
-      case "cash":
-        providerId = "pp_cash_cash";
-        break;
-      case "card":
-        providerId = "pp_stripe_stripe";
-        break;
-      default:
-        providerId = "pp_system_default";
-    }
-
-    // Step 2: Initiate payment session on cart
-   let payment = await initiatePaymentSession(cart, {
-      cart_id: cart?.id,
-      provider_id: providerId,
-    });
-
-
-    // Step 4: Complete the cart
-    const orderResult = await sdk.store.cart.complete(cart?.id, {}, headers);
-
-    if (!orderResult.order) {
-      throw new Error("Failed to create order");
-    }
-
-    // Step 5: Capture the payment
-    const captureResult = await capturePayment({order_id: orderResult?.order?.id, payment_method: 'cash', payment_data: {amount, change, cash_amount: cashAmount}  });
-    console.log(orderResult, 'CAPPT RESSSS')
-    // if (!captureResult.success) {
-    //   throw new Error("Payment capture failed");
-    // }
-
-    return {
-      success: true,
-      order: orderResult.order,
-      payment: captureResult,
-      // payment: captureResult.payment,
-      message: "Payment processed successfully",
-    };
-  } catch (error: any) {
-    console.error("Error processing POS payment:", error);
+  
+  // Validate required params
+  if (!cart?.id) {
     return {
       success: false,
       order: null,
       payment: null,
-      message: error.message || "Failed to process payment",
+      message: "Cart ID is required",
+    };
+  }
+
+  const headers = await getAuthHeaders();
+  
+  // Generate unique idempotency key for this transaction
+  const idempotencyKey = `pos_${cart.id}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  
+  // Add idempotency key to headers
+  const headersWithIdempotency = {
+    ...headers,
+    "Idempotency-Key": idempotencyKey,
+  };
+
+  try {
+    // Step 1: Determine payment provider
+    const providerId = getPaymentProviderId(paymentMethod);
+
+    // Step 2: Verify cart status before processing
+    const cartStatus = await verifyCartStatus(cart.id, headers);
+    if (cartStatus === "completed" || cartStatus === "processing") {
+      return {
+        success: false,
+        order: null,
+        payment: null,
+        message: "Cart is already being processed or completed",
+      };
+    }
+
+    // Step 3: Initiate payment session on cart
+    let payment;
+    try {
+       payment = await initiateCapturePaymentSession(cart, {cart_id: cart?.id, provider_id: providerId}, headersWithIdempotency) as any;
+      console.log(payment, 'PAAYMMM')
+      if (!payment?.id) {
+        throw new Error("Failed to initiate payment session");
+      }
+    } catch (paymentError: any) {
+      console.error("Payment initiation failed:", paymentError);
+      return {
+        success: false,
+        order: null,
+        payment: null,
+        message: `Payment initiation failed: ${paymentError.message}`,
+      };
+    }
+
+    // Step 4: Complete the cart with retry logic for idempotency conflicts
+    let orderResult;
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries) {
+      try {
+        orderResult = await sdk.store.cart.complete(
+          cart.id, 
+          {}, 
+          headersWithIdempotency
+        );
+        break; // Success, exit retry loop
+      } catch (completeError: any) {
+        // Handle idempotency conflicts
+        if (completeError?.code === "invalid_state_error" || 
+            completeError?.type === "conflict") {
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            return {
+              success: false,
+              order: null,
+              payment: null,
+              message: "Cart completion is taking longer than expected. Please check order status.",
+            };
+          }
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount - 1)));
+          continue;
+        }
+        throw completeError; // Re-throw other errors
+      }
+    }
+
+    if (!orderResult?.order) {
+      throw new Error("Failed to create order");
+    }
+
+    // Step 5: Capture payment if not already captured
+    let captureResult;
+    try {
+      // captureResult = await capturePayment({
+      //   order_id: orderResult.order.id,
+      //   payment_method: paymentMethod,
+      //   payment_data: {
+      //     amount,
+      //     change,
+      //     cash_amount: cashAmount,
+      //     payment_id: payment?.id,
+      //   },
+      // });
+
+
+      console.log(captureResult, 'VAPPPACPAP')
+      if (!captureResult?.id) {
+        // Log the failure but don't throw - order is created, we need to handle payment separately
+        console.error("Payment capture failed:", captureResult);
+        return {
+          success: false,
+          order: orderResult.order,
+          payment: null,
+          message: "Order created but payment capture failed. Please check payment status.",
+        };
+      }
+    } catch (captureError: any) {
+      console.error("Payment capture error:", captureError);
+      return {
+        success: false,
+        order: orderResult.order,
+        payment: null,
+        message: `Order created but payment capture failed: ${captureError.message}`,
+      };
+    }
+
+    // Step 6: Verify order status after completion
+    const verifiedOrder = await verifyOrderStatus(orderResult.order.id, headers);
+    
+    return {
+      success: true,
+      order: verifiedOrder || orderResult.order,
+      payment: captureResult.payment || captureResult,
+      message: "Payment processed successfully",
+    };
+  } catch (error: any) {
+    console.error("Error processing POS payment:", error);
+    
+    // Check for specific error types
+    let errorMessage = error.message || "Failed to process payment";
+    let errorCode = error.code || "unknown_error";
+    
+    // Handle idempotency errors
+    if (errorCode === "invalid_state_error" || error.type === "conflict") {
+      errorMessage = "This transaction is already being processed. Please wait.";
+    }
+    
+    return {
+      success: false,
+      order: null,
+      payment: null,
+      message: errorMessage,
     };
   }
 }
+
+/**
+ * Helper: Get payment provider ID based on method
+ */
+function getPaymentProviderId(method: "cash" | "card" | "other"): string {
+  switch (method) {
+    case "cash":
+      return "pp_cash_cash";
+    case "card":
+      return "pp_stripe_stripe";
+    default:
+      return "pp_system_default";
+  }
+}
+
+/**
+ * Helper: Verify cart status
+ */
+async function verifyCartStatus(cartId: string, headers: any): Promise<string> {
+  try {
+    const cart = await sdk.store.cart.retrieve(cartId, {}, headers);
+    return cart?.status || "pending";
+  } catch (error) {
+    console.warn("Failed to verify cart status:", error);
+    return "pending";
+  }
+}
+
+/**
+ * Helper: Verify order status
+ */
+async function verifyOrderStatus(orderId: string, headers: any): Promise<any> {
+  try {
+    const order = await sdk.store.order.retrieve(orderId, {}, headers);
+    return order;
+  } catch (error) {
+    console.warn("Failed to verify order status:", error);
+    return null;
+  }
+}
+
+// /**
+//  * Helper: Initiate payment session
+//  */
+// async function initiatePaymentSession(data: {
+//   cart_id: string;
+//   provider_id: string;
+//   data?: any;
+// }): Promise<any> {
+//   try {
+//     // Implementation depends on your SDK/API
+//     const response = await sdk.store.payment.initiate(data);
+//     return response;
+//   } catch (error: any) {
+//     console.error("Initiate payment session error:", error);
+//     throw new Error(`Payment session initiation failed: ${error.message}`);
+//   }
+// }
+
+/**
+ * Helper: Capture payment
+ */
+// async function capturePayment(data: {
+//   order_id: string;
+//   payment_method: string;
+//   payment_data?: any;
+// }): Promise<any> {
+//   try {
+//     // Implementation depends on your SDK/API
+//     const response = await sdk.admin.payment.capture(data);
+//     return response;
+//   } catch (error: any) {
+//     console.error("Capture payment error:", error);
+//     throw new Error(`Payment capture failed: ${error.message}`);
+//   }
+// }
 
 /**
  * Validate payment amount

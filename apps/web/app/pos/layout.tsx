@@ -1,6 +1,5 @@
 // app/(pos)/layout.tsx - Server Component
 import { Suspense } from "react";
-import { PosClientProvider } from "./_components/pos-client-provider";
 import { PosLayoutContent } from "./_components/pos-layout-content";
 import { Spinner } from "@/components/ui/spinner";
 import { TooltipProvider } from "@/components/ui/tooltip";
