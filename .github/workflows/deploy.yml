@@ -6,15 +6,10 @@ on:
       - development
   workflow_dispatch:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
-    outputs:
-      build-time: ${{ steps.build.outputs.build-time }}
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -23,53 +18,19 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'pnpm'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
         with:
           version: 8
-          run_install: false
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Setup pnpm cache
-        uses: actions/cache@v3
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
-        run: |
-          if [ -f "pnpm-lock.yaml" ]; then
-            echo "📦 Lockfile found, installing with frozen-lockfile..."
-            pnpm install --frozen-lockfile --prefer-offline
-          else
-            echo "⚠️ Lockfile missing, generating new one..."
-            pnpm install --no-frozen-lockfile --prefer-offline
-            echo "📝 New lockfile generated. Please commit it to the repository."
-          fi
-
-      - name: Cache Next.js build
-        uses: actions/cache@v3
-        with:
-          path: |
-            apps/web/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('apps/web/**/*.js', 'apps/web/**/*.jsx', 'apps/web/**/*.ts', 'apps/web/**/*.tsx') }}
-          restore-keys: |
-            ${{ runner.os }}-nextjs-
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Build project
-        id: build
         run: |
           cd apps/web
-          npm run build
-          echo "build-time=$(date +%s)" >> $GITHUB_OUTPUT
+          pnpm run build
         env:
           NEXT_PUBLIC_MEDUSA_BACKEND_URL: ${{ vars.NEXT_PUBLIC_MEDUSA_BACKEND_URL }}
           NEXT_PUBLIC_BASE_URL: ${{ vars.NEXT_PUBLIC_BASE_URL }}
@@ -79,30 +40,6 @@ jobs:
           NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY }}
           NEXT_PUBLIC_MEDUSA_SECRET_KEY: ${{ secrets.NEXT_PUBLIC_MEDUSA_SECRET_KEY }}
           REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET }}
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-output
-          path: |
-            apps/web/.next
-            apps/web/public
-            apps/web/package.json
-            apps/web/.env.production
-          retention-days: 1
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-output
-          path: apps/web/
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
@@ -114,41 +51,47 @@ jobs:
           script: |
             set -e
             
-            echo "🚀 Starting deployment..."
+            echo "=== Starting deployment to EC2 ==="
             
-            # Setup Node.js
+            # Load NVM if installed
             export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-            
-            if ! command -v node &> /dev/null || [ "$(node --version | cut -d. -f1 | tr -d 'v')" -lt 20 ]; then
-              echo "Setting up Node.js 20..."
-              curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-              sudo apt-get install -y nodejs
+            if [ -s "$NVM_DIR/nvm.sh" ]; then
+                echo "Loading NVM..."
+                \. "$NVM_DIR/nvm.sh"
+                nvm use 20 || nvm install 20
+            else
+                echo "NVM not found, installing..."
+                curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+                export NVM_DIR="$HOME/.nvm"
+                [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+                nvm install 20
+                nvm alias default 20
             fi
             
-            # Install pnpm if needed
+            # Install pnpm if not installed
             if ! command -v pnpm &> /dev/null; then
-              echo "Installing pnpm..."
-              sudo npm install -g pnpm@8
+                echo "Installing pnpm..."
+                npm install -g pnpm
             fi
+            
+            echo "Node version: $(node --version)"
+            echo "pnpm version: $(pnpm --version)"
             
             cd ~/apps/alayon-merchant
             
-            # Pull latest code
-            git fetch origin development
-            git reset --hard origin/development
+            echo "Pulling latest changes..."
+            git pull origin development
             
-            # Install production dependencies only
-            echo "📦 Installing production dependencies..."
-            if [ -f "pnpm-lock.yaml" ]; then
-              pnpm install --prod --frozen-lockfile --prefer-offline
-            else
-              pnpm install --prod --no-frozen-lockfile --prefer-offline
-            fi
+            echo "Fixing permissions..."
+            sudo chown -R $USER:$USER ~/apps/alayon-merchant
             
-            # Create environment file
+            echo "Installing dependencies..."
+            pnpm install --frozen-lockfile --prefer-offline
+            
             cd apps/web
-            cat > .env.production << 'EOF'
+            
+            echo "Creating environment file..."
+            cat > .env.production << EOF
             NODE_ENV=production
             NEXT_PUBLIC_MEDUSA_BACKEND_URL=${{ vars.NEXT_PUBLIC_MEDUSA_BACKEND_URL }}
             NEXT_PUBLIC_BASE_URL=${{ vars.NEXT_PUBLIC_BASE_URL }}
@@ -160,13 +103,11 @@ jobs:
             REVALIDATE_SECRET=${{ secrets.REVALIDATE_SECRET }}
             EOF
             
-            # Restart PM2
-            echo "🔄 Restarting application..."
-            if pm2 list | grep -q "alayon-merchant"; then
-              pm2 reload alayon-merchant --update-env
-            else
-              pm2 start "npm run start" --name "alayon-merchant" --cwd ~/apps/alayon-merchant/apps/web
-            fi
+            echo "Building on EC2..."
+            npm run build
+            
+            echo "Starting PM2 process..."
+            pm2 restart alayon-merchant || pm2 start "cd apps/web && npm run start" --name "alayon-merchant"
             pm2 save
             
-            echo "✅ Deployment completed!"
+            echo "=== Deployment completed! ==="
