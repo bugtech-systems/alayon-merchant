@@ -25,17 +25,8 @@ jobs:
           version: 8
 
       - name: Install dependencies
-        run: |
-          # Try frozen lockfile first, fallback if missing
-          if [ -f "pnpm-lock.yaml" ]; then
-            echo "📦 Lockfile found, installing with frozen-lockfile..."
-            pnpm install --frozen-lockfile --prefer-offline
-          else
-            echo "⚠️ Lockfile missing, generating new one..."
-            pnpm install --no-frozen-lockfile --prefer-offline
-            echo "📝 New lockfile generated."
-          fi
-  
+        run: pnpm install --no-frozen-lockfile --prefer-offline
+
       - name: Build project
         run: |
           cd apps/web
@@ -62,49 +53,28 @@ jobs:
             
             echo "=== Starting deployment to EC2 ==="
             
-            # Load NVM if installed
             export NVM_DIR="$HOME/.nvm"
-            if [ -s "$NVM_DIR/nvm.sh" ]; then
-                echo "Loading NVM..."
-                \. "$NVM_DIR/nvm.sh"
-                nvm use 20 || nvm install 20
-            else
-                echo "NVM not found, installing..."
-                curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-                export NVM_DIR="$HOME/.nvm"
-                [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-                nvm install 20
-                nvm alias default 20
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            
+            if ! command -v node &> /dev/null || [ "$(node --version | cut -d. -f1 | tr -d 'v')" -lt 20 ]; then
+              curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+              sudo apt-get install -y nodejs -y
             fi
             
-            # Install pnpm if not installed
             if ! command -v pnpm &> /dev/null; then
-                echo "Installing pnpm..."
-                npm install -g pnpm
+              sudo npm install -g pnpm@8
             fi
-            
-            echo "Node version: $(node --version)"
-            echo "pnpm version: $(pnpm --version)"
             
             cd ~/apps/alayon-merchant
             
-            echo "Pulling latest changes..."
             git pull origin development
-            
-            echo "Fixing permissions..."
             sudo chown -R $USER:$USER ~/apps/alayon-merchant
             
-            echo "Installing dependencies..."
-            # Same fix on EC2
-            if [ -f "pnpm-lock.yaml" ]; then
-              pnpm install --frozen-lockfile --prefer-offline
-            else
-              pnpm install --no-frozen-lockfile --prefer-offline
-            fi
+            # Always use --no-frozen-lockfile
+            pnpm install --no-frozen-lockfile --prefer-offline
             
             cd apps/web
             
-            echo "Creating environment file..."
             cat > .env.production << EOF
             NODE_ENV=production
             NEXT_PUBLIC_MEDUSA_BACKEND_URL=${{ vars.NEXT_PUBLIC_MEDUSA_BACKEND_URL }}
@@ -117,11 +87,9 @@ jobs:
             REVALIDATE_SECRET=${{ secrets.REVALIDATE_SECRET }}
             EOF
             
-            echo "Building on EC2..."
             npm run build
             
-            echo "Starting PM2 process..."
-            pm2 restart alayon-merchant || pm2 start "cd apps/web && npm run start" --name "alayon-merchant"
+            pm2 restart alayon-merchant || pm2 start "npm run start" --name "alayon-merchant" --cwd ~/apps/alayon-merchant/apps/web
             pm2 save
             
             echo "=== Deployment completed! ==="
