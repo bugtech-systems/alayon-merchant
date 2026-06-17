@@ -1,6 +1,8 @@
+// components/pos/pos-layout-content.tsx
+
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -17,45 +19,36 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
 } from "@/components/ui/sheet";
 import {
   Building2,
-  Warehouse,
-  Star,
   History,
   FileText,
-  Settings,
   Users,
   Layers,
-  ShoppingCart,
   Menu,
   User,
   TrendingUp,
   LogOut,
-  CreditCard,
-  QrCode,
-  DollarSign,
-  Wifi,
-  WifiOff,
+  Loader2,
   RefreshCw,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useOffline } from "@/components/medusa-offline-provider";
 import { PosContext, type PosContextType } from "../../../contexts/pos-context";
-import { logout } from "@/lib/actions";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMedusaAuth } from "@/providers/MedusaAuthProvider";
+import { format, startOfDay, endOfDay } from 'date-fns';
+import { getTodayOrdersSummary } from "@/lib/data/pos";
 
-// Navigation Items (static, can be moved to separate file)
+// Navigation Items
 const navItems: NavItem[] = [
   { icon: Building2, label: "Home", href: "/pos" },
   { icon: Layers, label: "Products", href: "/pos/products" },
   { icon: Users, label: "Customers", href: "/pos/customers", disabled: false },
   { icon: History, label: "Orders", href: "/pos/orders", disabled: false },
-  { icon: FileText, label: "Reports", href: "/pos/reports", disabled: false },
-  { icon: Settings, label: "Settings", href: "/pos/settings", disabled: false },
+  { icon: FileText, label: "Transactions", href: "/pos/transactions", disabled: false },
 ];
 
 interface NavItem {
@@ -124,67 +117,75 @@ function NavItemComponent({
   );
 }
 
-// Offline Status Bar Component
-function OfflineStatusBar() {
-  const { isOnline, pendingSyncCount, isSyncing, manualSync, lastSyncTime } = useOffline();
+// Today's Sales Component with Actions
+function TodaySales({ orderData }: { orderData: any }) {
+
+  let salesData = orderData;
+
+
+  const today = new Date();
+
+
 
   return (
-    <div className={cn(
-      "sticky top-0 z-50 flex items-center justify-between px-4 py-2 text-sm border-b",
-      isOnline ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"
-    )}>
-      <div className="flex items-center gap-2">
-        {isOnline ? (
-          <Wifi className="h-4 w-4" />
-        ) : (
-          <WifiOff className="h-4 w-4" />
-        )}
-        <span className="font-medium">
-          {isOnline ? 'Online Mode' : 'Offline Mode'}
-        </span>
-        {lastSyncTime && isOnline && (
-          <span className="text-xs text-muted-foreground ml-2 hidden sm:inline">
-            Last sync: {lastSyncTime.toLocaleTimeString()}
+    <div className="rounded-lg bg-muted p-4 hover:bg-muted/80 transition-colors">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm text-muted-foreground">Today's Sales</p>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            {format(today, 'MMM dd, yyyy')}
           </span>
-        )}
+     
+          <TrendingUp className="h-4 w-4 text-green-600 flex-shrink-0" />
+        </div>
       </div>
       
-      <div className="flex items-center gap-3">
-        {pendingSyncCount > 0 && (
-          <Badge variant={isOnline ? "default" : "secondary"} className="gap-1">
-            <span>{pendingSyncCount} pending {pendingSyncCount === 1 ? 'item' : 'items'}</span>
-          </Badge>
-        )}
-        
-        <Button 
-          size="sm" 
-          variant="ghost" 
-          onClick={manualSync}
-          disabled={isSyncing || !isOnline}
-          className="h-8"
-        >
-          <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
-          <span className="ml-2 hidden sm:inline">
-            {isSyncing ? 'Syncing...' : 'Sync Now'}
+      <p className="text-2xl font-bold">
+        ₱{salesData.total_sales.toFixed(2)}
+      </p>
+      
+      {salesData.order_count > 0 && (
+        <div className="flex items-center gap-2 mt-1">
+          <span className="text-xs text-green-600 font-medium">
+            {salesData.order_count} orders today
           </span>
-        </Button>
+        </div>
+      )}
+      
+      <div className="mt-3 flex items-center gap-4 text-xs">
+        <div className="flex items-center gap-1">
+          <div className="h-2 w-2 rounded-full bg-green-600 flex-shrink-0" />
+          <span>{salesData.completed_orders} completed</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Users className="h-3 w-3 flex-shrink-0" />
+          <span>{salesData.customer_count} customers</span>
+        </div>
       </div>
+
+      {(salesData.pending_orders > 0 || salesData.total_sales > 0) && (
+        <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground border-t pt-2">
+          {salesData.pending_orders > 0 && (
+            <span>{salesData.pending_orders} pending</span>
+          )}
+          {salesData.average_order_value > 0 && (
+            <span>Avg: ₱{salesData.average_order_value.toFixed(2)}</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 // Sidebar Content Component
-function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
+function SidebarContent({ onNavClick, user, orderData }: {orderData?: any, user: any; onNavClick?: () => void }) {
   const pathname = usePathname();
-  const { pendingSyncCount, isOnline } = useOffline();
   const [draftCount, setDraftCount] = useState(0);
   const router = useRouter();
-  const {toast} = useToast()
-const { logout } = useMedusaAuth() as any;
-  const {logout: authLogout } = useAuth()
-
-
-
+  const { toast } = useToast();
+  const { logout } = useMedusaAuth() as any;
+  const { logout: authLogout } = useAuth();
+  const { first_name, last_name, metadata } = user || {};
 
   const handleLogout = async () => {
     try {
@@ -214,7 +215,6 @@ const { logout } = useMedusaAuth() as any;
         const cookie = cookies[i] as any;
         const eqPos = cookie.indexOf('=');
         const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
-        // Delete cookie by setting expiration to past date
         document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
       }
 
@@ -236,35 +236,28 @@ const { logout } = useMedusaAuth() as any;
         );
       }
 
-              // 6. Call the logout function from your auth system
-            logout()
-        authLogout()
-      
-  
+      // 6. Call the logout function from your auth system
+      logout();
+      authLogout();
 
-      // 8. Redirect to login page
+      // 7. Redirect to login page
       router.push('/login');
       
     } catch (error) {
       console.error('Logout error:', error);
       
-      // Even if logout API fails, still clear local data and redirect
       toast({
         title: "Logged out",
         description: "You have been logged out successfully",
       });
-      
-      // router.push('/login');
     }
   };
-
 
   const getActiveNav = () => {
     if (pathname?.includes("/pos/products")) return "Products";
     if (pathname?.includes("/pos/customers")) return "Customers";
     if (pathname?.includes("/pos/orders")) return "Orders";
-    if (pathname?.includes("/pos/reports")) return "Reports";
-    if (pathname?.includes("/pos/settings")) return "Settings";
+    if (pathname?.includes("/pos/transactions")) return "Transactions";
     return "Home";
   };
 
@@ -285,12 +278,14 @@ const { logout } = useMedusaAuth() as any;
     
     getDraftCount();
     
-    window.addEventListener("storage", getDraftCount);
-    window.addEventListener("draft-updated", getDraftCount);
+    const handleDraftUpdate = () => getDraftCount();
+    
+    window.addEventListener("storage", handleDraftUpdate);
+    window.addEventListener("draft-updated", handleDraftUpdate);
     
     return () => {
-      window.removeEventListener("storage", getDraftCount);
-      window.removeEventListener("draft-updated", getDraftCount);
+      window.removeEventListener("storage", handleDraftUpdate);
+      window.removeEventListener("draft-updated", handleDraftUpdate);
     };
   }, []);
 
@@ -313,8 +308,8 @@ const { logout } = useMedusaAuth() as any;
             <User className="h-4 w-4 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">Staff User</p>
-            <p className="text-xs text-muted-foreground truncate">POS Terminal</p>
+            <p className="text-sm font-medium truncate">{first_name || 'User'} {last_name || ''}</p>
+            <p className="text-xs text-muted-foreground truncate">POS ({metadata?.role?.toUpperCase() || 'USER'})</p>
           </div>
         </div>
       </div>
@@ -338,51 +333,16 @@ const { logout } = useMedusaAuth() as any;
 
         <Separator className="my-4" />
 
-        {/* Quick Stats */}
-        <div className="rounded-lg bg-muted p-4">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm text-muted-foreground">Today's Sales</p>
-            <TrendingUp className="h-4 w-4 text-green-600 flex-shrink-0" />
-          </div>
-          <p className="text-2xl font-bold">₱ 1,234.55</p>
-          <p className="text-xs text-muted-foreground mt-1">+12% from yesterday</p>
-          <div className="mt-3 flex items-center gap-3 text-xs">
-            <div className="flex items-center gap-1">
-              <div className="h-2 w-2 rounded-full bg-green-600 flex-shrink-0" />
-              <span>12 orders</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Users className="h-3 w-3 flex-shrink-0" />
-              <span>34 customers</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Offline Status in Sidebar */}
-        <div className="mt-4 px-2">
-          <div className="rounded-lg bg-muted/50 p-3">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-muted-foreground">Sync Status</p>
-              <div className="flex items-center gap-2">
-                <div className={cn(
-                  "h-2 w-2 rounded-full",
-                  isOnline ? "bg-green-500" : "bg-yellow-500"
-                )} />
-                <span className="text-xs">{isOnline ? 'Online' : 'Offline'}</span>
-              </div>
-            </div>
-            {pendingSyncCount > 0 && (
-              <div className="text-xs text-muted-foreground mt-1">
-                {pendingSyncCount} item{pendingSyncCount !== 1 ? 's' : ''} pending sync
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Today's Sales - Using actions */}
+        <TodaySales orderData={orderData} />
       </ScrollArea>
 
       {/* Footer */}
       <div className="border-t p-4">
-        <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground" onClick={() => handleLogout()}>
+        <button 
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground" 
+          onClick={handleLogout}
+        >
           <LogOut className="h-4 w-4 flex-shrink-0" />
           <span>Logout</span>
         </button>
@@ -392,8 +352,8 @@ const { logout } = useMedusaAuth() as any;
 }
 
 // Mobile Header Component
-function MobileHeader({ onMenuOpen, cartItemCount }: { onMenuOpen: () => void; cartItemCount: number }) {
-  const { isOnline, pendingSyncCount } = useOffline();
+function MobileHeader({ onMenuOpen, user }: { user: any; onMenuOpen: () => void }) {
+  const { isOnline } = useOffline();
   
   return (
     <div className="sticky top-0 z-20 flex items-center justify-between border-b bg-card px-4 py-3 lg:hidden">
@@ -407,11 +367,6 @@ function MobileHeader({ onMenuOpen, cartItemCount }: { onMenuOpen: () => void; c
         )} />
         <Building2 className="h-5 w-5 text-primary" />
         <h1 className="font-semibold">Alayon POS</h1>
-        {pendingSyncCount > 0 && (
-          <Badge variant="secondary" className="text-xs ml-1">
-            {pendingSyncCount}
-          </Badge>
-        )}
       </div>
       <div className="w-10" />
     </div>
@@ -419,7 +374,7 @@ function MobileHeader({ onMenuOpen, cartItemCount }: { onMenuOpen: () => void; c
 }
 
 // Main Layout Content Component
-export function PosLayoutContent({ children }: { children: React.ReactNode }) {
+export function PosLayoutContent({ children, user, orderData }: { children: React.ReactNode; user: any, orderData: any }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [cartItemCount, setCartItemCount] = useState(0);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -443,12 +398,14 @@ export function PosLayoutContent({ children }: { children: React.ReactNode }) {
 
     updateCartCount();
     
-    window.addEventListener("storage", updateCartCount);
-    window.addEventListener("cart-updated", updateCartCount);
+    const handleCartUpdate = () => updateCartCount();
+    
+    window.addEventListener("storage", handleCartUpdate);
+    window.addEventListener("cart-updated", handleCartUpdate);
     
     return () => {
-      window.removeEventListener("storage", updateCartCount);
-      window.removeEventListener("cart-updated", updateCartCount);
+      window.removeEventListener("storage", handleCartUpdate);
+      window.removeEventListener("cart-updated", handleCartUpdate);
     };
   }, []);
 
@@ -465,18 +422,16 @@ export function PosLayoutContent({ children }: { children: React.ReactNode }) {
     cartItemCount,
     openCart,
     closeCart,
-    isCartOpen
+    isCartOpen,
   };
 
   return (
     <PosContext.Provider value={contextValue}>
       <div className="flex h-screen flex-col overflow-hidden bg-background">
-        {/* Offline Status Bar - Shows at top */}
-        
         {/* Mobile Header */}
         <MobileHeader 
+          user={user}
           onMenuOpen={() => setSidebarOpen(true)} 
-          cartItemCount={cartItemCount}
         />
 
         {/* Mobile Sidebar Sheet */}
@@ -485,7 +440,7 @@ export function PosLayoutContent({ children }: { children: React.ReactNode }) {
             <SheetHeader className="border-b p-4">
               <SheetTitle>Menu</SheetTitle>
             </SheetHeader>
-            <SidebarContent onNavClick={() => setSidebarOpen(false)} />
+            <SidebarContent onNavClick={() => setSidebarOpen(false)} user={user} orderData={orderData}/>
           </SheetContent>
         </Sheet>
 
@@ -493,7 +448,7 @@ export function PosLayoutContent({ children }: { children: React.ReactNode }) {
         <div className="flex flex-1 overflow-hidden">
           {/* Desktop Sidebar */}
           <aside className="hidden w-64 flex-col border-r bg-card lg:flex">
-            <SidebarContent />
+            <SidebarContent user={user} orderData={orderData}/>
           </aside>
 
           {/* Main Content Area */}

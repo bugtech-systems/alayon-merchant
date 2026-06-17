@@ -50,18 +50,6 @@ export interface MedusaCartItem {
   };
 }
 
-export interface SimpleTable {
-  id: string;
-  name: string;
-  number: string;
-  capacity: number;
-  status: "available" | "occupied" | "reserved" | "cleaning";
-  current_order_ids?: string[];
-  current_order_numbers?: number[];
-  customer_name?: string;
-  occupied_since?: Date;
-  order_total?: number;
-}
 
 export interface Region {
   id: string;
@@ -95,7 +83,7 @@ export interface Customer {
   id: string;
   first_name: string;
   last_name?: string;
-  email: string;
+  customer_email: string;
   phone?: string;
   customer_group_id?: string;
 }
@@ -111,4 +99,46 @@ export interface DraftOrder {
   customer_name?: string;
   table_ids?: string[];
   notes?: string;
+}
+
+
+
+
+export interface Customer {
+  id: string;
+  first_name: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+  customer_group_id?: string;
+  customer_group?: {
+    id: string;
+    name: string;
+  };
+}
+
+export interface SimpleTable {
+  id: string;
+  name: string;
+  number: string;
+  capacity: number;
+  status?: 'available' | 'occupied' | 'reserved' | 'clearing';
+}
+
+export interface Region {
+  id: string;
+  name: string;
+  currency_code: string;
+  tax_rate: number;
+}
+
+export interface DraftOrder {
+  id: string;
+  name: string;
+  cart: MedusaCart;
+  table_ids?: string[];
+  customer_id?: string;
+  customer_name?: string;
+  item_count: number;
+  total_amount: number;
 }

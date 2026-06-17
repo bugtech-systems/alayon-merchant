@@ -15,8 +15,10 @@ export default async function ProductsPage() {
   if (!user) redirect("/login");
 
   return (
+        <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8">
     <Suspense fallback={<ProductsLayoutSkeleton />}>
       <ProductsApp region={region} user={user} />
     </Suspense>
+    </div>
   );
 }

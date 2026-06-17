@@ -1,7 +1,8 @@
 // components/orders/orders-client.tsx
+
 'use client';
 
-import React, { useState, useTransition, useCallback, useEffect } from 'react';
+import React, { useState, useTransition, useCallback, useEffect, useMemo } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -24,12 +25,27 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { OrderView } from './order-view';
 import { DraftOrderWizard } from '../../app/pos/_components/draft-wizard';
 import { updateOrderStatus, deleteOrder, convertDraftToOrder, deleteDraftOrder, deletePosOrder } from '@/lib/actions/orders';
@@ -49,83 +65,364 @@ import {
   User,
   Calendar,
   DollarSign,
-  ShoppingBag
+  ShoppingBag,
+  MoreVertical,
+  FileText,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  RotateCcw,
+  Users,
+  Filter,
+  ChevronDown,
+  Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import { Badge } from '../ui/badge';
 
-// Status badge component
+// ============================================
+// STATUS CONFIGURATIONS
+// ============================================
+
+const ORDER_STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+  pending: { 
+    label: 'Pending', 
+    icon: <Clock className="h-3 w-3" />,
+    variant: 'secondary' 
+  },
+  processing: { 
+    label: 'Processing', 
+    icon: <RefreshCw className="h-3 w-3" />,
+    variant: 'default' 
+  },
+  completed: { 
+    label: 'Completed', 
+    icon: <CheckCircle className="h-3 w-3" />,
+    variant: 'outline' 
+  },
+  cancelled: { 
+    label: 'Cancelled', 
+    icon: <AlertCircle className="h-3 w-3" />,
+    variant: 'destructive' 
+  },
+  refunded: { 
+    label: 'Refunded', 
+    icon: <RotateCcw className="h-3 w-3" />,
+    variant: 'secondary' 
+  },
+  draft: { 
+    label: 'Draft', 
+    icon: <FileText className="h-3 w-3" />,
+    variant: 'outline' 
+  },
+};
+
+const PAYMENT_STATUS_CONFIG: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+  paid: { label: 'Paid', variant: 'default' },
+  pending: { label: 'Pending', variant: 'secondary' },
+  failed: { label: 'Failed', variant: 'destructive' },
+  refunded: { label: 'Refunded', variant: 'outline' },
+  not_paid: { label: 'Not Paid', variant: 'secondary' },
+};
+
+// ============================================
+// BADGE COMPONENTS
+// ============================================
+
 const OrderStatusBadge = ({ status }: { status: string }) => {
-  const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-    pending: { label: 'Pending', variant: 'secondary' },
-    processing: { label: 'Processing', variant: 'default' },
-    completed: { label: 'Completed', variant: 'outline' },
-    cancelled: { label: 'Cancelled', variant: 'destructive' },
-    refunded: { label: 'Refunded', variant: 'secondary' },
-    draft: { label: 'Draft', variant: 'outline' },
+  const config = ORDER_STATUS_CONFIG[status?.toLowerCase()] || { 
+    label: status, 
+    icon: null, 
+    variant: 'secondary' as const 
   };
   
-  const config = statusConfig[status?.toLowerCase()] || { label: status, variant: 'secondary' };
-  
   return (
-    <Badge variant={config.variant} className="capitalize">
+    <Badge variant={config.variant} className="gap-1.5 capitalize">
+      {config.icon}
       {config.label}
     </Badge>
   );
 };
 
-// Payment status badge
 const PaymentStatusBadge = ({ status }: { status: string }) => {
-  const config: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-    paid: { label: 'Paid', variant: 'default' },
-    pending: { label: 'Pending', variant: 'secondary' },
-    failed: { label: 'Failed', variant: 'destructive' },
-    refunded: { label: 'Refunded', variant: 'outline' },
-    not_paid: { label: 'Not Paid', variant: 'secondary' },
+  const config = PAYMENT_STATUS_CONFIG[status?.toLowerCase()] || { 
+    label: status, 
+    variant: 'secondary' as const 
   };
   
-  const badgeConfig = config[status?.toLowerCase()] || { label: status, variant: 'secondary' };
-  
   return (
-    <Badge variant={badgeConfig.variant} className="capitalize">
-      {badgeConfig.label}
+    <Badge variant={config.variant} className="gap-1.5 capitalize">
+      {config.label}
     </Badge>
   );
 };
 
-// Badge component
-const Badge = ({ children, variant = 'default', className }: { children: React.ReactNode; variant?: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string }) => {
-  const variants = {
-    default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-    secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/90',
-    destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-    outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
-  };
-  
+// ============================================
+// STATS CARDS
+// ============================================
+
+const StatsCards = ({ orders, orderType, isLoading }: { orders: any[]; orderType: string; isLoading?: boolean }) => {
+  const stats = useMemo(() => {
+    const total = orders.length;
+    const totalValue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
+    const completed = orders.filter(o => o.status === 'completed').length;
+    const pending = orders.filter(o => o.status === 'pending' || o.status === 'processing').length;
+    
+    return { total, totalValue, completed, pending };
+  }, [orders]);
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} className="bg-card rounded-lg border p-4 animate-pulse">
+            <div className="h-4 bg-muted rounded w-1/2 mb-2"></div>
+            <div className="h-8 bg-muted rounded w-3/4"></div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
-    <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors", variants[variant], className)}>
-      {children}
-    </span>
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+      <div className="bg-card rounded-lg border p-4 hover:shadow-md transition-shadow">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">Total {orderType === 'drafts' ? 'Drafts' : 'Orders'}</p>
+            <p className="text-2xl font-bold mt-1">{stats.total}</p>
+          </div>
+          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+            <Package className="h-5 w-5 text-primary" />
+          </div>
+        </div>
+      </div>
+      
+      <div className="bg-card rounded-lg border p-4 hover:shadow-md transition-shadow">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">Total Value</p>
+            <p className="text-2xl font-bold mt-1">₱{stats.totalValue.toFixed(2)}</p>
+          </div>
+          <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
+            <DollarSign className="h-5 w-5 text-emerald-500" />
+          </div>
+        </div>
+      </div>
+      
+      {orderType === 'orders' && (
+        <>
+          <div className="bg-card rounded-lg border p-4 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Completed</p>
+                <p className="text-2xl font-bold mt-1 text-emerald-500">{stats.completed}</p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                <CheckCircle className="h-5 w-5 text-emerald-500" />
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-card rounded-lg border p-4 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Pending</p>
+                <p className="text-2xl font-bold mt-1 text-yellow-500">{stats.pending}</p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-yellow-500/10 flex items-center justify-center">
+                <Clock className="h-5 w-5 text-yellow-500" />
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   );
 };
 
-// Mobile Order Card Component
-const MobileOrderCard = ({ order, orderType, onView, onStatusUpdate, onDelete, onConvert }: any) => {
+// ============================================
+// PAGINATION
+// ============================================
+
+const Pagination = ({ 
+  page, 
+  totalPages, 
+  hasNext, 
+  hasPrevious, 
+  total, 
+  orderType,
+  onPageChange,
+  isLoading 
+}: { 
+  page: number; 
+  totalPages: number; 
+  hasNext: boolean; 
+  hasPrevious: boolean;
+  total: number;
+  orderType: string;
+  onPageChange: (page: number) => void;
+  isLoading?: boolean;
+}) => {
+  // Generate page numbers to show
+  const getPageNumbers = useCallback(() => {
+    const pages = [];
+    const maxVisible = 5;
+    let start = Math.max(1, page - Math.floor(maxVisible / 2));
+    let end = Math.min(totalPages, start + maxVisible - 1);
+    
+    if (end - start < maxVisible - 1) {
+      start = Math.max(1, end - maxVisible + 1);
+    }
+    
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
+  }, [page, totalPages]);
+
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2 py-4 border-t mt-4">
+      <div className="text-sm text-muted-foreground order-2 sm:order-1">
+        Showing page {page} of {totalPages} • {total} total {orderType}
+      </div>
+      <div className="flex items-center gap-1 order-1 sm:order-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onPageChange(page - 1)}
+          disabled={!hasPrevious || isLoading}
+          className="h-8 px-2"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        
+        {getPageNumbers().map((p) => (
+          <Button
+            key={p}
+            variant={p === page ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => onPageChange(p)}
+            disabled={isLoading}
+            className={cn(
+              "h-8 w-8 px-0",
+              p === page && "pointer-events-none"
+            )}
+          >
+            {p}
+          </Button>
+        ))}
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onPageChange(page + 1)}
+          disabled={!hasNext || isLoading}
+          className="h-8 px-2"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+// ============================================
+// ACTION DROPDOWN MENU
+// ============================================
+
+const OrderActionsMenu = ({ 
+  order, 
+  orderType,
+  onView,
+  onStatusUpdate,
+  onDelete,
+  onConvert 
+}: {
+  order: any;
+  orderType: string;
+  onView: (order: any) => void;
+  onStatusUpdate: (order: any) => void;
+  onDelete: (order: any) => void;
+  onConvert: (order: any) => void;
+}) => {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-8 w-8">
+          <MoreVertical className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem onClick={() => onView(order)}>
+          <Eye className="mr-2 h-4 w-4" />
+          View Details
+        </DropdownMenuItem>
+        
+        {orderType === 'drafts' ? (
+          <DropdownMenuItem onClick={() => onConvert(order)}>
+            <CreditCard className="mr-2 h-4 w-4" />
+            Convert to Order
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem onClick={() => onStatusUpdate(order)}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Update Status
+          </DropdownMenuItem>
+        )}
+        
+        <DropdownMenuSeparator />
+        
+        <DropdownMenuItem 
+          onClick={() => onDelete(order)}
+          className="text-destructive focus:text-destructive"
+        >
+          <Trash2 className="mr-2 h-4 w-4" />
+          Delete {orderType === 'drafts' ? 'Draft' : 'Order'}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
+// ============================================
+// MOBILE ORDER CARD
+// ============================================
+
+const MobileOrderCard = ({ 
+  order, 
+  orderType, 
+  onView, 
+  onStatusUpdate, 
+  onDelete, 
+  onConvert 
+}: any) => {
+  const statusConfig = ORDER_STATUS_CONFIG[order.status?.toLowerCase()] || { 
+    label: order.status, 
+    icon: null,
+    variant: 'secondary' as const 
+  };
+
   return (
     <div className="bg-card rounded-lg border p-4 space-y-3 hover:shadow-md transition-shadow">
       {/* Header */}
       <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <Package className="h-4 w-4 text-muted-foreground" />
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <Package className="h-4 w-4 text-primary" />
+          </div>
+          <div>
             <span className="font-mono text-sm font-semibold">
               {orderType === 'drafts' ? order.id.slice(0, 8) : `#${order.display_id}`}
             </span>
+            <p className="text-xs text-muted-foreground">
+              {order.created_at && format(new Date(order.created_at), 'MMM dd, yyyy h:mm a')}
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            {order.created_at && format(new Date(order.created_at), 'MMM dd, yyyy h:mm a')}
-          </p>
         </div>
         {orderType === 'drafts' ? (
           <Badge variant="outline">Draft</Badge>
@@ -137,7 +434,7 @@ const MobileOrderCard = ({ order, orderType, onView, onStatusUpdate, onDelete, o
       {/* Customer Info */}
       <div className="flex items-center gap-2 text-sm">
         <User className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="text-foreground">
+        <span className="font-medium">
           {order.customer?.first_name || order.customer_name || order.email?.split('@')[0] || 'Guest'}
         </span>
       </div>
@@ -151,7 +448,7 @@ const MobileOrderCard = ({ order, orderType, onView, onStatusUpdate, onDelete, o
 
       {/* Total and Items */}
       <div className="flex items-center justify-between pt-2 border-t">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <div className="flex items-center gap-1">
             <ShoppingBag className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="text-sm font-medium">
@@ -175,126 +472,24 @@ const MobileOrderCard = ({ order, orderType, onView, onStatusUpdate, onDelete, o
           <Eye className="h-3.5 w-3.5 mr-1" />
           View
         </Button>
-        {orderType === 'drafts' ? (
-          <Button size="sm" variant="default" className="flex-1" onClick={() => onConvert(order)}>
-            <CreditCard className="h-3.5 w-3.5 mr-1" />
-            Convert
-          </Button>
-        ) : (
-          <Button size="sm" variant="outline" className="flex-1" onClick={() => onStatusUpdate(order)}>
-            <RefreshCw className="h-3.5 w-3.5 mr-1" />
-            Update
-          </Button>
-        )}
-        <Button size="sm" variant="destructive" className="flex-1" onClick={() => onDelete(order)}>
-          <Trash2 className="h-3.5 w-3.5 mr-1" />
-          Delete
-        </Button>
+        <div className="relative">
+          <OrderActionsMenu
+            order={order}
+            orderType={orderType}
+            onView={onView}
+            onStatusUpdate={onStatusUpdate}
+            onDelete={onDelete}
+            onConvert={onConvert}
+          />
+        </div>
       </div>
     </div>
   );
 };
 
-// Desktop Table Row Component
-const DesktopOrderRow = ({ order, orderType, onView, onStatusUpdate, onDelete, onConvert }: any) => {
-  return (
-    <tr className="border-b transition-colors hover:bg-muted/50">
-      {/* Order ID */}
-      <td className="p-4 align-middle">
-        <div className="font-mono text-sm font-medium">
-          {orderType === 'drafts' ? order.id.slice(0, 8) : `#${order.display_id}`}
-        </div>
-      </td>
-      
-      {/* Customer */}
-      <td className="p-4 align-middle">
-        <div className="space-y-1">
-          <div className="font-medium">
-            {order.customer?.first_name || order.customer_name || 'Guest'}
-            {order.customer?.last_name && ` ${order.customer.last_name}`}
-          </div>
-          {order.email && (
-            <div className="text-xs text-muted-foreground">{order.email}</div>
-          )}
-        </div>
-      </td>
-      
-      {/* Total */}
-      <td className="p-4 align-middle">
-        <div className="font-semibold">₱{(order.total || 0).toFixed(2)}</div>
-      </td>
-      
-      {/* Status */}
-      <td className="p-4 align-middle">
-        {orderType === 'drafts' ? (
-          <Badge variant="outline">Draft</Badge>
-        ) : (
-          <div className="space-y-1">
-            <OrderStatusBadge status={order.status} />
-            {order.payment_status && (
-              <div className="mt-1">
-                <PaymentStatusBadge status={order.payment_status} />
-              </div>
-            )}
-          </div>
-        )}
-      </td>
-      
-      {/* Items */}
-      <td className="p-4 align-middle">
-        <div className="text-center">{order.items?.length || order.items_count || 0}</div>
-      </td>
-      
-      {/* Date */}
-      <td className="p-4 align-middle">
-        <div className="text-sm">
-          {order.created_at ? format(new Date(order.created_at), 'MMM dd, yyyy') : '—'}
-        </div>
-        <div className="text-xs text-muted-foreground">
-          {order.created_at ? format(new Date(order.created_at), 'h:mm a') : ''}
-        </div>
-      </td>
-      
-      {/* Actions */}
-      <td className="p-4 align-middle">
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onView(order)}
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-          {orderType === 'drafts' ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onConvert(order)}
-            >
-              <CreditCard className="h-4 w-4" />
-            </Button>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onStatusUpdate(order)}
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:text-destructive"
-            onClick={() => onDelete(order)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </td>
-    </tr>
-  );
-};
+// ============================================
+// MAIN ORDERS CLIENT COMPONENT
+// ============================================
 
 interface OrdersClientProps {
   initialData: {
@@ -337,7 +532,7 @@ export function OrdersClient({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   
-  // Local state
+  // State
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
@@ -345,7 +540,11 @@ export function OrdersClient({
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [draftWizardOpen, setDraftWizardOpen] = useState(false);
   const [newStatus, setNewStatus] = useState('');
-  const [orders, setOrders] = useState(orderType === 'drafts' ? initialData.draft_orders || [] : initialData.orders || []);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  const [orders, setOrders] = useState(
+    orderType === 'drafts' ? initialData.draft_orders || [] : initialData.orders || []
+  );
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [pagination, setPagination] = useState({
     count: initialData.count,
@@ -355,7 +554,7 @@ export function OrdersClient({
     has_previous: initialData.has_previous
   });
   
-  // Check if mobile view
+  // Check mobile
   const [isMobile, setIsMobile] = useState(false);
   
   useEffect(() => {
@@ -367,7 +566,7 @@ export function OrdersClient({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Update URL with new params
+  // Update URL params
   const updateUrlParams = useCallback((updates: Record<string, string | number | null | undefined>) => {
     const params = new URLSearchParams(searchParams.toString());
     
@@ -386,22 +585,18 @@ export function OrdersClient({
     });
   }, [router, pathname, searchParams, orderType]);
 
-  // Fetch data from server based on current params
-  const fetchData = useCallback(async () => {
-    const page = parseInt(searchParams.get('page') || String(initialPage));
+  // Fetch data
+  const fetchData = useCallback(async (page?: number) => {
+    const currentPage = page || parseInt(searchParams.get('page') || String(initialPage));
     const limit = parseInt(searchParams.get('limit') || String(initialLimit));
-    const offset = (page - 1) * limit;
+    const offset = (currentPage - 1) * limit;
     
-    // Build filters
     const filters: Record<string, any> = {};
-    
     const search = searchParams.get('search');
     if (search) filters.search = search;
+    if (user?.id) filters.seller_id = user.id;
     
-    if (user && user?.id) {
-      filters.seller_id = user.id;
-    }
-    
+    setIsLoading(true);
     try {
       let response;
       if (orderType === 'drafts') {
@@ -422,59 +617,59 @@ export function OrdersClient({
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error(`Failed to fetch ${orderType}`);
+    } finally {
+      setIsLoading(false);
     }
   }, [user, searchParams, initialPage, initialLimit, orderType]);
 
-  // Refetch when search params change
-  // useEffect(() => {
-  //   fetchData();
-  // }, [fetchData]);
-
   // Handle page change
-  const handlePageChange = (page: number) => {
+  const handlePageChange = useCallback((page: number) => {
     updateUrlParams({ page });
-  };
+    // Immediately update the UI
+    fetchData(page);
+  }, [updateUrlParams, fetchData]);
 
-  // Handle search change with debounce
+  // Handle search
   const handleSearchChange = useCallback((term: string) => {
     setSearchTerm(term);
     const timeoutId = setTimeout(() => {
       updateUrlParams({ search: term || null, page: 1 });
+      fetchData(1);
     }, 500);
     return () => clearTimeout(timeoutId);
-  }, [updateUrlParams]);
+  }, [updateUrlParams, fetchData]);
 
-  // Handle view order
+  // Handle actions
   const handleView = (order: any) => {
     setSelectedOrder(order);
     setViewDialogOpen(true);
   };
 
-  // Handle status update
   const handleStatusUpdate = async () => {
     if (!selectedOrder || !newStatus) return;
     
     setStatusDialogOpen(false);
-    
+    setIsLoading(true);
     try {
       const result = await updateOrderStatus(selectedOrder.id, newStatus);
       if (result.success) {
         toast.success(`Order status updated to ${newStatus}`);
-        fetchData();
+        await fetchData(pagination.page);
       } else {
         throw new Error(result.error);
       }
     } catch (error) {
       toast.error('Failed to update order status');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Handle delete order
   const handleDelete = async () => {
     if (!selectedOrder) return;
     
     setDeleteDialogOpen(false);
-    
+    setIsLoading(true);
     try {
       let result;
       if (orderType === 'drafts') {
@@ -485,26 +680,27 @@ export function OrdersClient({
       
       if (result.success) {
         toast.success(`${orderType === 'drafts' ? 'Draft order' : 'Order'} deleted successfully`);
-        fetchData();
+        await fetchData(pagination.page);
       } else {
         throw new Error(result.error);
       }
     } catch (error) {
       toast.error(`Failed to delete ${orderType === 'drafts' ? 'draft order' : 'order'}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Handle convert draft to order
   const handleConvertToOrder = async () => {
     if (!selectedOrder) return;
     
     setConvertDialogOpen(false);
-    
+    setIsLoading(true);
     try {
       const result = await convertDraftToOrder(selectedOrder.id);
       if (result.success) {
         toast.success('Draft order converted to regular order successfully');
-        fetchData();
+        await fetchData(pagination.page);
         const params = new URLSearchParams(searchParams.toString());
         params.set('type', 'orders');
         router.push(`${pathname}?${params.toString()}`);
@@ -513,106 +709,12 @@ export function OrdersClient({
       }
     } catch (error) {
       toast.error('Failed to convert draft order');
-      console.error(error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const { page, total_pages, has_next, has_previous } = pagination;
-
-  // Pagination component
-  const Pagination = () => {
-    if (total_pages <= 1) return null;
-    
-    return (
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2 py-4">
-        <div className="text-sm text-muted-foreground order-2 sm:order-1">
-          Showing page {page} of {total_pages} • {pagination.count} total {orderType}
-        </div>
-        <div className="flex gap-2 order-1 sm:order-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handlePageChange(page - 1)}
-            disabled={!has_previous || isPending}
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handlePageChange(page + 1)}
-            disabled={!has_next || isPending}
-          >
-            Next
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
-        </div>
-      </div>
-    );
-  };
-
-  // Stats Cards
-  const StatsCards = () => {
-    const totalOrders = pagination.count;
-    const totalValue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
-    
-    return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-card rounded-lg border p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Total {orderType === 'drafts' ? 'Drafts' : 'Orders'}</p>
-              <p className="text-2xl font-bold mt-1">{totalOrders}</p>
-            </div>
-            <Package className="h-8 w-8 text-muted-foreground" />
-          </div>
-        </div>
-        
-        <div className="bg-card rounded-lg border p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Total Value</p>
-              <p className="text-2xl font-bold mt-1">₱{totalValue.toFixed(2)}</p>
-            </div>
-            <DollarSign className="h-8 w-8 text-muted-foreground" />
-          </div>
-        </div>
-        
-        {orderType === 'orders' && (
-          <>
-            <div className="bg-card rounded-lg border p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Completed</p>
-                  <p className="text-2xl font-bold mt-1">
-                    {orders.filter(o => o.status === 'completed').length}
-                  </p>
-                </div>
-                <div className="h-8 w-8 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
-                  <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-card rounded-lg border p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Pending</p>
-                  <p className="text-2xl font-bold mt-1">
-                    {orders.filter(o => o.status === 'pending').length}
-                  </p>
-                </div>
-                <div className="h-8 w-8 rounded-full bg-yellow-100 dark:bg-yellow-900/20 flex items-center justify-center">
-                  <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-    );
-  };
+  const { page, total_pages, has_next, has_previous, count } = pagination;
 
   return (
     <>
@@ -624,119 +726,170 @@ export function OrdersClient({
             placeholder={`Search ${orderType === 'drafts' ? 'draft orders' : 'orders'} by ID, customer, email...`}
             value={searchTerm}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-9"
+            className="pl-9 h-10"
           />
+          {searchTerm && (
+            <button
+              onClick={() => handleSearchChange('')}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
         {orderType === 'drafts' && (
-          <Button onClick={() => setDraftWizardOpen(true)} className="gap-2">
+          <Button onClick={() => setDraftWizardOpen(true)} className="gap-2 h-10">
             <Plus className="h-4 w-4" />
-            Create Draft Order
+            Create Draft
           </Button>
         )}
       </div>
 
       {/* Stats Cards */}
-      <StatsCards />
+      <StatsCards orders={orders} orderType={orderType} isLoading={isLoading} />
 
-      {/* Orders List - Desktop Table View */}
-      {!isMobile ? (
+      {/* Orders List */}
+      {isLoading && orders.length === 0 ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : orders.length === 0 ? (
+        <div className="text-center py-12 bg-card rounded-lg border">
+          <Package className="h-12 w-12 mx-auto mb-3 text-muted-foreground/50" />
+          <p className="text-muted-foreground">No {orderType} found</p>
+          <p className="text-sm text-muted-foreground mt-1">Try adjusting your search or filters</p>
+        </div>
+      ) : !isMobile ? (
+        /* Desktop Table View */
         <div className="bg-card rounded-lg border overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-muted/50 border-b">
-                <tr>
-                  <th className="text-left p-4 font-medium">Order ID</th>
-                  <th className="text-left p-4 font-medium">Customer</th>
-                  <th className="text-left p-4 font-medium">Total</th>
-                  <th className="text-left p-4 font-medium">Status</th>
-                  <th className="text-center p-4 font-medium">Items</th>
-                  <th className="text-left p-4 font-medium">Date</th>
-                  <th className="text-center p-4 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-12 text-muted-foreground">
-                      <Package className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                      <p>No {orderType} found</p>
-                      <p className="text-sm mt-1">Try adjusting your search</p>
-                    </td>
-                  </tr>
-                ) : (
-                  orders.map((order) => (
-                    <DesktopOrderRow
-                      key={order.id}
-                      order={order}
-                      orderType={orderType}
-                      onView={handleView}
-                      onStatusUpdate={(o: any) => {
-                        setSelectedOrder(o);
-                        setNewStatus(o.status);
-                        setStatusDialogOpen(true);
-                      }}
-                      onDelete={(o: any) => {
-                        setSelectedOrder(o);
-                        setDeleteDialogOpen(true);
-                      }}
-                      onConvert={(o: any) => {
-                        setSelectedOrder(o);
-                        setConvertDialogOpen(true);
-                      }}
-                    />
-                  ))
-                )}
-              </tbody>
-            </table>
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead className="font-medium">Order ID</TableHead>
+                  <TableHead className="font-medium">Customer</TableHead>
+                  <TableHead className="font-medium text-right">Total</TableHead>
+                  <TableHead className="font-medium">Status</TableHead>
+                  <TableHead className="font-medium text-center">Items</TableHead>
+                  <TableHead className="font-medium">Date</TableHead>
+                  <TableHead className="font-medium text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {orders.map((order) => (
+                  <TableRow key={order.id} className="hover:bg-muted/30">
+                    <TableCell className="font-mono text-sm font-medium">
+                      {orderType === 'drafts' ? order.id.slice(0, 8) : `#${order.display_id}`}
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-0.5">
+                        <div className="font-medium">
+                          {order.customer?.first_name || order.customer_name || 'Guest'}
+                          {order.customer?.last_name && ` ${order.customer.last_name}`}
+                        </div>
+                        {order.email && (
+                          <div className="text-xs text-muted-foreground">{order.email}</div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">
+                      ₱{(order.total || 0).toFixed(2)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <OrderStatusBadge status={order.status} />
+                        {orderType === 'orders' && order.payment_status && (
+                          <div className="mt-1">
+                            <PaymentStatusBadge status={order.payment_status} />
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {order.items?.length || order.items_count || 0}
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        {order.created_at ? format(new Date(order.created_at), 'MMM dd, yyyy') : '—'}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {order.created_at ? format(new Date(order.created_at), 'h:mm a') : ''}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <OrderActionsMenu
+                        order={order}
+                        orderType={orderType}
+                        onView={handleView}
+                        onStatusUpdate={(o) => {
+                          setSelectedOrder(o);
+                          setNewStatus(o.status);
+                          setStatusDialogOpen(true);
+                        }}
+                        onDelete={(o) => {
+                          setSelectedOrder(o);
+                          setDeleteDialogOpen(true);
+                        }}
+                        onConvert={(o) => {
+                          setSelectedOrder(o);
+                          setConvertDialogOpen(true);
+                        }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         </div>
       ) : (
         /* Mobile Card View */
         <div className="space-y-3">
-          {orders.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground bg-card rounded-lg border">
-              <Package className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>No {orderType} found</p>
-              <p className="text-sm mt-1">Try adjusting your search</p>
-            </div>
-          ) : (
-            orders.map((order) => (
-              <MobileOrderCard
-                key={order.id}
-                order={order}
-                orderType={orderType}
-                onView={handleView}
-                onStatusUpdate={(o: any) => {
-                  setSelectedOrder(o);
-                  setNewStatus(o.status);
-                  setStatusDialogOpen(true);
-                }}
-                onDelete={(o: any) => {
-                  setSelectedOrder(o);
-                  setDeleteDialogOpen(true);
-                }}
-                onConvert={(o: any) => {
-                  setSelectedOrder(o);
-                  setConvertDialogOpen(true);
-                }}
-              />
-            ))
-          )}
+          {orders.map((order) => (
+            <MobileOrderCard
+              key={order.id}
+              order={order}
+              orderType={orderType}
+              onView={handleView}
+              onStatusUpdate={(o: any) => {
+                setSelectedOrder(o);
+                setNewStatus(o.status);
+                setStatusDialogOpen(true);
+              }}
+              onDelete={(o: any) => {
+                setSelectedOrder(o);
+                setDeleteDialogOpen(true);
+              }}
+              onConvert={(o: any) => {
+                setSelectedOrder(o);
+                setConvertDialogOpen(true);
+              }}
+            />
+          ))}
         </div>
       )}
 
       {/* Pagination */}
-      <Pagination />
+      <Pagination
+        page={page}
+        totalPages={total_pages}
+        hasNext={has_next}
+        hasPrevious={has_previous}
+        total={count}
+        orderType={orderType}
+        onPageChange={handlePageChange}
+        isLoading={isLoading}
+      />
 
-      {/* Draft Order Wizard */}
-      <DraftOrderWizard 
+      {/* Dialogs */}
+      {/* <DraftOrderWizard 
         open={draftWizardOpen}
         onOpenChange={setDraftWizardOpen}
         onSuccess={() => {
-          fetchData();
+          fetchData(1);
           toast.success('Draft order created successfully');
         }}
-      />
+      /> */}
 
       {/* View Order Dialog */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
@@ -797,14 +950,15 @@ export function OrdersClient({
             <Button variant="outline" onClick={() => setStatusDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleStatusUpdate}>
+            <Button onClick={handleStatusUpdate} disabled={isLoading}>
+              {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               Update Status
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Convert Draft to Order Confirmation Dialog */}
+      {/* Convert Dialog */}
       <AlertDialog open={convertDialogOpen} onOpenChange={setConvertDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -817,14 +971,15 @@ export function OrdersClient({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConvertToOrder}>
+            <AlertDialogAction onClick={handleConvertToOrder} disabled={isLoading}>
+              {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               Convert to Order
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -837,7 +992,12 @@ export function OrdersClient({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction 
+              onClick={handleDelete} 
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={isLoading}
+            >
+              {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

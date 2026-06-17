@@ -8,7 +8,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Search, RefreshCw, History, ShoppingCart, Save, Tag, Users, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
-import { CartSidebar } from "./sidebar-cart";
+// import { CartSidebar } from "./sidebar-cart";
+import { CartSidebar } from "./cart-sidebar";
 import { ProductCard } from "./product-card";
 import { DraftsDialog } from "./drafts-dialog";
 import { PaymentDialog } from "./payment-dialog";
@@ -34,7 +35,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTableIds, setSelectedTableIds] = useLocalStorage<string[]>("current_order_table_ids", []);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [orderNotes, setOrderNotes] = useState("");
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
@@ -101,12 +102,15 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
         customer_group_id: pricingContext.customerGroupId,
         pricing_strategy: pricingContext.pricingStrategy
       });
+      if(cart.customer_id){
+        setSelectedCustomer(cart.customer_id)
+      }
     }
   }, [pricingContext, cart?.id, updateMetadata]);
   
   // Handle customer change
   const handleCustomerChange = useCallback(async (customer: Customer | null) => {
-    setSelectedCustomer(customer);
+    setSelectedCustomer(customer?.id);
     await attachCustomer(customer);
     
     // Update pricing context for customer-specific pricing
@@ -155,7 +159,6 @@ const handleCheckout = useCallback(async () => {
     });
   }
 }, [cart, prepareCartForCheckout, toast]);
-
 
   // Handle add to cart with pricing strategy tracking
   const handleAddToCart = useCallback(async (params: {
@@ -315,8 +318,6 @@ const handleCheckout = useCallback(async () => {
   
 
 
-console.log(cart, 'CAAART')
-
 
   // Pricing info component for header
   const PricingInfoBadge = () => (
@@ -343,6 +344,7 @@ console.log(cart, 'CAAART')
   );
   
   const cartSidebarProps = {
+    ...pricingContext,
     cart,
     region,
     selectedTableIds,

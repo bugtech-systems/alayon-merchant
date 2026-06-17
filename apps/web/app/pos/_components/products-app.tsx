@@ -66,13 +66,12 @@ export function ProductsApp({ region, user }: ProductsAppProps) {
     limit,
     offset,
     search: debouncedSearch || undefined,
+    user
   });
-
 
   const products = data?.products || [];
   const totalCount = data?.count || 0;
   const totalPages = Math.ceil(totalCount / limit);
-  console.log(data?.products, 'PRODDS')
   // Update URL when search or page changes
   const updateUrl = useCallback(
     (newSearch: string, newPage: number) => {
@@ -104,7 +103,6 @@ export function ProductsApp({ region, user }: ProductsAppProps) {
     setPriceListEditorOpen(true);
   };
 
-  const currencySymbol = region.currency_code?.toUpperCase() || "PHP";
 
   if (error) {
     return (
@@ -116,20 +114,21 @@ export function ProductsApp({ region, user }: ProductsAppProps) {
     );
   }
 
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Products</h1>
-          <p className="text-sm text-muted-foreground">
+          {/* <p className="text-sm text-muted-foreground">
             Manage products for region: {region.name} ({currencySymbol})
             {userPriceListId && (
               <span className="ml-2 inline-flex items-center gap-1 text-xs bg-primary/10 px-2 py-0.5 rounded-full">
                 Price list applied
               </span>
             )}
-          </p>
+          </p> */}
         </div>
       </div>
 

@@ -21,7 +21,7 @@ import { z } from "zod"
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL ||
-  "https://api.sharewin.pro";
+  "https://api.alayon.store";
 
 // Types
 export interface CustomerFilters {
@@ -183,12 +183,7 @@ export async function getCustomers(
     }
 
     // Fetch customers from Medusa
-    const response = await sdk.client.fetch<{
-      customers: B2BCustomer[]
-      count: number
-      offset: number
-      limit: number
-    }>(`/dashboard/customers`, {
+    const response = await sdk.client.fetch(`/dashboard/customers`, {
       method: "GET",
       query: queryParams,
       headers,
@@ -631,7 +626,7 @@ export const retrieveCustomer = async (): Promise<B2BCustomer | null> => {
   }
 
   return await sdk.client
-    .fetch<{ customer: B2BCustomer }>(`/store/customers/me`, {
+    .fetch(`/store/customers/me`, {
       method: "GET",
       query: {
         fields: "*orders",
@@ -698,6 +693,33 @@ export async function transferCart() {
 
   const cartCacheTag = await getCacheTag("carts")
   revalidateTag(cartCacheTag, "max")
+}
+
+export async function assignCart(id: any, customerId: any) {
+  const cartId = id || await getCartId()
+
+  if (!cartId) {
+    return
+  }
+
+  const headers = {
+    ...(await getAuthHeaders()),
+  }
+
+   const response = await sdk.client.fetch(`/dashboard/carts/${cartId}/customer`, {
+          method: "POST",
+          body: {customer_id: customerId},
+          headers: {
+            "Content-Type": "application/json",
+            ...headers,
+          },
+        });
+
+
+
+  const cartCacheTag = await getCacheTag("carts")
+  revalidateTag(cartCacheTag, "max")
+  return response
 }
 
 export const addCustomerAddress = async (
@@ -827,9 +849,7 @@ export async function createQuickCustomer(customerData: any) {
       ...customerData
     }
 
-      const response = await sdk.client.fetch<{
-          customer: any;
-        }>(`/dashboard/customers`, {
+      const response = await sdk.client.fetch(`/dashboard/customers`, {
           method: "POST",
           body: newData,
           headers: {
@@ -843,7 +863,7 @@ export async function createQuickCustomer(customerData: any) {
     return response?.data;
   } catch (error) {
     console.error('Error creating guest customer:', error);
-    return null;
+    return medusaError(error);
   }
 }
 

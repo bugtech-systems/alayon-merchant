@@ -1,8 +1,9 @@
 // app/orders/page.tsx (Server Component)
 import { Suspense } from 'react';
-import { OrdersClientWrapper } from '../_components/orders-client-wrapper';
+import { OrdersClient } from '@/components/orders/orders-client';
 import { OrderTableSkeleton } from '@/components/ui/table-skeleton';
 import { retrieveUser } from '@/lib/data';
+import { listPosOrders, listDraftOrders } from '@/lib/data/orders';
 
 interface PageProps {
   searchParams: Promise<{
@@ -76,13 +77,16 @@ export default async function OrdersPage({ searchParams }: PageProps) {
     filters.customer_id = params.customer_id;
   }
   
-  // // Seller filter based on user role
-  // if (user && user?.id) {
-  //   filters.seller_id = user.id;
-  // }
-  
   if(user?.employee?.company?.id){
     filters.company_id = user?.employee?.company?.id;
+  }
+  
+  // Fetch initial data based on order type
+  let initialData;
+  if (orderType === 'drafts') {
+    initialData = await listDraftOrders(limit, offset, filters);
+  } else {
+    initialData = await listPosOrders(limit, offset, filters);
   }
   
   return (
@@ -95,7 +99,8 @@ export default async function OrdersPage({ searchParams }: PageProps) {
       </div>
 
       <Suspense fallback={<OrderTableSkeleton />}>
-        <OrdersClientWrapper 
+        <OrdersClient 
+          initialData={initialData}
           initialPage={page}
           initialLimit={limit}
           initialSortField={sortField}
@@ -109,10 +114,7 @@ export default async function OrdersPage({ searchParams }: PageProps) {
           initialMaxTotal={params.max_total || ''}
           initialCustomerId={params.customer_id || ''}
           user={user}
-          initialOrderType={orderType}
-          filters={filters}
-          limit={limit}
-          offset={offset}
+          orderType={orderType}
         />
       </Suspense>
     </div>

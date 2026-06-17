@@ -3,6 +3,8 @@ import { Suspense } from "react";
 import { PosLayoutContent } from "./_components/pos-layout-content";
 import { Spinner } from "@/components/ui/spinner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { retrieveUser } from "@/lib/data";
+import { getTodayOrdersSummary } from "@/lib/data/pos";
 
 // This is a Server Component by default (no "use client" directive)
 export const metadata = {
@@ -14,11 +16,14 @@ interface PosLayoutProps {
   children: React.ReactNode;
 }
 
-export default function PosLayout({ children }: PosLayoutProps) {
+export default async function PosLayout({ children }: PosLayoutProps) {
+  const user = await retrieveUser();
+    const sellerId = user?.id;
+     const data = await getTodayOrdersSummary(sellerId);
   return (
       <Suspense fallback={<Spinner />}>
         <TooltipProvider>
-        <PosLayoutContent>
+        <PosLayoutContent user={user} orderData={data}>
           {children}
         </PosLayoutContent>
         </TooltipProvider>

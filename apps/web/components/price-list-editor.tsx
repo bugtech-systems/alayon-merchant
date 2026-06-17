@@ -107,7 +107,7 @@ export const usePriceList = (
       const variantPriceObjects = new Map<string, PriceListPrice>();
 
       console.log(priceList, 'pssaaa')
-      const sortedPrices = priceList?.prices.sort((a, b) => {
+      const sortedPrices = priceList?.prices.filter(a => a.rules_count).sort((a, b) => {
         if (a.created_at && b.created_at) {
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         }
@@ -122,7 +122,8 @@ export const usePriceList = (
       // Group prices by variant_id
       const pricesByVariant = new Map<string, PriceListPrice[]>();
       for (const price of sortedPrices) {
-        if (!pricesByVariant.get(price.variant_id) && !price.deleted_at) {
+        console.log(price, 'PPPPP')
+        if (!pricesByVariant.get(price.variant_id) && !price.deleted_at ) {
           pricesByVariant.set(price.variant_id, []);
           pricesByVariant.get(price.variant_id)!.push(price);
         }
@@ -228,7 +229,6 @@ export function PriceListEditor({
   onSuccess,
 }: PriceListEditorProps) {
   const [variantPrices, setVariantPrices] = useState<Record<string, string>>({});
-  const [activeTab, setActiveTab] = useState<"variants" | "summary">("variants");
 
   // Fetch data
   const {data, isLoading} = usePriceList(priceListId, {currencyCode: 'php', regionId: region?.id}) as any;
@@ -265,6 +265,8 @@ export function PriceListEditor({
     setVariantPrices(initial);
   }, [priceList, variantPriceMap, product, region?.currency_code]);
 
+
+  console.log(priceList, variantPriceMap, product, 'PRICC')
 
   const handlePriceChange = (variantId: string, value: string) => {
     setVariantPrices((prev) => ({ ...prev, [variantId]: value }));
@@ -324,7 +326,7 @@ export function PriceListEditor({
   const currencySymbol = getCurrencySymbol(region?.currency_code || 'php');
   const taxNote = isTaxInclusive ? "(prices are tax-inclusive)" : "(prices exclude tax)";
 
-
+  console.log(product, data, 'price editor')
   if (!open) return null;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -389,17 +391,8 @@ export function PriceListEditor({
             </div>
 
             {/* Main Content */}
-            <div className="lg:col-span-2 flex flex-col overflow-hidden">
-              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 flex flex-col">
-                <div className="border-b px-6">
-                  <TabsList>
-                    <TabsTrigger value="variants">Variants</TabsTrigger>
-                    <TabsTrigger value="summary">Summary</TabsTrigger>
-                  </TabsList>
-                </div>
-
-                <TabsContent value="variants" className="flex-1 overflow-hidden m-0 p-6">
-                  <ScrollArea className="h-full">
+            <div className="lg:col-span-2 flex p-2 flex-col overflow-hidden">
+               <ScrollArea className="h-full">
                     {isLoading ? (
                       <div className="flex justify-center py-12">
                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -412,7 +405,7 @@ export function PriceListEditor({
                           <TableHeader>
                             <TableRow>
                               <TableHead>Variant</TableHead>
-                              <TableHead>Default Price</TableHead>
+                              <TableHead>SRP Price</TableHead>
                               <TableHead>Price List Price ({currencySymbol})</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -453,48 +446,6 @@ export function PriceListEditor({
                       </div>
                     )}
                   </ScrollArea>
-                </TabsContent>
-
-                <TabsContent value="summary" className="flex-1 overflow-auto m-0 p-6">
-                  <div className="space-y-4">
-                    <h3 className="font-semibold">Summary of Changes</h3>
-                    <div className="rounded-md border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Variant</TableHead>
-                            <TableHead>Current Price List Price</TableHead>
-                            <TableHead>New Price List Price</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {product?.variants.map((variant) => {
-                            const currentPriceListPrice = priceList?.prices.find(
-                              (p) => p.variant_id === variant.id
-                            )?.amount;
-                            const newPrice = variantPrices[variant.id];
-                            return (
-                              <TableRow key={variant.id}>
-                                <TableCell>{variant.title || "Default Variant"}</TableCell>
-                                <TableCell>
-                                  {currentPriceListPrice
-                                    ? formatCurrency(currentPriceListPrice, region?.currency_code)
-                                    : "Not set"}
-                                </TableCell>
-                                <TableCell>
-                                  {newPrice
-                                    ? formatCurrency(parseFloat(newPrice), region?.currency_code)
-                                    : "Removed"}
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-                </TabsContent>
-              </Tabs>
             </div>
           </div>
         </div>

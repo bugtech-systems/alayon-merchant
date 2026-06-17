@@ -572,7 +572,7 @@ const productsResponse = await adminFetch("/admin/products", {
     limit: 100,
     region_id: region?.id,
     // currency_code: region?.currency_code, // or your desired currency
-    fields: "id,title,thumbnail,handle,categories,*variants,variants.id,variants.title,variants.sku,variants.inventory_quantity,*variants.prices",
+    fields: "id,title,thumbnail,handle,status,*categories,*variants,variants.id,variants.title,variants.sku,variants.inventory_quantity,*variants.prices",
     price_list_id: [priceListId],  // Array of price list IDs
     // Optional: Add other filters
     // status: ["published"],

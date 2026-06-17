@@ -4,7 +4,7 @@ import { sdk } from "@/lib/config";
 import { useToast } from "@/hooks/use-toast";
 import { MedusaCart, MedusaCartItem, Customer, Region } from "../types";
 import { adminFetch } from "@/lib/apiClient";
-import { updateLineItemPrice } from "@/lib/actions";
+import { assignCart, updateLineItemPrice } from "@/lib/actions";
 import { getFinalPrice } from "@/lib/utils";
 
 interface UsePosCartProps {
@@ -78,7 +78,7 @@ const updateCartState = useCallback((cartData: MedusaCart | null) => {
     try {
       // Fetch cart with expanded fields for pricing
       const response = await sdk.store.cart.retrieve(storedCartId, {
-        fields: "*items,items.metadata,items.unit_price,items.subtotal,items.total"
+        fields: "customer_id,*items,items.metadata,items.unit_price,items.subtotal,items.total"
       });
 
       const cartData = response.cart || response;
@@ -436,10 +436,7 @@ const addToCart = useCallback(async (params: any) => {
     
     try {
       if (customer) {
-        await sdk.store.cart.update(storedCartId, { 
-          customer_id: customer.id, 
-          email: customer.email 
-        });
+        await assignCart(storedCartId, customer?.id);
       } else {
         await sdk.store.cart.update(storedCartId, { customer_id: null });
       }

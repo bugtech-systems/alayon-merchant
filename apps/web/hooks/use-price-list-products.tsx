@@ -1,6 +1,8 @@
 // hooks/use-price-list-products-enhanced.ts
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { adminFetch } from "@/lib/apiClient";
+import { listPriceListProducts } from "@/lib/data/products";
+import { retrieveUser } from "@/lib/data";
 
 export interface PriceListProductFilters {
   search?: string;
@@ -20,6 +22,7 @@ interface UsePriceListProductsOptions {
   search?: string;
   filters?: PriceListProductFilters;
   enabled?: boolean;
+  user?: any;
 }
 
 export const usePriceListProducts = (
@@ -27,7 +30,6 @@ export const usePriceListProducts = (
   options: UsePriceListProductsOptions = {}
 ) => {
   const { limit = 10, offset = 0, search = "", filters = {}, enabled = true } = options;
-
   const buildQueryParams = () => {
     const params = new URLSearchParams({
       limit: limit.toString(),
@@ -36,9 +38,9 @@ export const usePriceListProducts = (
     });
 
     // Add price list ID filter
-    if (priceListId) {
-      params.append("price_list_id[]", priceListId);
-    }
+    // if (priceListId) {
+    //   params.append("price_list_id[]", priceListId);
+    // }
 
     // Add search query
     if (search) {
@@ -81,40 +83,43 @@ export const usePriceListProducts = (
   return useQuery({
     queryKey: ["price-list-products", priceListId, { limit, offset, search, filters }],
     queryFn: async () => {
+        console.log(options, 'OPTTTS')
+     
+
       if (!priceListId) {
         return { products: [], count: 0, hasMore: false };
       }
 
       try {
-        const params = buildQueryParams();
-        const response = await adminFetch(`/admin/products?${params.toString()}`);
+        const response = await listPriceListProducts({priceListId, countryCode: 'php'})
         
         const products = response.products || [];
         const count = response.count || products.length;
 
         // Enhance products with price list specific data
-        const enhancedProducts = products.map((product: any) => ({
-          ...product,
-          // Get variants with their prices
-          variants: product.variants?.map((variant: any) => ({
-            ...variant,
-            // Mark which prices come from this price list
-            price_list_prices: variant.prices?.filter((price: any) => 
-              price.price_list_id === priceListId
-            ) || [],
-            // Get the specific price for this price list
-            price_list_price: variant.prices?.find((price: any) => 
-              price.price_list_id === priceListId
-            ),
-          })),
-          // Calculate if product has any prices in this price list
-          has_price_list_prices: product.variants?.some((variant: any) =>
-            variant.prices?.some((price: any) => price.price_list_id === priceListId)
-          ) || false,
-        }));
-
+        // const enhancedProducts = products.map((product: any) => ({
+        //   ...product,
+        //   // Get variants with their prices
+        //   variants: product.variants?.map((variant: any) => ({
+        //     ...variant,
+        //     // Mark which prices come from this price list
+        //     price_list_prices: variant.prices?.filter((price: any) => 
+        //       price.price_list_id === priceListId
+        //     ) || [],
+        //     // Get the specific price for this price list
+        //     price_list_price: variant.prices?.find((price: any) => 
+        //       price.price_list_id === priceListId
+        //     ),
+        //   })),
+        //   // Calculate if product has any prices in this price list
+        //   has_price_list_prices: product.variants?.some((variant: any) =>
+        //     variant.prices?.some((price: any) => price.price_list_id === priceListId)
+        //   ) || false,
+        // }));
+          console.log(products, 'PRODDS')
         return { 
-          products: enhancedProducts, 
+          products: products, 
+          original_products: products,
           count,
           hasMore: offset + limit < count 
         };
