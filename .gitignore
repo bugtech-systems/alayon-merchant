@@ -30,7 +30,7 @@ dist
 
 # Debug
 npm-debug.log*
-
+apps/web/next-env.d.ts
 # Misc
 .DS_Store
 *.pem
