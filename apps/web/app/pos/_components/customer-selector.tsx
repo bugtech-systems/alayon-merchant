@@ -145,6 +145,7 @@ export function CustomerSelector({
 
   const handleClear = async () => {
     await onClear();
+    setSelected(null)
     setIsOpen(false);
   };
 
@@ -178,6 +179,8 @@ export function CustomerSelector({
         phone: newCustomer.phone,
       });
       
+
+        console.log(response, 'RESPP')
       // Refresh customer list
       await fetchCustomers();
       

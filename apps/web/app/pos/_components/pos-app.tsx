@@ -110,7 +110,11 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
   
   // Handle customer change
   const handleCustomerChange = useCallback(async (customer: Customer | null) => {
+    if(customer){
     setSelectedCustomer(customer?.id);
+    } else {
+    setSelectedCustomer(null)
+    }
     await attachCustomer(customer);
     
     // Update pricing context for customer-specific pricing
@@ -120,6 +124,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
         pricing_strategy: 'customer_group'
       });
     }
+    refreshCart(cart?.id)
   }, [attachCustomer, updateMetadata]);
   
   // Handle notes change with debounce

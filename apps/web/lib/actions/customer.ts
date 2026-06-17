@@ -722,6 +722,32 @@ export async function assignCart(id: any, customerId: any) {
   return response
 }
 
+export async function removeCart(id: any) {
+  const cartId = id || await getCartId()
+
+  if (!cartId) {
+    return
+  }
+
+  const headers = {
+    ...(await getAuthHeaders()),
+  }
+
+   const response = await sdk.client.fetch(`/dashboard/carts/${cartId}/customer`, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            ...headers,
+          },
+        });
+
+
+
+  const cartCacheTag = await getCacheTag("carts")
+  revalidateTag(cartCacheTag, "max")
+  return response
+}
+
 export const addCustomerAddress = async (
   _currentState: unknown,
   formData: FormData

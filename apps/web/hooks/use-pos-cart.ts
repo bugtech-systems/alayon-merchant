@@ -4,7 +4,7 @@ import { sdk } from "@/lib/config";
 import { useToast } from "@/hooks/use-toast";
 import { MedusaCart, MedusaCartItem, Customer, Region } from "../types";
 import { adminFetch } from "@/lib/apiClient";
-import { assignCart, updateLineItemPrice } from "@/lib/actions";
+import { assignCart, removeCart, updateLineItemPrice } from "@/lib/actions";
 import { getFinalPrice } from "@/lib/utils";
 
 interface UsePosCartProps {
@@ -438,7 +438,7 @@ const addToCart = useCallback(async (params: any) => {
       if (customer) {
         await assignCart(storedCartId, customer?.id);
       } else {
-        await sdk.store.cart.update(storedCartId, { customer_id: null });
+        await removeCart(storedCartId);
       }
       await refreshCart(storedCartId);
     } catch (error) {
