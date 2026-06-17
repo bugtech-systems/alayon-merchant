@@ -1,6 +1,6 @@
 "use server"
 
-import { sdk } from "@/lib/medusa/config"
+import { sdk } from "@/lib/config"
 import {
   getAuthHeaders,
   getCacheOptions,
@@ -186,3 +186,23 @@ export const getCompanyProducts = async (companyId: string) => {
      
 };
 
+export const listCompanies = async (filter: any) => {
+   const headers = {
+    ...(await getAuthHeaders()),
+  }
+
+  const next = {
+    ...( await getCacheOptions("companies")),
+  }
+
+
+  const query = new URLSearchParams(filter).toString();
+
+ let {companies} = await sdk.client.fetch(`/store/companies?${query}`, {
+      method: "GET",
+      headers,
+      next
+    }) as any;
+      console.log(companies)
+     return companies;
+}

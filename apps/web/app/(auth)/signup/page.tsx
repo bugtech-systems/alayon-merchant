@@ -4,7 +4,7 @@
 import { Container, Heading } from "@medusajs/ui";
 import { SignupForm } from "@/components/dashboard/signup-form";
 import { useEffect, useState } from "react";
-import { listCompanies } from "@/lib/medusa/data/companies";
+import { listCompanies } from "@/lib/data/companies";
 
 export default function SignupPageClient() {
   const [companies, setCompanies] = useState([])
