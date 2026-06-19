@@ -577,7 +577,7 @@ const handleCheckout = useCallback(async () => {
       </div>
       
       {/* Cart Sidebar */}
-      <aside className="hidden w-96 flex-col border-l bg-card lg:flex">
+      <aside className="hidden w-86 flex-col border-l bg-card lg:flex">
         <CartSidebar {...cartSidebarProps} />
       </aside>
       

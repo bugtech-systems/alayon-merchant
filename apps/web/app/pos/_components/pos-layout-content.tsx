@@ -436,7 +436,7 @@ export function PosLayoutContent({ children, user, orderData }: { children: Reac
 
         {/* Mobile Sidebar Sheet */}
         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-          <SheetContent side="left" className="w-80 p-0">
+          <SheetContent side="left" className="w-50 p-0">
             <SheetHeader className="border-b p-4">
               <SheetTitle>Menu</SheetTitle>
             </SheetHeader>
