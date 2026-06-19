@@ -44,9 +44,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn, formatCurrency, getFinalPrice } from "@/lib/utils";
+import { cn, getFinalPrice } from "@/lib/utils";
 import { PrintDialog } from "./print-dialog";
 import { Separator } from "@/components/ui/separator";
+import { CustomerSelector } from "./customer-selector";
 
 // ============================================
 // TYPES
@@ -627,57 +628,6 @@ function TableSelector({ selectedIds, onSelect, disabledIds = [] }: {
   );
 }
 
-// ============================================
-// CUSTOMER SELECTOR (Simplified)
-// ============================================
-
-function CustomerSelector({ selected, onSelect, onClear }: { 
-  selected: Customer | null; 
-  onSelect: (customer: Customer) => Promise<void>;
-  onClear: () => Promise<void>;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <div className="space-y-2">
-      <div className="flex justify-between">
-        <label className="text-xs font-medium">Customer</label>
-        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setIsOpen(true)}>
-          <UserPlus className="mr-1 h-3 w-3" />
-          {selected ? "Change" : "Add"}
-        </Button>
-      </div>
-
-      {selected ? (
-        <Badge variant="secondary" className="gap-1 text-xs p-2">
-          <User className="h-3 w-3" />
-          <span>{selected.first_name} {selected.last_name}</span>
-          {selected.phone && <span className="text-muted-foreground">({selected.phone})</span>}
-          <button onClick={onClear} className="ml-1 hover:text-destructive">
-            <X className="h-3 w-3" />
-          </button>
-        </Badge>
-      ) : (
-        <div className="text-xs text-muted-foreground">No customer selected</div>
-      )}
-
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Select Customer</DialogTitle>
-            <DialogDescription>Select a customer for this order</DialogDescription>
-          </DialogHeader>
-          <div className="text-center py-4 text-muted-foreground">
-            Customer search implementation here
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsOpen(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
 
 // ============================================
 // MAIN CART SIDEBAR
@@ -685,6 +635,7 @@ function CustomerSelector({ selected, onSelect, onClear }: {
 
 interface CartSidebarProps {
   cart: MedusaCart | null;
+  customerGroupId?: any;
   region?: Region;
   selectedTableIds: string[];
   selectedCustomer: Customer | null;
@@ -704,6 +655,7 @@ interface CartSidebarProps {
 }
 
 export function CartSidebar({
+  customerGroupId,
   cart,
   region,
   selectedTableIds,
@@ -815,6 +767,8 @@ export function CartSidebar({
               selected={selectedCustomer}
               onSelect={onCustomerChange}
               onClear={() => onCustomerChange(null)}
+              customerGroupId={customerGroupId}
+              
             />
 
             {cart?.metadata?.pricing_strategy && cart.metadata.pricing_strategy !== 'default' && (
@@ -849,11 +803,7 @@ export function CartSidebar({
         {/* Scrollable cart items area */}
         <div className="flex-1 overflow-y-auto min-h-0">
           <div className="p-3 md:p-4">
-            {isLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin" />
-              </div>
-            ) : itemCount === 0 ? (
+            { itemCount === 0 ? (
               <div className="text-center py-8">
                 <ShoppingCart className="h-8 w-8 md:h-12 md:w-12 text-muted-foreground mx-auto mb-2" />
                 <p className="text-xs md:text-sm text-muted-foreground">Cart is empty</p>

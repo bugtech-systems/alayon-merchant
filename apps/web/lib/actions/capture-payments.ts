@@ -1,7 +1,8 @@
 // lib/data/payment-capture.ts
 
-import { sdk } from "@/lib/config";
+import sdk from "@/lib/config";
 import { getAuthHeaders } from "@/lib/data/cookies";
+import { capturePayment } from "../data/cart";
 
 // ============================================================================
 // TYPES
@@ -55,18 +56,11 @@ export async function captureOrderPayment(
   const headers = await getAuthHeaders();
 
   try {
-    const response = await  sdk.client.fetch("/dashboard/capture-payment", {
-      method: "POST",
-      body: params,
-    });
+    const response = await capturePayment(params);
 console.log(response, 'cappptue')
-    const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(data.message || "Failed to capture payment");
-    }
-
-    return data;
+  
+    return response;
   } catch (error) {
     console.error("Error capturing payment:", error);
     throw error;
@@ -432,7 +426,39 @@ export async function processPOSPayment(params: {
 
     // Step 5: Capture payment if not already captured
     let captureResult;
+ try {
+      captureResult = await capturePayment({
+        order_id: orderResult.order.id,
+        payment_method: paymentMethod,
+        payment_data: {
+          amount,
+          change,
+          cash_amount: cashAmount,
+          payment_id: payment?.id,
+        },
+      });
 
+
+      console.log(captureResult, 'VAPPPACPAP')
+      if (!captureResult?.id) {
+        // Log the failure but don't throw - order is created, we need to handle payment separately
+        console.error("Payment capture failed:", captureResult);
+        return {
+          success: false,
+          order: orderResult.order,
+          payment: null,
+          message: "Order created but payment capture failed. Please check payment status.",
+        };
+      }
+    } catch (captureError: any) {
+      console.error("Payment capture error:", captureError);
+      return {
+        success: false,
+        order: orderResult.order,
+        payment: null,
+        message: `Order created but payment capture failed: ${captureError.message}`,
+      };
+    }
 
     // Step 6: Verify order status after completion
     const verifiedOrder = await verifyOrderStatus(orderResult.order.id, headers);

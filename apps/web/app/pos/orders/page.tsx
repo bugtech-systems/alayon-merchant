@@ -77,18 +77,23 @@ export default async function OrdersPage({ searchParams }: PageProps) {
     filters.customer_id = params.customer_id;
   }
   
-  if(user?.employee?.company?.id){
-    filters.company_id = user?.employee?.company?.id;
-  }
+  // if(user?.employee?.company?.id){
+  //   filters.company = user?.employee?.company?.id;
+  // }
+
+
+
+
   
+  if (user?.id) {
+    filters.seller_id = user.id
+  }
+
   // Fetch initial data based on order type
-  let initialData;
-  if (orderType === 'drafts') {
-    initialData = await listDraftOrders(limit, offset, filters);
-  } else {
-    initialData = await listPosOrders(limit, offset, filters);
-  }
-  
+  let initialData = await listPosOrders(limit, offset, filters);
+   
+
+
   return (
     <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8">
       <div className="mb-6">

@@ -648,20 +648,28 @@ export const declineTransferRequest = async (id: string, token: string) => {
 
 export async function listPosOrders(limit: number = 10, offset: number = 0, filters: Record<string, any> = {}) {
   try {
-    const params = new URLSearchParams({
-      limit: limit.toString(),
-      offset: offset.toString(),
-      ...filters,
-    });
+      const queryParams = new URLSearchParams({
+          limit: limit.toString(),
+          offset: offset.toString(),
+        });
     
-    const response = await adminFetch(`/admin/orders?${params.toString()}`);
-    
+ 
+        // ✅ CORRECT: Seller ID filter using dot notation
+  if (filters?.seller_id) {
+    queryParams.append('metadata.seller_id', filters.seller_id);
+  }
+
+
+    console.log(queryParams, 'PARS', filters)
+    const response = await adminFetch(`/admin/orders?${queryParams.toString()}`);
+    const filteredOrders = response.orders.filter((order: any) => order.metadata?.seller_id === filters?.seller_id);
+    const count = filteredOrders.length;
     return {
-      orders: response.orders || [],
-      count: response.count || 0,
+      orders: filteredOrders || [],
+      count: count || 0,
       page: Math.floor(offset / limit) + 1,
-      total_pages: Math.ceil((response.count || 0) / limit),
-      has_next: offset + limit < (response.count || 0),
+      total_pages: Math.ceil((count || 0) / limit),
+      has_next: offset + limit < (count || 0),
       has_previous: offset > 0,
     };
   } catch (error) {

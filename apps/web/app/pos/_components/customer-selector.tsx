@@ -212,6 +212,8 @@ export function CustomerSelector({
     if (customers.length && selectedCustomer) {
         let customer = customers.find(a => a.id == selectedCustomer)
       setSelected(customer);
+    } else if(!selectedCustomer) {
+        setSelected(null)
     }
   }, [customers, selectedCustomer]);
 

@@ -26,12 +26,15 @@ export async function listTransactions(
       }
     );
 
+        const filteredTransactions = response.transactions.filter((trans: any) => trans?.customer_id === filters?.customer_id);
+    const count = filteredTransactions.length;
+
     return {
-      transactions: response.transactions || [],
-      count: response.count || 0,
+      transactions: filteredTransactions || [],
+      count: count || 0,
       page: Math.floor(offset / limit) + 1,
-      total_pages: Math.ceil((response.count || 0) / limit),
-      has_next: offset + limit < (response.count || 0),
+      total_pages: Math.ceil((count || 0) / limit),
+      has_next: offset + limit < (count || 0),
       has_previous: offset > 0,
     };
   } catch (error) {

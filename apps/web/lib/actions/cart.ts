@@ -45,7 +45,7 @@ export async function retrieveCart(id?: string): Promise<B2BCart | null> {
   }
 
   try {
-    const { cart } = await sdk.client.fetch<HttpTypes.StoreCartResponse>(`/store/carts/${cartId}`, {
+    const { cart } = await sdk.client.fetch(`/store/carts/${cartId}`, {
       credentials: "include",
       method: "GET",
       query: {

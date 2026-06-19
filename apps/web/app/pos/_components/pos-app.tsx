@@ -8,7 +8,6 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Search, RefreshCw, History, ShoppingCart, Save, Tag, Users, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
-// import { CartSidebar } from "./sidebar-cart";
 import { CartSidebar } from "./cart-sidebar";
 import { ProductCard } from "./product-card";
 import { DraftsDialog } from "./drafts-dialog";
@@ -20,8 +19,6 @@ import { usePosDrafts } from "@/hooks/use-pos-drafts";
 import { usePosTables } from "@/hooks/use-pos-tables";
 import { Region, Customer } from "@/types";
 import { Badge } from "@/components/ui/badge";
-import sdk from "@/lib/config";
-import { processPOSPayment } from "@/lib/actions/capture-payments";
 import { useToast } from "@/hooks/use-toast";
 
 interface PosAppProps {
@@ -78,7 +75,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
       customerId: selectedCustomer?.id
     });
   
-  const { drafts, saveAsDraft, deleteDraft, loadDraft } = usePosDrafts();
+  const { drafts, saveAsDraft, deleteDraft } = usePosDrafts();
   const { occupiedTableIds, updateTableOccupancy } = usePosTables();
   
   // Initialize cart
@@ -485,13 +482,13 @@ const handleCheckout = useCallback(async () => {
           onComplete={async (order) => {
             console.log("Order completed:", order);
             // Reset POS state
+            handleCustomerChange(null)
             await createCart();
             setSelectedTableIds([]);
             setSelectedCustomer(null);
             setOrderNotes("");
             setPaymentDialogOpen(false);
             setMobileCartOpen(false);
-            
             toast({ 
               title: "Success", 
               description: `Order #${order.display_id} completed successfully` 
@@ -603,6 +600,7 @@ const handleCheckout = useCallback(async () => {
           onComplete={async (order) => {
             console.log("Order completed:", order);
             // Reset POS state
+            handleCustomerChange(null)
             await createCart();
             setSelectedTableIds([]);
             setSelectedCustomer(null);
