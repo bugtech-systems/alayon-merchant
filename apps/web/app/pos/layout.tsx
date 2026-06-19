@@ -17,9 +17,9 @@ interface PosLayoutProps {
 }
 
 export default async function PosLayout({ children }: PosLayoutProps) {
-  const user = await retrieveUser();
+    const user = await retrieveUser();
     const sellerId = user?.id;
-     const data = await getTodayOrdersSummary(sellerId);
+    const data = await getTodayOrdersSummary(sellerId);
   return (
       <Suspense fallback={<Spinner />}>
         <TooltipProvider>
