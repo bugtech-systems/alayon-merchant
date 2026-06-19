@@ -151,7 +151,7 @@ const handleTablesChange = (ids: string[]) => {
     <>
       <PrintDialog open={printOpen} onOpenChange={setPrintOpen} cart={cart} />
 
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-[85vh]">
         {/* Header */}
         <div className="border-b p-3 md:p-4 flex-shrink-0 bg-background">
           <div className="flex justify-between items-center mb-3">

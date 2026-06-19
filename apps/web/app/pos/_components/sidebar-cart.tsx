@@ -730,7 +730,7 @@ export function CartSidebar({
       </Dialog>
 
       {/* Main container - full height flex column */}
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-[80vh]">
         {/* Header - fixed at top */}
         <div className="border-b p-3 md:p-4 flex-shrink-0 bg-background">
           <div className="flex justify-between items-center mb-3">
@@ -801,7 +801,7 @@ export function CartSidebar({
         </div>
 
         {/* Scrollable cart items area */}
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="flex-1 overflow-y-auto max-h-[40vh]">
           <div className="p-3 md:p-4">
             { itemCount === 0 ? (
               <div className="text-center py-8">
