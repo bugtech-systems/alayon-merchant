@@ -45,6 +45,8 @@ export function ProductsTable({ products, isLoading, onEditPricing }: ProductsTa
     return min === max ? formatCurrency(min) : `${formatCurrency(min)} - ${formatCurrency(max)}`;
   };
 
+
+  console.log(products, 'prodds')
   return (
     <div className="rounded-md border">
       <Table>

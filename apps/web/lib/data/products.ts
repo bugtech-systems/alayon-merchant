@@ -569,7 +569,7 @@ export async function listPriceListProducts({
 const productsResponse = await adminFetch("/admin/products", {
   method: "GET",
   query: {
-    limit: 100,
+    limit: 1000,
     region_id: region?.id,
     // currency_code: region?.currency_code, // or your desired currency
     fields: "id,title,thumbnail,handle,status,*categories,*variants,variants.id,variants.title,variants.sku,variants.inventory_quantity,*variants.prices",
@@ -581,17 +581,11 @@ const productsResponse = await adminFetch("/admin/products", {
 });
     
 
-
+console.log(productsResponse, 'prddss')
     let products = productsResponse.products || [];
     console.log(`Fetched ${products.length} total products`, products, productsResponse);
     
-    // Apply pricing based on priority: Price List > Customer Group > Customer Specific
-    if (priceListId) {
-      console.log(`Applying price list pricing with ID: ${priceListId}`);
-      const pricedProducts = await applyPriceListToProducts(products, priceListId, currencyCode);
-      return { products: pricedProducts };
-    } 
-    
+
     if (customerGroupId) {
       console.log(`Applying customer group pricing with ID: ${customerGroupId}`);
       const pricedProducts = await applyCustomerGroupPricing(products, customerGroupId, currencyCode, headers);

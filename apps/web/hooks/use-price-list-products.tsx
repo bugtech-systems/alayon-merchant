@@ -29,7 +29,7 @@ export const usePriceListProducts = (
   priceListId: string | undefined,
   options: UsePriceListProductsOptions = {}
 ) => {
-  const { limit = 10, offset = 0, search = "", filters = {}, enabled = true } = options;
+  const { limit = 1000, offset = 0, search = "", filters = {}, enabled = true } = options;
   const buildQueryParams = () => {
     const params = new URLSearchParams({
       limit: limit.toString(),
@@ -81,7 +81,7 @@ export const usePriceListProducts = (
   };
 
   return useQuery({
-    queryKey: ["price-list-products", priceListId, { limit, offset, search, filters }],
+    queryKey: ["price-list-products", priceListId],
     queryFn: async () => {
         console.log(options, 'OPTTTS')
      

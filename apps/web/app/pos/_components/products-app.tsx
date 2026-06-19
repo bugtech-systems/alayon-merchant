@@ -58,7 +58,7 @@ export function ProductsApp({ region, user }: ProductsAppProps) {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  const limit = 100;
+  const limit = 1000;
   const offset = (urlPage - 1) * limit;
 
   // Fetch products from the price list
