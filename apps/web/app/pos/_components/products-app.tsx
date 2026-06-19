@@ -78,8 +78,8 @@ export function ProductsApp({ region, user }: ProductsAppProps) {
       const params = new URLSearchParams();
       if (newSearch) params.set("q", newSearch);
       if (newPage > 1) params.set("page", newPage.toString());
-      const newUrl = `/products${params.toString() ? `?${params.toString()}` : ""}`;
-      router.push(newUrl, { scroll: false });
+      // const newUrl = `/products${params.toString() ? `?${params.toString()}` : ""}`;
+      // router.push(newUrl, { scroll: false });
     },
     [router]
   );
@@ -87,7 +87,7 @@ export function ProductsApp({ region, user }: ProductsAppProps) {
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newSearch = e.target.value;
     setSearchInput(newSearch);
-    updateUrl(newSearch, 1);
+    // updateUrl(newSearch, 1);
   };
 
   const handlePageChange = (newPage: number) => {
