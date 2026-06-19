@@ -221,7 +221,7 @@ export function CashFlowOverview() {
             <div>
               <p className="text-muted-foreground text-xs uppercase">Total Income</p>
               <p className="font-medium text-2xl tabular-nums">
-                {isLoading ? "Loading..." : formatCurrency(summary.totalIncome, { noDecimals: true })}
+                {isLoading ? "Loading..." : formatCurrency(summary.totalIncome, 'PHP')}
               </p>
              
             </div>
@@ -234,7 +234,7 @@ export function CashFlowOverview() {
             <div>
               <p className="text-muted-foreground text-xs uppercase">Total Expenses</p>
               <p className="font-medium text-2xl tabular-nums">
-                {isLoading ? "Loading..." : formatCurrency(summary.totalExpenses, { noDecimals: true })}
+                {isLoading ? "Loading..." : formatCurrency(summary.totalExpenses, 'PHP')}
               </p>
             </div>
           </div>
@@ -252,7 +252,7 @@ export function CashFlowOverview() {
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-lg font-semibold tabular-nums ${summary.netCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCurrency(summary.netCashFlow, { noDecimals: true })}
+              {formatCurrency(summary.netCashFlow, 'php')}
             </span>
             {summary.netCashFlow >= 0 ? (
               <TrendingUp className="h-4 w-4 text-green-600" />
@@ -295,7 +295,7 @@ export function CashFlowOverview() {
                   <ChartTooltipContent 
                     hideLabel 
                     formatter={(value, name) => {
-                      const formattedValue = formatCurrency(Math.abs(value as number), { noDecimals: true })
+                      const formattedValue = formatCurrency(Math.abs(value as number), 'PHP')
                       return [formattedValue, name === 'income' ? 'Income' : 'Expenses']
                     }}
                   />

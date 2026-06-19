@@ -196,7 +196,7 @@ export function BalanceDistributionCard() {
                             x={viewBox.cx}
                             y={(viewBox.cy ?? 0) + 14}
                           >
-                            {formatCurrency(totalBalance, { currency, noDecimals: true })}
+                            {formatCurrency(totalBalance, 'PHP')}
                           </tspan>
                         </text>
                       );
@@ -219,7 +219,7 @@ export function BalanceDistributionCard() {
                       <p className="truncate text-muted-foreground text-xs">{item.account}</p>
                     </div>
                     <p className="font-medium tabular-nums">
-                      {formatCurrency(item.amount, { currency, noDecimals: true })}
+                      {formatCurrency(item.amount, 'PHP')}
                     </p>
                   </div>
                   <div className="font-medium tabular-nums">{item.percentage}%</div>

@@ -91,7 +91,7 @@ export const usePriceListProducts = (
       }
 
       try {
-        const response = await listPriceListProducts({priceListId, countryCode: 'php'})
+        const response = await listPriceListProducts({priceListId, countryCode: 'ph'})
         
         const products = response.products || [];
         const count = response.count || products.length;
