@@ -54,10 +54,9 @@ import {
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { OrderView } from './order-view';
-import { DraftOrderWizard } from '../../app/pos/_components/draft-wizard';
 import { updateOrderStatus, deleteOrder, convertDraftToOrder, deleteDraftOrder, deletePosOrder } from '@/lib/actions/orders';
 import { captureOrderPayment } from '@/lib/actions/capture-payments';
-import { listOrders, listDraftOrders, listPosOrders } from '@/lib/data/orders';
+import { listDraftOrders, listPosOrders } from '@/lib/data/orders';
 
 import { 
   Eye, 
@@ -107,6 +106,7 @@ import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import { sortOrders } from '@/lib/utils/helpers';
 
 // ============================================
 // STATUS CONFIGURATIONS
@@ -1050,7 +1050,10 @@ export function OrdersClient({
         setOrders(response.draft_orders || []);
       } else {
         response = await listPosOrders(limit, offset, filters);
-        setOrders(response.orders || []);
+        console.log(response, "RESSSPSP")
+        let orders = sortOrders(response.orders, initialSortField, 'desc')
+        console.log(orders, 'ORDERSS')
+        setOrders(orders || []);
       }
       
       setPagination({

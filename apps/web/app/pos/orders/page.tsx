@@ -4,6 +4,7 @@ import { OrdersClient } from '@/components/orders/orders-client';
 import { OrderTableSkeleton } from '@/components/ui/table-skeleton';
 import { retrieveUser } from '@/lib/data';
 import { listPosOrders, listDraftOrders } from '@/lib/data/orders';
+import { sortOrders } from '@/lib/utils/helpers';
 
 interface PageProps {
   searchParams: Promise<{
@@ -30,7 +31,7 @@ export default async function OrdersPage({ searchParams }: PageProps) {
   const orderType = params.type || 'orders';
   
   // Parse pagination
-  const limit = parseInt(params.limit || '10');
+  const limit = parseInt(params.limit || '1000');
   const page = parseInt(params.page || '1');
   const offset = (page - 1) * limit;
   
@@ -90,9 +91,9 @@ export default async function OrdersPage({ searchParams }: PageProps) {
   }
 
   // Fetch initial data based on order type
-  let initialData = await listPosOrders(limit, offset, filters);
-   
-
+  let initialOrders = await listPosOrders(limit, offset, filters);
+  let initialData = sortOrders(initialOrders.orders, 'created_at', 'desc')
+  console.log(initialData, 'INITTIAL')
 
   return (
     <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8">
@@ -105,7 +106,7 @@ export default async function OrdersPage({ searchParams }: PageProps) {
 
       <Suspense fallback={<OrderTableSkeleton />}>
         <OrdersClient 
-          initialData={initialData}
+          initialData={{...initialOrders, orders: initialData}}
           initialPage={page}
           initialLimit={limit}
           initialSortField={sortField}

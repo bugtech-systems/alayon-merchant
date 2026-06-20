@@ -646,7 +646,7 @@ export const declineTransferRequest = async (id: string, token: string) => {
 };
 
 
-export async function listPosOrders(limit: number = 10, offset: number = 0, filters: Record<string, any> = {}) {
+export async function listPosOrders(limit: number = 1000, offset: number = 0, filters: Record<string, any> = {}) {
   try {
       const queryParams = new URLSearchParams({
           limit: limit.toString(),
@@ -662,7 +662,8 @@ export async function listPosOrders(limit: number = 10, offset: number = 0, filt
 
     console.log(queryParams, 'PARS', filters)
     const response = await adminFetch(`/admin/orders?${queryParams.toString()}`);
-    const filteredOrders = response.orders.filter((order: any) => order.metadata?.seller_id === filters?.seller_id);
+    const filteredOrders = response.orders.filter((order: any) => order.metadata?.seller_id === filters?.seller_id).sort();
+        // console.log(response, filteredOrders,'Filtered', filters)
     const count = filteredOrders.length;
     return {
       orders: filteredOrders || [],
