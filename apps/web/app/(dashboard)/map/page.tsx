@@ -1,9 +1,18 @@
-import { RiderMap } from "@/components/rider/RiderMap";
+// app/page.tsx
+"use client";
 
-export default function Page() {
+import { CustomerMap } from "@/components/map/customer-map";
+
+export default function Home() {
   return (
-    <div className="@container/main flex flex-col gap-4 md:gap-6">
-      <RiderMap/>
+    <div className="container mx-auto">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold">Customer Mapping</h1>
+        <p className="text-muted-foreground">
+          Visualize customer locations and optimize routes
+        </p>
+      </div>
+      <CustomerMap />
     </div>
   );
 }
