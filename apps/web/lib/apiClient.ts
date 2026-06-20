@@ -130,7 +130,6 @@ export const adminClient = {
 export const adminFetch = async (endpoint: string, options: RequestInit & { query?: Record<string, any> } = {}) => {
   const baseUrl = process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL || "http://localhost:9000";
   const apiKey = process.env.NEXT_PUBLIC_MEDUSA_SECRET_KEY;
-  console.log(options, 'OPTTIONS')
   // Build URL with query parameters
   let url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
   if (options.query) {

@@ -185,7 +185,7 @@ export async function applyPriceListToProducts(
         if (!hasPriceInList) {
           console.log(`Product ${product.id} (${product.title}) has no variants in price list`);
         }
-        return hasPriceInList;
+        return true;
       })
       .map((product: any) => ({
         ...product,
@@ -586,13 +586,23 @@ console.log(productsResponse, 'prddss')
     console.log(`Fetched ${products.length} total products`, products, productsResponse);
     
 
-    if (customerGroupId) {
+
+
+        // Apply pricing based on priority: Price List > Customer Group > Customer Specific
+    if (priceListId) {
+      console.log(`Applying price list pricing with ID: ${priceListId}`);
+      const pricedProducts = await applyPriceListToProducts(products, priceListId, currencyCode);
+      return { products: pricedProducts };
+    } 
+    
+     if (customerGroupId) {
       console.log(`Applying customer group pricing with ID: ${customerGroupId}`);
       const pricedProducts = await applyCustomerGroupPricing(products, customerGroupId, currencyCode, headers);
       console.log(`After customer group pricing: ${pricedProducts.length} products`);
       return { products: pricedProducts };
     }
-    
+
+
     if (customerId) {
       console.log(`Applying customer-specific pricing with ID: ${customerId}`);
       const pricedProducts = await applyCustomerPricing(products, customerId, currencyCode, headers);
