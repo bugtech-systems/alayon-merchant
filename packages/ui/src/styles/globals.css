@@ -200,6 +200,41 @@ These serve as the fallback; there is no separate default.css file. */
     @apply !border-transparent !bg-transparent;
 
     }
+    .leaflet-popup-content-wrapper {
+  @apply bg-popover text-popover-foreground rounded-lg shadow-lg border border-border;
+}
+
+.leaflet-popup-tip {
+  @apply bg-popover border-border;
+}
+
+.leaflet-popup-content {
+  @apply m-3 text-sm font-sans;
+}
+
+/* Leaflet zoom control – clean, minimal */
+.leaflet-control-zoom {
+  @apply border border-border rounded-lg shadow-md overflow-hidden;
+}
+
+.leaflet-control-zoom a {
+  @apply bg-background text-foreground hover:bg-muted transition-colors;
+  border: none !important;
+}
+
+.leaflet-control-zoom a:first-child {
+  @apply border-b border-border;
+}
+
+/* Remove default leaflet outline */
+.leaflet-container {
+  @apply focus:outline-none;
+}
+
+/* Optional: smooth tile loading */
+.leaflet-tile-pane {
+  filter: saturate(1.1);
+}
   .marker-cluster div {
     @apply font-[inherit];
     }
