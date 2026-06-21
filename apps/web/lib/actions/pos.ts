@@ -174,7 +174,7 @@ export async function createCustomer(data: {
       ...(await getAuthHeaders()),
     });
     
-    revalidateTag("customers");
+    revalidateTag("customers", "max");
     return customer as MedusaCustomer;
   } catch (error) {
     console.error("Error creating customer:", error);

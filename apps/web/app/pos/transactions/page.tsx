@@ -42,7 +42,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
   const initialData = await listTransactions(limit, offset, filters);
 
 
-console.log(user, 'USSSER')
+console.log(user, 'USSSER', initialData)
 
   return (
     <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8">

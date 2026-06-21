@@ -176,8 +176,10 @@ const TransactionForm = ({
 
   const handleAddNewCategory = () => {
     if (!newCategoryName.trim()) return;
+    if (categories.find(a => a.id == newCategoryName.trim())) return alert('Already Exists!');
+    
     const category: TransactionCategory = {
-      id: `cat_${Date.now()}`,
+      id: newCategoryName.trim(),
       name: newCategoryName.trim(),
       icon: newCategoryIcon,
       color: newCategoryColor,
@@ -247,8 +249,8 @@ const TransactionForm = ({
             <SelectValue placeholder="Select type" />
           </SelectTrigger>
           <SelectContent>
-            {TRANSACTION_TYPES.map((type) => (
-              <SelectItem key={type.value} value={type.value}>
+            {TRANSACTION_TYPES.map((type, index) => (
+              <SelectItem key={type.value + index} value={type.value}>
                 <div className="flex items-center gap-2">
                   {type.icon}
                   {type.label}
@@ -622,9 +624,16 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
     setIsLoading(true);
     try {
       const response = await listTransactions(ITEMS_PER_PAGE, offset, filters);
+
+      console.log(response.transactions, 'TRANSS')
+
+
+
+
       setTransactions(response.transactions || []);
       setTotalCount(response.count || 0);
       setTotalPages(response.total_pages || 1);
+      return response.transactions;
     } catch (error) {
       console.error('Error fetching transactions:', error);
       toast.error('Failed to fetch transactions');
@@ -635,8 +644,34 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
 
   // Fetch when date range changes
   useEffect(() => {
-    fetchTransactions(1);
+     fetchTransactions(1);
+
   }, [dateRange]);
+
+   useEffect(() => {
+    if(transactions.length && !categories.length){
+      const uniqueCategories = [...new Set(
+        transactions
+          .filter((a: any) => a.category_id)
+          .map((a: any) => a.category_id.trim())
+      )];
+
+          let transCat = uniqueCategories.map((categoryId: string) => {
+          let number = Math.floor(Math.random() * 12) + 1;
+          return {
+            id: categoryId,
+            name: categoryId,
+            icon: 'wallet',
+            color: CATEGORY_COLORS[number],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          } as TransactionCategory;
+        });
+      
+      setCategories(transCat)
+    }
+   
+  }, [transactions]); 
 
   // Handle page change
   const handlePageChange = (page: number) => {
@@ -712,13 +747,6 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
     setCategories([...categories, category]);
   };
 
-  const handleDeleteCategory = (categoryId: string) => {
-    const category = categories.find(c => c.id === categoryId);
-    if (category) {
-      setCategories(categories.filter(c => c.id !== categoryId));
-      toast.success(`Category "${category.name}" deleted`);
-    }
-  };
 
   // Calculate totals by category
   const categoryTotals = useMemo(() => {
@@ -855,9 +883,9 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
           {showBreakdown && (
             <div className="p-3 pt-0 border-t">
               <div className="flex flex-wrap gap-2">
-                {categoryTotals.map(({ category, total, count }) => (
+                {categoryTotals.map(({ category, total, count }, index) => (
                   <div
-                    key={category?.id || 'uncategorized'}
+                    key={`${category?.id}${index}`}
                     className="flex items-center gap-2 bg-muted/30 rounded-full px-3 py-1.5 text-sm"
                   >
                     {category ? (

@@ -26,7 +26,6 @@ export interface TransactionGroup {
 export interface TransactionCategory {
   id: string;
   name: string;
-  group_id: string;
   icon?: string;
   color?: string;
   created_at: string;

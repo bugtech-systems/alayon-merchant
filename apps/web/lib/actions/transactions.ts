@@ -4,6 +4,7 @@
 
 import sdk from '@/lib/config';
 import { Transaction } from '@/types/transactions';
+import { getAuthHeaders } from '../data/cookies';
 
 export async function listTransactions(
   limit: number = 10,
@@ -75,8 +76,11 @@ export async function updateTransaction(id: string, data: Partial<Transaction>) 
 
 export async function deleteTransaction(id: string) {
   try {
-    await sdk.client.fetch(`/store/transactions/${id}`, {
+    await sdk.client.fetch(`/dashboard/transactions/${id}`, {
       method: 'DELETE',
+      headers: {
+                ...(await getAuthHeaders()),
+      },
     });
 
     return { success: true };
