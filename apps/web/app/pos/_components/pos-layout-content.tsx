@@ -41,6 +41,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useMedusaAuth } from "@/providers/MedusaAuthProvider";
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { getTodayOrdersSummary } from "@/lib/data/pos";
+import Link from "next/link";
 
 // Navigation Items
 const navItems: NavItem[] = [
@@ -293,12 +294,12 @@ function SidebarContent({ onNavClick, user, orderData }: {orderData?: any, user:
     <div className="flex h-full flex-col">
       {/* Logo Section */}
       <div className="border-b p-4">
-        <div className="flex items-center gap-2">
+        <Link href="/dashboard" className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <Building2 className="h-4 w-4 text-primary-foreground" />
           </div>
           <span className="font-semibold">Alayon POS</span>
-        </div>
+        </Link>
       </div>
 
       {/* User Info Section */}

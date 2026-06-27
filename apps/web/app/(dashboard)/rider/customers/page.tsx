@@ -1,94 +1,69 @@
-// app/customers/page.tsx
-"use client";
+// app/customers/page.tsx (Server Component)
+import { Suspense } from 'react';
+import { CustomersClient } from '@/components/customers/customers-client';
+import { listCustomerGroupCustomers } from '@/lib/data/customer';
+import { CustomerTableSkeleton } from '@/components/ui/table-skeleton';
+import { retrieveUser } from '@/lib/data';
 
-import { Suspense } from "react";
-import { SubscriberOverview } from "@/components/subscriber-overview";
-import { useCustomers, useCustomersStats } from "@/lib/hooks/useN8nQuery";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+interface PageProps {
+  searchParams: Promise<{
+    page?: string;
+    limit?: string;
+    sort?: string;
+    order?: string;
+    search?: string;
+    [key: string]: string | undefined;
+  }>;
+}
 
-function CustomersContent() {
-  // Fetch customers data
-  const {
-    data: customersData,
-    isLoading: isLoadingCustomers,
-    error: customersError,
-    refetch: refetchCustomers,
-  } = useCustomers({
-    page: 1,
-    pageSize: 10,
+export default async function CustomersPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const user = await retrieveUser()
+  const page = parseInt(params.page || '1');
+  const limit = parseInt(params.limit || '10');
+  const sortField = params.sort || 'created_at';
+  const sortOrder = (params.order || 'desc') as 'asc' | 'desc';
+  const searchTerm = params.search || '';
+  
+    console.log(user, 'USER')
+  const customerGroupId = user?.metadata?.role === 'company' 
+    ? user.employee?.company?.customer_group_id 
+    : user?.driver?.customer_group_id;
+    console.log(user, 'USER', customerGroupId)
+
+  // Extract filters from search params (excluding pagination/sort params)
+  const filters: Record<string, any> = {};
+  const excludeParams = ['page', 'limit', 'sort', 'order', 'search'];
+  Object.keys(params).forEach(key => {
+    if (!excludeParams.includes(key) && params[key]) {
+      filters[key] = params[key];
+    }
   });
 
-  // Fetch stats data
-  const {
-    data: stats,
-    isLoading: isLoadingStats,
-    error: statsError,
-    refetch: refetchStats,
-  } = useCustomersStats();
+  // Fetch initial data on the server
+  const initialData = await listCustomerGroupCustomers(customerGroupId);
 
-  const isLoading = isLoadingCustomers || isLoadingStats;
-  const error = customersError || statsError;
 
-  if (error) {
-    return (
-      <div className="container mx-auto p-4 md:p-6">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>
-            Failed to load customer data. Please try again later.
-          </AlertDescription>
-        </Alert>
-        <div className="mt-4 flex justify-center">
-          <button
-            onClick={() => {
-              refetchCustomers();
-              refetchStats();
-            }}
-            className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-          >
-            Retry
-          </button>
-        </div>
+  return (
+    <div className="container mx-auto py-10 px-4 sm:px-6 lg:px-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight">Customers</h1>
+        <p className="text-muted-foreground mt-2">
+          Manage and view all your customers
+        </p>
       </div>
-    );
-  }
 
-  return (
-    <SubscriberOverview
-      initialData={customersData?.data || []}
-      initialTotal={customersData?.total || 0}
-      initialStats={stats || null}
-      isLoading={isLoading}
-      onRefresh={() => {
-        refetchCustomers();
-        refetchStats();
-      }}
-    />
-  );
-}
-
-export default function CustomersPage() {
-  return (
-    <Suspense fallback={<CustomersSkeleton />}>
-      <CustomersContent />
-    </Suspense>
-  );
-}
-
-function CustomersSkeleton() {
-  return (
-    <div className="container mx-auto p-4 md:p-6">
-      <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-          {[...Array(5)].map((_, i) => (
-            <Skeleton key={i} className="h-32" />
-          ))}
-        </div>
-        <Skeleton className="h-[600px]" />
-      </div>
+      <Suspense fallback={<CustomerTableSkeleton />}>
+        <CustomersClient 
+          initialData={initialData}
+          initialPage={page}
+          initialLimit={limit}
+          initialSort={sortField}
+          initialOrder={sortOrder}
+          initialSearch={searchTerm}
+          initialFilters={filters}
+        />
+      </Suspense>
     </div>
   );
 }

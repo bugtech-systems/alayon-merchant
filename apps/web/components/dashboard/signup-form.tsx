@@ -77,7 +77,7 @@ interface SignupFormProps {
   }>;
 }
 
-export function SignupForm({ companies = [] }: SignupFormProps) {
+export function   SignupForm({ companies = [] }: SignupFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string>("");
@@ -241,7 +241,6 @@ export function SignupForm({ companies = [] }: SignupFormProps) {
           </div>
 
           {/* Company Selection */}
-          {watchedUserType === "company" && (
             <div className="space-y-2">
               <Label>Company <span className="text-red-500">*</span></Label>
               <Select 
@@ -265,7 +264,6 @@ export function SignupForm({ companies = [] }: SignupFormProps) {
                 <p className="text-sm text-red-600">{getErrorMessage("company_id")}</p>
               )}
             </div>
-          )}
 
           {/* Name Fields */}
           <div className="grid grid-cols-2 gap-4">

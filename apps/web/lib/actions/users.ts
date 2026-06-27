@@ -5,7 +5,7 @@ import { revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { createSession, destroySession } from "../../lib/data/sessions";
 import { sdk } from "../medusa/config";
-import { getAuthHeaders, getCacheHeaders, getCacheTag, removeAuthToken } from "../data/cookies";
+import { getAuthHeaders, getCacheHeaders, getCacheTag, removeAuthToken, removeCartId } from "../data/cookies";
 import { track } from "@vercel/analytics/server";
 import { n8nFetcher } from "@/hooks/useN8nQuery";
 import { retrieveCustomer, transferCart } from "./customer";
@@ -94,10 +94,10 @@ export async function signup(prevState: FormState, data: FormData): Promise<Form
   }
 
   const { user_type, company_id, first_name, last_name, phone, email, password } = validationResult.data;
-  const actor_type = user_type as "company" | "driver";
+  const actor_type = user_type as "company" | "driver" | "customer";
 
   // Additional validation for company users
-  if (actor_type === "company" && !company_id) {
+  if (!company_id) {
     return {
       error: "Company selection is required",
       fieldErrors: {
@@ -119,7 +119,6 @@ export async function signup(prevState: FormState, data: FormData): Promise<Form
       token = await sdk.auth.register("customer", "emailpass", {
         email: email || `${phone.replace(/[^0-9]/g, '')}@temp.user`, // Fallback email if not provided
         password: password,
-       
       });
       
       if (!token) {
@@ -225,6 +224,7 @@ export async function signup(prevState: FormState, data: FormData): Promise<Form
       first_name,
       last_name,
       customer_id: createdCustomer.id,
+      company_id,
       phone,
       actor_type,
       token,
@@ -350,6 +350,9 @@ export async function login(_currentState: unknown, formData: FormData) {
   const password = formData.get("password") as string
 
   try {
+
+    await removeAuthToken();
+    await removeCartId()
     return await sdk.auth
       .login("customer", "emailpass", { email, password })
       .then(async (token) => {
@@ -452,7 +455,7 @@ export async function getToken({
 }: {
   email: string;
   password: string;
-  actor_type: "company" | "driver";
+  actor_type: "company" | "driver" | "customer";
   provider: "emailpass";
 }) {
   const { token }: { token: string } = await sdk.client.fetch(

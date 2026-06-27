@@ -117,7 +117,7 @@ export function LoginForm({onSuccess }: LoginFormProps) {
             formData.append(key, value.toString());
           }
         });
-        
+        localStorage.removeItem('pos_cart_id');
         const result = await login(data, formData);
         if (!result?.success) {
           setServerError(result.error ?? result);

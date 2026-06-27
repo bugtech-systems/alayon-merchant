@@ -484,4 +484,107 @@ export const getCustomer = async (customerId: string): Promise<{ success: boolea
   })
 }
 
+
+export interface ListCustomersWithOrdersParams {
+  limit?: number;
+  offset?: number;
+  search?: string;
+  company_id?: string;
+  customer_group_id?: string;
+  has_account?: string;
+  sort_field?: string;
+  sort_order?: "ASC" | "DESC";
+}
+
+export interface CustomerWithOrders {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  has_account: boolean;
+  groups: Array<{
+    id: string;
+    name: string;
+  }>;
+  latest_order: any | null;
+  total_orders: number;
+  total_spent: number;
+  average_order_value: number;
+  last_order_at: string | null;
+  customer_summary: {
+    total_orders: number;
+    total_spent: number;
+    average_order_value: number;
+    last_order_date: string | null;
+  };
+}
+
+export interface ListCustomersWithOrdersResponse {
+  customers: CustomerWithOrders[];
+  count: number;
+  limit: number;
+  offset: number;
+  meta: {
+    total_customers: number;
+    active_customers: number;
+    total_revenue: number;
+    filters: any;
+    sort: any;
+  };
+}
+
+export async function listCustomersWithOrders(
+  params: ListCustomersWithOrdersParams = {}
+): Promise<ListCustomersWithOrdersResponse> {
+  try {
+    const headers = await getAuthHeaders();
     
+    // Build query parameters
+    const queryParams = new URLSearchParams();
+    
+    if (params.limit) queryParams.append("limit", params.limit.toString());
+    if (params.offset) queryParams.append("offset", params.offset.toString());
+    if (params.search) queryParams.append("search", params.search);
+    if (params.company_id) queryParams.append("company_id", params.company_id);
+    if (params.customer_group_id) queryParams.append("customer_group_id", params.customer_group_id);
+    if (params.has_account) queryParams.append("has_account", params.has_account);
+    if (params.sort_field) queryParams.append("sort_field", params.sort_field);
+    if (params.sort_order) queryParams.append("sort_order", params.sort_order);
+
+    const url = `/dashboard/drivers/customers-order?${queryParams.toString()}`;
+    
+    const response = await sdk.client.fetch<ListCustomersWithOrdersResponse>(url, {
+      method: "GET",
+      headers,
+    });
+
+    return response;
+  } catch (error) {
+    console.error("Error fetching customers with orders:", error);
+    throw new Error("Failed to fetch customers");
+  }
+}
+
+// Fetch single customer with orders
+export async function getCustomerWithOrders(customerId: string): Promise<CustomerWithOrders | null> {
+  try {
+    const headers = await getAuthHeaders();
+    
+    const response = await sdk.client.fetch<{
+      customer: CustomerWithOrders;
+    }>(`/admin/customers-with-orders/${customerId}`, {
+      method: "GET",
+      headers,
+    });
+
+    if (!response.customer) {
+      return null;
+    }
+
+    return response.customer;
+  } catch (error) {
+    console.error(`Error fetching customer ${customerId}:`, error);
+    return null;
+  }
+}
