@@ -537,7 +537,7 @@ export interface ListCustomersWithOrdersResponse {
 export async function listCustomersWithOrders(
   params: ListCustomersWithOrdersParams = {}
 ): Promise<ListCustomersWithOrdersResponse> {
-  try {
+  try { 
     const headers = await getAuthHeaders();
     
     // Build query parameters
