@@ -35,8 +35,12 @@ import {
   ArrowRight,
   Target,
   AlertCircle,
+  Search,
+  X,
+  Building2,
 } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
+import { Input } from "@workspace/ui/components/input";
 
 // ============================================================
 // 1. Types
@@ -156,6 +160,36 @@ const SAMPLE_CUSTOMERS: Customer[] = [
     nextVisit: "2024-02-18",
     revenue: 120000,
   },
+  {
+    id: "c6",
+    name: "Luzviminda Tan",
+    company: "Tan & Associates",
+    lat: 11.2520,
+    lng: 124.9970,
+    address: "Tacloban Doctors Hospital Area",
+    phone: "+63 967 890 1234",
+    email: "luz@tanassoc.com",
+    status: "active",
+    priority: "high",
+    lastVisit: "2024-01-12",
+    nextVisit: "2024-02-12",
+    revenue: 180000,
+  },
+  {
+    id: "c7",
+    name: "Roberto Lim",
+    company: "Lim Trading Co.",
+    lat: 11.2350,
+    lng: 125.0150,
+    address: "Tacloban Port Area",
+    phone: "+63 978 901 2345",
+    email: "roberto@limtrading.com",
+    status: "inactive",
+    priority: "low",
+    lastVisit: "2023-12-20",
+    nextVisit: "2024-03-20",
+    revenue: 30000,
+  },
 ];
 
 // ============================================================
@@ -218,9 +252,12 @@ async function generateRoutes(
 ): Promise<Route[]> {
   const routes: Route[] = [];
 
-  for (let i = 0; i < customers.length - 1; i++) {
-    const start = customers[i];
-    const end = customers[i + 1];
+  // Filter customers with valid coordinates
+  const validCustomers = customers.filter(c => c.lat && c.lng);
+
+  for (let i = 0; i < validCustomers.length - 1; i++) {
+    const start = validCustomers[i];
+    const end = validCustomers[i + 1];
 
     try {
       const result = await fetchOSRMRoute(
@@ -297,36 +334,49 @@ function RouteDetailsCard({ routeDetails }: { routeDetails: RouteDetails | null 
 
   return (
     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] w-[90%] max-w-2xl pointer-events-none">
-      <Card className="pointer-events-auto shadow-lg border-primary/20">
-        <CardContent className="p-4">
-          <div className="flex items-start justify-between gap-4">
+      <Card className="pointer-events-auto shadow-lg border-primary/20 bg-background/95 backdrop-blur-sm">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex items-start justify-between gap-2 sm:gap-4">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                <Route className="size-4" />
+              <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground mb-1">
+                <Route className="size-3 sm:size-4" />
                 <span>Route Details</span>
               </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-medium text-sm truncate">{routeDetails.from.name}</span>
-                <ArrowRight className="size-4 text-muted-foreground flex-shrink-0" />
-                <span className="font-medium text-sm truncate">{routeDetails.to.name}</span>
+              <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                <span className="font-medium text-xs sm:text-sm truncate max-w-[80px] sm:max-w-[150px]">
+                  {routeDetails.from.name}
+                </span>
+                <ArrowRight className="size-3 sm:size-4 text-muted-foreground flex-shrink-0" />
+                <span className="font-medium text-xs sm:text-sm truncate max-w-[80px] sm:max-w-[150px]">
+                  {routeDetails.to.name}
+                </span>
               </div>
-              <div className="flex items-center gap-4 mt-2 text-sm">
+              <div className="flex items-center gap-2 sm:gap-4 mt-1 sm:mt-2 text-xs sm:text-sm flex-wrap">
                 <div className="flex items-center gap-1">
-                  <Navigation className="size-4 text-muted-foreground" />
+                  <Navigation className="size-3 sm:size-4 text-muted-foreground" />
                   <span className="font-medium">{routeDetails.distance.toFixed(2)} km</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Clock className="size-4 text-muted-foreground" />
+                  <Clock className="size-3 sm:size-4 text-muted-foreground" />
                   <span className="font-medium">{Math.round(routeDetails.duration)} min</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Target className="size-4 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">via {routeDetails.routeId}</span>
+                  <Target className="size-3 sm:size-4 text-muted-foreground" />
+                  <span className="text-[10px] sm:text-xs text-muted-foreground">via {routeDetails.routeId}</span>
                 </div>
               </div>
             </div>
             <div className="flex-shrink-0">
-              <div className="size-2 rounded-full" style={{ backgroundColor: routeDetails.from.priority === "high" ? "#ef4444" : routeDetails.from.priority === "medium" ? "#eab308" : "#3b82f6" }} />
+              <div 
+                className="size-2 sm:size-3 rounded-full" 
+                style={{ 
+                  backgroundColor: routeDetails.from.priority === "high" 
+                    ? "#ef4444" 
+                    : routeDetails.from.priority === "medium" 
+                    ? "#eab308" 
+                    : "#3b82f6" 
+                }} 
+              />
             </div>
           </div>
         </CardContent>
@@ -336,7 +386,78 @@ function RouteDetailsCard({ routeDetails }: { routeDetails: RouteDetails | null 
 }
 
 // ============================================================
-// 7. Customer List Component (Desktop)
+// 7. Customer List Item Component
+// ============================================================
+function CustomerListItem({
+  customer,
+  isSelected,
+  onSelect,
+  showInfo = false,
+}: {
+  customer: Customer;
+  isSelected: boolean;
+  onSelect: (customer: Customer) => void;
+  showInfo?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "p-2 sm:p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md",
+        isSelected
+          ? "border-primary bg-primary/5 shadow-sm"
+          : "hover:border-primary/50"
+      )}
+      onClick={() => onSelect(customer)}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+            <p className="font-medium text-sm sm:text-base truncate">
+              {customer.name}
+            </p>
+            <CustomerStatusBadge status={customer.status} />
+          </div>
+          <p className="text-xs sm:text-sm text-muted-foreground truncate flex items-center gap-1">
+            <Building2 className="size-3" />
+            {customer.company}
+          </p>
+        </div>
+        <CustomerPriorityBadge priority={customer.priority} />
+      </div>
+
+      <div className="mt-1 sm:mt-2 grid grid-cols-2 gap-1 sm:gap-2 text-xs sm:text-sm">
+        <div className="flex items-center gap-1 text-muted-foreground min-w-0">
+          <MapPin className="size-3 flex-shrink-0" />
+          <span className="truncate">{customer.address.split(",")[0]}</span>
+        </div>
+        <div className="flex items-center gap-1 text-muted-foreground min-w-0">
+          <Phone className="size-3 flex-shrink-0" />
+          <span className="truncate">{customer.phone}</span>
+        </div>
+      </div>
+
+      {showInfo && (
+        <div className="mt-1 sm:mt-2 grid grid-cols-2 gap-1 sm:gap-2 text-[10px] sm:text-xs text-muted-foreground border-t pt-1 sm:pt-2">
+          <div>
+            <span className="font-medium">Revenue:</span> ₱
+            {customer?.revenue?.toLocaleString()}
+          </div>
+          <div>
+            <span className="font-medium">Last Visit:</span>{" "}
+            {new Date(customer.lastVisit).toLocaleDateString()}
+          </div>
+          <div className="col-span-2">
+            <span className="font-medium">Next Visit:</span>{" "}
+            {new Date(customer.nextVisit).toLocaleDateString()}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// 8. Customer List Component (Desktop - Fully Scrollable)
 // ============================================================
 function CustomerListDesktop({
   customers,
@@ -344,82 +465,71 @@ function CustomerListDesktop({
   onSelectCustomer,
   showCustomerInfo,
   totalCustomers,
+  searchQuery,
+  onSearchChange,
 }: {
   customers: Customer[];
   selectedCustomer: Customer | null;
   onSelectCustomer: (customer: Customer) => void;
   showCustomerInfo: boolean;
   totalCustomers: number;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
 }) {
   return (
-    <Card className="w-80 flex-shrink-0 overflow-hidden hidden lg:flex lg:flex-col">
-      <CardHeader className="border-b">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-            <Users className="size-4 sm:size-5" />
-            Customers
-            <Badge variant="secondary" className="text-xs">
-              {totalCustomers}
-            </Badge>
-          </CardTitle>
+    <Card className="w-72 sm:w-80 flex-shrink-0 overflow-hidden hidden lg:flex lg:flex-col h-full max-h-full">
+      {/* Fixed Header */}
+      <CardHeader className="border-b p-3 sm:p-4 flex-shrink-0">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+              <Users className="size-4 sm:size-5" />
+              Customers
+              <Badge variant="secondary" className="text-xs">
+                {totalCustomers}
+              </Badge>
+            </CardTitle>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Search customers..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="pl-7 h-8 text-sm"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => onSearchChange("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       </CardHeader>
 
-      <ScrollArea className="flex-1">
-        <div className="p-3 sm:p-4 space-y-2 sm:space-y-3">
-          {customers.map((customer) => (
-            <div
-              key={customer.id}
-              className={cn(
-                "p-2 sm:p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md",
-                selectedCustomer?.id === customer.id
-                  ? "border-primary bg-primary/5"
-                  : "hover:border-primary/50"
-              )}
-              onClick={() => onSelectCustomer(customer)}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
-                    <p className="font-medium text-sm sm:text-base truncate">{customer.name}</p>
-                    <CustomerStatusBadge status={customer.status} />
-                  </div>
-                  <p className="text-xs sm:text-sm text-muted-foreground truncate">
-                    {customer.company}
-                  </p>
-                </div>
-                <CustomerPriorityBadge priority={customer.priority} />
-              </div>
-
-              <div className="mt-1 sm:mt-2 grid grid-cols-2 gap-1 sm:gap-2 text-xs sm:text-sm">
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <MapPin className="size-3" />
-                  <span className="truncate">{customer.address.split(",")[0]}</span>
-                </div>
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <Phone className="size-3" />
-                  <span className="truncate">{customer.phone}</span>
-                </div>
-              </div>
-
-              {showCustomerInfo && (
-                <div className="mt-1 sm:mt-2 grid grid-cols-2 gap-1 sm:gap-2 text-xs text-muted-foreground border-t pt-1 sm:pt-2">
-                  <div>
-                    <span className="font-medium">Revenue:</span> ₱
-                    {customer.revenue.toLocaleString()}
-                  </div>
-                  <div>
-                    <span className="font-medium">Last Visit:</span>{" "}
-                    {new Date(customer.lastVisit).toLocaleDateString()}
-                  </div>
-                  <div className="col-span-2">
-                    <span className="font-medium">Next Visit:</span>{" "}
-                    {new Date(customer.nextVisit).toLocaleDateString()}
-                  </div>
-                </div>
-              )}
+      {/* Scrollable Content */}
+      <ScrollArea className="flex-1 h-full min-h-0">
+        <div className="p-2 sm:p-3 space-y-2 sm:space-y-3">
+          {customers.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <Users className="size-8 text-muted-foreground/50 mb-2" />
+              <p className="text-sm text-muted-foreground">No customers found</p>
+              <p className="text-xs text-muted-foreground">Try adjusting your search</p>
             </div>
-          ))}
+          ) : (
+            customers.map((customer) => (
+              <CustomerListItem
+                key={customer.id}
+                customer={customer}
+                isSelected={selectedCustomer?.id === customer.id}
+                onSelect={onSelectCustomer}
+                showInfo={showCustomerInfo}
+              />
+            ))
+          )}
         </div>
       </ScrollArea>
     </Card>
@@ -427,7 +537,7 @@ function CustomerListDesktop({
 }
 
 // ============================================================
-// 8. Customer List Component (Mobile)
+// 9. Customer List Component (Mobile - Fully Scrollable)
 // ============================================================
 function CustomerListMobile({
   customers,
@@ -435,6 +545,8 @@ function CustomerListMobile({
   onSelectCustomer,
   showCustomerInfo,
   totalCustomers,
+  searchQuery,
+  onSearchChange,
   isOpen,
   onOpenChange,
 }: {
@@ -443,6 +555,8 @@ function CustomerListMobile({
   onSelectCustomer: (customer: Customer) => void;
   showCustomerInfo: boolean;
   totalCustomers: number;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -452,81 +566,73 @@ function CustomerListMobile({
         <Button
           size="icon"
           variant="secondary"
-          className="lg:hidden fixed bottom-4 right-4 z-[1000] shadow-lg rounded-full size-12"
+          className="lg:hidden fixed bottom-4 right-4 z-[1000] shadow-lg rounded-full size-12 sm:size-14"
         >
-          <Menu className="size-5" />
+          <Menu className="size-5 sm:size-6" />
         </Button>
       </SheetTrigger>
       <SheetContent side="left" className="w-[90vw] sm:w-[400px] p-0">
-        <Card className="h-full border-0 rounded-none">
-          <CardHeader className="border-b">
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Users className="size-5" />
-                Customers
-                <Badge variant="secondary">{totalCustomers}</Badge>
-              </CardTitle>
+        <Card className="h-full border-0 rounded-none flex flex-col">
+          {/* Fixed Header */}
+          <CardHeader className="border-b p-4 flex-shrink-0">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <Users className="size-5" />
+                  Customers
+                  <Badge variant="secondary">{totalCustomers}</Badge>
+                </CardTitle>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  onClick={() => onOpenChange(false)}
+                >
+                  <X className="size-4" />
+                </Button>
+              </div>
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Search customers..."
+                  value={searchQuery}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  className="pl-7 h-9 text-sm"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => onSearchChange("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           </CardHeader>
 
-          <ScrollArea className="h-[calc(100vh-80px)]">
-            <div className="p-4 space-y-3">
-              {customers.map((customer) => (
-                <div
-                  key={customer.id}
-                  className={cn(
-                    "p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md",
-                    selectedCustomer?.id === customer.id
-                      ? "border-primary bg-primary/5"
-                      : "hover:border-primary/50"
-                  )}
-                  onClick={() => {
-                    onSelectCustomer(customer);
-                    onOpenChange(false);
-                  }}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-medium truncate">{customer.name}</p>
-                        <CustomerStatusBadge status={customer.status} />
-                      </div>
-                      <p className="text-sm text-muted-foreground truncate">
-                        {customer.company}
-                      </p>
-                    </div>
-                    <CustomerPriorityBadge priority={customer.priority} />
-                  </div>
-
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                      <MapPin className="size-3" />
-                      <span className="truncate">{customer.address.split(",")[0]}</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                      <Phone className="size-3" />
-                      <span className="truncate">{customer.phone}</span>
-                    </div>
-                  </div>
-
-                  {showCustomerInfo && (
-                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground border-t pt-2">
-                      <div>
-                        <span className="font-medium">Revenue:</span> ₱
-                        {customer.revenue.toLocaleString()}
-                      </div>
-                      <div>
-                        <span className="font-medium">Last Visit:</span>{" "}
-                        {new Date(customer.lastVisit).toLocaleDateString()}
-                      </div>
-                      <div className="col-span-2">
-                        <span className="font-medium">Next Visit:</span>{" "}
-                        {new Date(customer.nextVisit).toLocaleDateString()}
-                      </div>
-                    </div>
-                  )}
+          {/* Scrollable Content */}
+          <ScrollArea className="flex-1 h-full min-h-0">
+            <div className="p-3 sm:p-4 space-y-3">
+              {customers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <Users className="size-8 text-muted-foreground/50 mb-2" />
+                  <p className="text-sm text-muted-foreground">No customers found</p>
                 </div>
-              ))}
+              ) : (
+                customers.map((customer) => (
+                  <CustomerListItem
+                    key={customer.id}
+                    customer={customer}
+                    isSelected={selectedCustomer?.id === customer.id}
+                    onSelect={(c) => {
+                      onSelectCustomer(c);
+                      onOpenChange(false);
+                    }}
+                    showInfo={showCustomerInfo}
+                  />
+                ))
+              )}
             </div>
           </ScrollArea>
         </Card>
@@ -536,18 +642,20 @@ function CustomerListMobile({
 }
 
 // ============================================================
-// 9. Main Customer Map Component
+// 10. Main Customer Map Component
 // ============================================================
 interface CustomerMapProps {
   customers?: Customer[];
   initialProfile?: "driving" | "walking" | "cycling";
   className?: string;
+  user?: any;
 }
 
 export function CustomerMap({
   customers = SAMPLE_CUSTOMERS,
   initialProfile = "driving",
   className,
+  user
 }: CustomerMapProps) {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [routes, setRoutes] = useState<Route[]>([]);
@@ -561,27 +669,44 @@ export function CustomerMap({
   const [routeDetails, setRouteDetails] = useState<RouteDetails | null>(null);
   const [highlightedRoute, setHighlightedRoute] = useState<string | null>(null);
   const [isSwitchingView, setIsSwitchingView] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Filter customers based on search query
+  const filteredCustomers = useMemo(() => {
+    if (!searchQuery.trim()) return customers;
+    
+    const query = searchQuery.toLowerCase().trim();
+    return customers.filter(
+      (c) =>
+        c.name.toLowerCase().includes(query) ||
+        c.company.toLowerCase().includes(query) ||
+        c.email.toLowerCase().includes(query) ||
+        c.phone.includes(query) ||
+        c.address.toLowerCase().includes(query)
+    );
+  }, [customers, searchQuery]);
 
   // Calculate total metrics
-  const totalCustomers = customers.length;
-  const activeCustomers = customers.filter(c => c.status === "active").length;
-  const totalRevenue = customers.reduce((sum, c) => sum + c.revenue, 0);
-  const avgRevenue = totalRevenue / totalCustomers;
+  const totalCustomers = filteredCustomers.length;
+  const activeCustomers = filteredCustomers.filter(c => c.status === "active").length;
+  const totalRevenue = filteredCustomers.reduce((sum, c) => sum + c.revenue, 0);
+  const avgRevenue = totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
 
   // Map center
   const center = useMemo(() => {
-    if (customers.length === 0) return [11.2445, 125.0040] as [number, number];
-    const avgLat = customers.reduce((sum, c) => sum + c.lat, 0) / customers.length;
-    const avgLng = customers.reduce((sum, c) => sum + c.lng, 0) / customers.length;
+    if (filteredCustomers.length === 0) return [11.2445, 125.0040] as [number, number];
+    const avgLat = filteredCustomers.reduce((sum, c) => sum + c.lat, 0) / filteredCustomers.length;
+    const avgLng = filteredCustomers.reduce((sum, c) => sum + c.lng, 0) / filteredCustomers.length;
     return [avgLat, avgLng] as [number, number];
-  }, [customers]);
+  }, [filteredCustomers]);
 
   // Fetch routes
   useEffect(() => {
     async function loadRoutes() {
       setLoading(true);
       try {
-        const generatedRoutes = await generateRoutes(customers, profile);
+        const customerRoutes = filteredCustomers.filter(a => (a?.lat && a?.lng));
+        const generatedRoutes = await generateRoutes(customerRoutes, profile);
         setRoutes(generatedRoutes);
       } catch (error) {
         console.error("Failed to generate routes:", error);
@@ -590,7 +715,7 @@ export function CustomerMap({
       }
     }
     loadRoutes();
-  }, [customers, profile]);
+  }, [filteredCustomers, profile]);
 
   // Find route details when a customer is selected
   useEffect(() => {
@@ -605,8 +730,8 @@ export function CustomerMap({
     );
 
     if (route) {
-      const from = customers.find(c => c.id === route.customerIds[0]);
-      const to = customers.find(c => c.id === route.customerIds[1]);
+      const from = filteredCustomers.find(c => c.id === route.customerIds[0]);
+      const to = filteredCustomers.find(c => c.id === route.customerIds[1]);
       
       if (from && to) {
         setRouteDetails({
@@ -622,7 +747,7 @@ export function CustomerMap({
       setRouteDetails(null);
       setHighlightedRoute(null);
     }
-  }, [selectedCustomer, routes, customers]);
+  }, [selectedCustomer, routes, filteredCustomers]);
 
   // Calculate route stats
   const totalDistance = routes.reduce((sum, r) => sum + r.distance, 0);
@@ -633,7 +758,6 @@ export function CustomerMap({
     if (type === mapType) return;
     setIsSwitchingView(true);
     setMapType(type);
-    // Reset loading state after tiles have time to load
     setTimeout(() => {
       setIsSwitchingView(false);
     }, 800);
@@ -668,23 +792,27 @@ export function CustomerMap({
   }, []);
 
   return (
-    <div className={cn("flex flex-col lg:flex-row h-[calc(100vh-120px)] min-h-[600px] w-full gap-2 sm:gap-4", className)}>
-      {/* Desktop Customer List */}
+    <div className={cn("flex flex-col lg:flex-row h-[calc(100vh-120px)] min-h-[500px] sm:min-h-[600px] w-full gap-2 sm:gap-4", className)}>
+      {/* Desktop Customer List - Fully Scrollable */}
       <CustomerListDesktop
-        customers={customers}
+        customers={filteredCustomers}
         selectedCustomer={selectedCustomer}
         onSelectCustomer={setSelectedCustomer}
         showCustomerInfo={showCustomerInfo}
         totalCustomers={totalCustomers}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
       />
 
-      {/* Mobile Customer List (Sheet) */}
+      {/* Mobile Customer List - Fully Scrollable */}
       <CustomerListMobile
-        customers={customers}
+        customers={filteredCustomers}
         selectedCustomer={selectedCustomer}
         onSelectCustomer={setSelectedCustomer}
         showCustomerInfo={showCustomerInfo}
         totalCustomers={totalCustomers}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
         isOpen={isMobileListOpen}
         onOpenChange={setIsMobileListOpen}
       />
@@ -709,12 +837,16 @@ export function CustomerMap({
                 <span className="font-medium">{activeCustomers}</span>
                 <span className="text-muted-foreground hidden sm:inline">active</span>
               </div>
-              <Separator orientation="vertical" className="h-3 sm:h-4 hidden sm:block" />
-              <div className="flex items-center gap-1 sm:gap-1.5 hidden sm:flex">
-                <TrendingUp className="size-3 sm:size-4 text-green-500" />
-                <span className="font-medium">₱{avgRevenue.toLocaleString()}</span>
-                <span className="text-muted-foreground hidden lg:inline">avg revenue</span>
-              </div>
+              {totalCustomers > 0 && (
+                <>
+                  <Separator orientation="vertical" className="h-3 sm:h-4 hidden sm:block" />
+                  <div className="flex items-center gap-1 sm:gap-1.5 hidden sm:flex">
+                    <TrendingUp className="size-3 sm:size-4 text-green-500" />
+                    <span className="font-medium">₱{avgRevenue.toLocaleString()}</span>
+                    <span className="text-muted-foreground hidden lg:inline">avg revenue</span>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Map Type Controls */}
@@ -755,35 +887,37 @@ export function CustomerMap({
             </div>
 
             {/* Route Profile Controls */}
-            <div className="pointer-events-auto flex gap-1 hidden xs:flex">
-              <Button
-                size="icon-sm"
-                variant={profile === "driving" ? "default" : "secondary"}
-                onClick={() => setProfile("driving")}
-                title="Driving"
-                className="shadow-sm h-7 w-7 sm:h-8 sm:w-8"
-              >
-                <Navigation className="size-3 sm:size-4" />
-              </Button>
-              <Button
-                size="icon-sm"
-                variant={profile === "walking" ? "default" : "secondary"}
-                onClick={() => setProfile("walking")}
-                title="Walking"
-                className="shadow-sm h-7 w-7 sm:h-8 sm:w-8"
-              >
-                <Users className="size-3 sm:size-4" />
-              </Button>
-              <Button
-                size="icon-sm"
-                variant={profile === "cycling" ? "default" : "secondary"}
-                onClick={() => setProfile("cycling")}
-                title="Cycling"
-                className="shadow-sm h-7 w-7 sm:h-8 sm:w-8"
-              >
-                <Route className="size-3 sm:size-4" />
-              </Button>
-            </div>
+            {filteredCustomers.length >= 2 && (
+              <div className="pointer-events-auto flex gap-1">
+                <Button
+                  size="icon-sm"
+                  variant={profile === "driving" ? "default" : "secondary"}
+                  onClick={() => setProfile("driving")}
+                  title="Driving"
+                  className="shadow-sm h-7 w-7 sm:h-8 sm:w-8"
+                >
+                  <Navigation className="size-3 sm:size-4" />
+                </Button>
+                <Button
+                  size="icon-sm"
+                  variant={profile === "walking" ? "default" : "secondary"}
+                  onClick={() => setProfile("walking")}
+                  title="Walking"
+                  className="shadow-sm h-7 w-7 sm:h-8 sm:w-8"
+                >
+                  <Users className="size-3 sm:size-4" />
+                </Button>
+                <Button
+                  size="icon-sm"
+                  variant={profile === "cycling" ? "default" : "secondary"}
+                  onClick={() => setProfile("cycling")}
+                  title="Cycling"
+                  className="shadow-sm h-7 w-7 sm:h-8 sm:w-8"
+                >
+                  <Route className="size-3 sm:size-4" />
+                </Button>
+              </div>
+            )}
 
             {/* Route Stats */}
             {!loading && routes.length > 0 && totalDistance > 0 && (
@@ -819,117 +953,107 @@ export function CustomerMap({
           {/* The Map */}
           <div className="h-full w-full">
             <Map center={center} zoom={12} className="h-full w-full">
-                {/* ALWAYS RENDER BOTH LAYERS - Let MapLayers handle visibility */}
-                
-                {/* Street View Layer */}
-            
-
-                {/* Satellite View Layer - Multiple reliable sources */}
-               {mapType == 'satellite' ?  
-
-               <MapTileLayer
+              {mapType === 'satellite' ? (
+                <MapTileLayer
                   name="Satellite"
                   url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
                   attribution='&copy; <a href="https://www.google.com/maps">Google</a>'
-                /> 
-
-                :
-
+                />
+              ) : (
                 <>
                   <MapTileLayer
-                  name="Satellite (Fallback)"
-                  url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                  attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
-                />
+                    name="Street"
+                    url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                  />
                   <MapTileLayer
-                  name="Street"
-                  url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
-                  attribution='&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; <a href="https://carto.com/attributions">CARTO</a>'
-                /> 
-              
+                    name="Satellite (Fallback)"
+                    url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                    attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
+                  />
                 </>
+              )}
 
+              <MapZoomControl position="top-1 left-1" />
+              <MapLocateControl position="right-1 bottom-1" />
 
-               }
-
-
-
-                <MapZoomControl position="top-1 left-1" />
-                <MapLocateControl position="right-1 bottom-1" />
-
-                {/* Routes */}
-                {showRoutes &&
-                  routes.map((route) => (
+              {/* Routes */}
+              {showRoutes && routes.length > 0 && filteredCustomers.length >= 2 && (
+                <>
+                  {routes.map((route) => (
                     <MapPolyline
                       key={route.id}
                       positions={route.coordinates}
-                      color={highlightedRoute === route.id ? route.color : route.color}
+                      color={highlightedRoute === route.id ? "#2563eb" : route.color}
                       weight={highlightedRoute === route.id ? 6 : 3}
-                      opacity={highlightedRoute === route.id ? 1 : 0.5}
+                      opacity={highlightedRoute === route.id ? 1 : 0.4}
                       lineJoin="round"
                       lineCap="round"
                       smoothFactor={0}
                     />
                   ))}
+                </>
+              )}
 
-                {/* Customer Markers */}
-                {customers.map((customer) => {
-                  const isSelected = selectedCustomer?.id === customer.id;
-                  const isHighlighted = highlightedRoute && routes.some(r => 
-                    r.id === highlightedRoute && r.customerIds.includes(customer.id)
-                  );
+              {/* Customer Markers */}
+              {filteredCustomers.map((customer) => {
+                const isSelected = selectedCustomer?.id === customer.id;
 
-                  return (
-                    <MapMarker
-                      key={customer.id}
-                      position={[customer.lat, customer.lng]}
-                    >
-                      <MapPopup>
-                        <div className="space-y-2 p-1 min-w-[200px] max-w-[280px]">
-                          <div className="flex items-center justify-between">
-                            <div className="font-semibold text-sm sm:text-base">{customer.name}</div>
-                            <CustomerStatusBadge status={customer.status} />
+                return (
+                  <MapMarker
+                    key={customer.id}
+                    position={[customer.lat, customer.lng]}
+                    onClick={() => setSelectedCustomer(customer)}
+                  >
+                    <MapPopup>
+                      <div className="space-y-2 p-1 min-w-[200px] max-w-[280px]">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-semibold text-sm sm:text-base truncate">
+                            {customer.name}
                           </div>
-                          <div className="text-xs sm:text-sm text-muted-foreground">
-                            {customer.company}
-                          </div>
-                          <Separator />
-                          <div className="grid grid-cols-2 gap-1 sm:gap-2 text-xs sm:text-sm">
-                            <div>
-                              <span className="text-muted-foreground">Revenue:</span>{" "}
-                              <span className="font-medium">₱{customer.revenue.toLocaleString()}</span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Priority:</span>{" "}
-                              <span className="font-medium capitalize">{customer.priority}</span>
-                            </div>
-                            <div className="col-span-2">
-                              <span className="text-muted-foreground">Address:</span>{" "}
-                              <span className="text-xs">{customer.address}</span>
-                            </div>
-                            <div className="col-span-2">
-                              <span className="text-muted-foreground">Phone:</span>{" "}
-                              <span className="text-xs">{customer.phone}</span>
-                            </div>
-                            <div className="col-span-2">
-                              <span className="text-muted-foreground">Email:</span>{" "}
-                              <span className="text-xs break-all">{customer.email}</span>
-                            </div>
-                          </div>
-                          {customer.notes && (
-                            <>
-                              <Separator />
-                              <div className="text-xs sm:text-sm">
-                                <span className="text-muted-foreground">Notes:</span>{" "}
-                                {customer.notes}
-                              </div>
-                            </>
-                          )}
+                          <CustomerStatusBadge status={customer.status} />
                         </div>
-                      </MapPopup>
-                    </MapMarker>
-                  );
-                })}
+                        <div className="text-xs sm:text-sm text-muted-foreground flex items-center gap-1">
+                          <Building2 className="size-3" />
+                          {customer.company}
+                        </div>
+                        <Separator />
+                        <div className="grid grid-cols-2 gap-1 sm:gap-2 text-xs sm:text-sm">
+                          <div>
+                            <span className="text-muted-foreground">Revenue:</span>{" "}
+                            <span className="font-medium">₱{customer?.revenue?.toLocaleString()}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Priority:</span>{" "}
+                            <span className="font-medium capitalize">{customer.priority}</span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-muted-foreground">Address:</span>{" "}
+                            <span className="text-xs">{customer.address}</span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-muted-foreground">Phone:</span>{" "}
+                            <span className="text-xs">{customer.phone}</span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-muted-foreground">Email:</span>{" "}
+                            <span className="text-xs break-all">{customer.email}</span>
+                          </div>
+                        </div>
+                        {customer.notes && (
+                          <>
+                            <Separator />
+                            <div className="text-xs sm:text-sm">
+                              <span className="text-muted-foreground">Notes:</span>{" "}
+                              {customer.notes}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </MapPopup>
+                  </MapMarker>
+                );
+              })}
             </Map>
           </div>
 
@@ -942,6 +1066,21 @@ export function CustomerMap({
               </div>
             </div>
           )}
+
+          {/* No Customers Message */}
+          {!loading && filteredCustomers.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-[1000] pointer-events-none">
+              <div className="flex flex-col items-center gap-3 bg-background/90 p-4 sm:p-6 rounded-lg shadow-lg max-w-sm text-center">
+                <AlertCircle className="size-8 sm:size-10 text-muted-foreground" />
+                <h3 className="font-semibold text-sm sm:text-base">No Customers Found</h3>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  {searchQuery 
+                    ? "No customers match your search criteria. Try adjusting your filters."
+                    : "No customers have been added to this company yet."}
+                </p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -949,6 +1088,6 @@ export function CustomerMap({
 }
 
 // ============================================================
-// 10. Export
+// 11. Export
 // ============================================================
 export default CustomerMap;
