@@ -140,6 +140,7 @@ const transformOrderForDashboard = (order: any): DashboardOrder => {
     thumbnail: item.thumbnail,
   }));
 
+
   // Get customer name
   let customerName = order.email || "Guest";
   let customerPhone = "N/A";
@@ -153,7 +154,11 @@ const transformOrderForDashboard = (order: any): DashboardOrder => {
     customerPhone = order.shipping_address.phone;
   }
 
+  const totalQuantity = formattedItems.reduce((sum: any, item: any) => sum + item.quantity, 0);
+
+
   return {
+    ...order,
     id: order.id,
     display_id: order.display_id,
     status: order.status,
@@ -174,6 +179,7 @@ const transformOrderForDashboard = (order: any): DashboardOrder => {
     formatted_tax: formatCurrency(order.tax_total || 0, order.currency_code),
     currency_code: order.currency_code,
     email: order.email,
+    totalQuantity,
     customer_name: customerName,
     customer_phone: customerPhone,
     customer_id: order.customer_id,
@@ -277,6 +283,7 @@ const buildQueryString = (
   params.set("expand_addresses", "true");
   params.set("expand_shipping_methods", "true");
   params.set("expand_payments", "false");
+  params.set("expand_delivery_info", "true");
 
   return params.toString();
 };
@@ -293,7 +300,7 @@ export const listOrders = async (
     const next = await getCacheOptions("orders");
     const queryString = buildQueryString(limit, offset, filters, sort);
     // Use Medusa SDK client to fetch from custom endpoint
-    const response = await sdk.client.fetch<any>(
+    const response = await sdk.client.fetch(
       `/dashboard/orders?${queryString}`,
       {
         method: "GET",
@@ -304,7 +311,8 @@ export const listOrders = async (
 console.log(response.orders, 'RESSSPPON')
     // Transform orders for dashboard
     const transformedOrders = response.orders?.map(transformOrderForDashboard) || [];
-    
+    console.log(transformedOrders, 'TRANSFORMM RESSSPPON')
+
     const totalPages = Math.ceil((response.count || 0) / limit);
     const currentPage = Math.floor(offset / limit) + 1;
     return {
@@ -340,7 +348,7 @@ export const retrieveOrder = async (id: string): Promise<DashboardOrder | null> 
     const headers = await getAuthHeaders();
     const next = await getCacheOptions("orders");
 
-    const response = await sdk.client.fetch<any>(
+    const response = await sdk.client.fetch(
       `/store/orders/${id}`,
       {
         method: "GET",

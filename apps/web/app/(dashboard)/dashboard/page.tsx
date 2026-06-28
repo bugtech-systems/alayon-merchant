@@ -21,6 +21,14 @@ export default async function Page() {
 
   const userRole = (user?.metadata?.role as string || "store");
   
+
+
+
+
+
+
+
+
   // Pass user data to client component
   return <DashboardClient user={user} userRole={userRole} />;
 }

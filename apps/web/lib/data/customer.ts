@@ -1,6 +1,6 @@
 "use server"
 
-import { sdk } from "@/lib/medusa/config"
+import { sdk } from "@/lib/config";
 import medusaError from "@/lib/medusa/util/medusa-error"
 import { B2BCustomer } from "@/types/global"
 import { HttpTypes } from "@medusajs/types"
@@ -17,7 +17,7 @@ import {
   removeAuthToken,
   removeCartId,
   setAuthToken,
-} from "../medusa/data/cookies"
+} from "../data/cookies"
 import { n8nFetcher } from "@/hooks/useN8nQuery"
 
 export const retrieveCustomer = async (): Promise<B2BCustomer | null> => {
@@ -35,8 +35,7 @@ export const retrieveCustomer = async (): Promise<B2BCustomer | null> => {
 
 
 
-  return await sdk.client
-    .fetch<{ customer: B2BCustomer }>(`/store/customers/me`, {
+  return await sdk.client.fetch(`/store/customers/me`, {
       method: "GET",
       query: {
         // fields: "",
@@ -537,7 +536,7 @@ export interface ListCustomersWithOrdersResponse {
 export async function listCustomersWithOrders(
   params: ListCustomersWithOrdersParams = {}
 ): Promise<ListCustomersWithOrdersResponse> {
-  try { 
+  try {
     const headers = await getAuthHeaders();
     
     // Build query parameters
@@ -545,10 +544,10 @@ export async function listCustomersWithOrders(
     
     if (params.limit) queryParams.append("limit", params.limit.toString());
     if (params.offset) queryParams.append("offset", params.offset.toString());
-    if (params.search) queryParams.append("search", params.search);
+    // if (params.search) queryParams.append("search", params.search);
     if (params.company_id) queryParams.append("company_id", params.company_id);
     if (params.customer_group_id) queryParams.append("customer_group_id", params.customer_group_id);
-    if (params.has_account) queryParams.append("has_account", params.has_account);
+    // if (params.has_account) queryParams.append("has_account", params.has_account);
     if (params.sort_field) queryParams.append("sort_field", params.sort_field);
     if (params.sort_order) queryParams.append("sort_order", params.sort_order);
 
@@ -558,7 +557,7 @@ export async function listCustomersWithOrders(
       method: "GET",
       headers,
     });
-
+    console.log(response, "RESSPP", url)
     return response;
   } catch (error) {
     console.error("Error fetching customers with orders:", error);

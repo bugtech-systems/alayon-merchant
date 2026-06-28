@@ -7,6 +7,9 @@ import { DynamicOrdersTable } from "@/components/proposal-sections-table/table";
 import { DeliverySectionCards } from "@/components/company/section-cards";
 import DriverDashboard from "./rider/page";
 import type { DashboardOrder } from "@/lib/data/orders";
+import { CompanyOrdersTable } from "@/components/company-orders-table/table";
+import React from "react";
+import { useMedusaOrders } from "@/hooks/useMedusaOrders";
 
 interface DashboardClientProps {
   user: any;
@@ -16,6 +19,22 @@ interface DashboardClientProps {
 export function DashboardClient({ user, userRole }: DashboardClientProps) {
   const router = useRouter();
 
+  const pricingContext = React.useMemo(() => ({
+    priceListId: user?.metadata?.role === 'company' 
+      ? user.employee?.company?.price_list_id 
+      : user?.driver?.price_list_id,
+    customerGroupId: user?.metadata?.role === 'company' 
+      ? user.employee?.company?.customer_group_id 
+      : user?.driver?.customer_group_id,
+    customerId: user?.id,
+    companyId: user?.metadata?.role == 'company' ? user.employee?.company_id : user?.driver?.company_id,
+    stockLocationId: user?.metadata?.role == 'company' ? user.employee?.company?.stock_location_id : user?.driver?.stock_location_id,
+    pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
+  }), [user]);
+
+  const { data, refetch } = useMedusaOrders({filters: { company_id: pricingContext.companyId}})
+
+  
   const handleAssignRider = async (orderId: string, riderName: string | null, riderId: string | null) => {
     try {
       const response = await fetch("/api/orders/assign-rider", {
@@ -91,16 +110,13 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           onAddOrder={handleAddOrder}
           onContactRider={handleContactRider}
         />
-       <DynamicOrdersTable
-  views={[]}
-  filters={[ ]}
-  enableExport={true}
-  enableBulkActions={true}
-  onAssignRider={handleAssignRider}
+       <CompanyOrdersTable
+       data={data?.orders || []}
+  onAssignDriver={handleAssignRider}
   onUpdateStatus={handleUpdateStatus}
   onContactRider={handleContactRider}
-  refreshInterval={30000}
-  company={company}
+  onRefresh={() => refetch()}
+  companyId={company?.id}
 />
       </div>
     );
@@ -109,7 +125,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   if (userRole === "driver") {
     return (
       <div className="@container/main flex flex-col gap-4 md:gap-6">
-        <DriverDashboard />
+        <DriverDashboard user={user}/>
       </div>
     );
   }
@@ -117,7 +133,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     if (userRole === "store") {
     return (
       <div className="@container/main flex flex-col gap-4 md:gap-6">
-        <DriverDashboard />
+        <DriverDashboard user={user}/>
       </div>
     );
   }

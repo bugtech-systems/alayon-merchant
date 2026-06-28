@@ -28,7 +28,7 @@ import {
 import { QuickCreateButton } from "../quick-create-button";
 import { quickCreateActions } from "@/config/quick-create-actions";
 import { QuickCreateDropdown } from "../quick-create-dropdown";
-import { MinimalSMSDialog, SMSDialog } from "./send-sms";
+import { MinimalSMSDialog} from "./send-sms";
 
 interface NavMainProps {
   readonly items: readonly any[];
@@ -197,7 +197,7 @@ export function NavMain({ items }: NavMainProps) {
                 align="end"
                 side="bottom"
               /> */}
-              <MinimalSMSDialog
+              {/* <MinimalSMSDialog
                 trigger={
 <Button
                 size="icon"
@@ -208,7 +208,7 @@ export function NavMain({ items }: NavMainProps) {
                 <span className="sr-only">Inbox</span>
               </Button>
                 }
-              />
+              /> */}
               
             </SidebarMenuItem>
           </SidebarMenu>

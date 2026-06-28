@@ -119,9 +119,11 @@ interface CustomerTableProps {
   companyId?: string;
   enableRealtime?: boolean;
   staleTime?: number;
+  user?: any;
 }
 
 export function CustomerTable({ 
+  user,
   onEditCustomer,
   onAddCustomer,
   onSendEmail,
@@ -151,24 +153,36 @@ export function CustomerTable({
   
   const [availableCities, setAvailableCities] = React.useState<string[]>([]);
   
-  // Initialize filters from URL params
-  const [filters, setFilters] = React.useState<CustomerFilters>(() => ({
+  // Filter state
+  const [filters, setFilters] = React.useState<any>({
     search: searchParams.get("search") || "",
     dateFrom: searchParams.get("dateFrom") ? new Date(searchParams.get("dateFrom")!) : undefined,
     dateTo: searchParams.get("dateTo") ? new Date(searchParams.get("dateTo")!) : undefined,
-    minSpent: searchParams.get("minSpent") ? Number(searchParams.get("minSpent")) : undefined,
-    maxSpent: searchParams.get("maxSpent") ? Number(searchParams.get("maxSpent")) : undefined,
-    minOrders: searchParams.get("minOrders") ? Number(searchParams.get("minOrders")) : undefined,
-    maxOrders: searchParams.get("maxOrders") ? Number(searchParams.get("maxOrders")) : undefined,
-    city: searchParams.get("city") || undefined,
-    tags: searchParams.get("tags")?.split(",") || undefined,
-    sortBy: searchParams.get("sortBy") || "joined_date",
+    minAmount: searchParams.get("minAmount") ? Number(searchParams.get("minAmount")) : undefined,
+    maxAmount: searchParams.get("maxAmount") ? Number(searchParams.get("maxAmount")) : undefined,
+    driverId: searchParams.get("driverId") || undefined,
+    sortBy: searchParams.get("sortBy") || "created_at",
     sortOrder: (searchParams.get("sortOrder") as "ASC" | "DESC") || "DESC",
-    companyId: companyId,
-  }));
+  });
   
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   
+  const pricingContext = React.useMemo(() => ({
+    priceListId: user?.metadata?.role === 'company' 
+      ? user.employee?.company?.price_list_id 
+      : user?.driver?.price_list_id,
+    customerGroupId: user?.metadata?.role === 'company' 
+      ? user.employee?.company?.customer_group_id 
+      : user?.driver?.customer_group_id,
+    customerId: user?.id,
+    stockLocationId: user?.metadata?.role == 'company' ? user.employee?.company?.stock_location_id : user?.driver?.stock_location_id,
+    pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
+  }), [user]);
+
+
+
+
+
   const sortableId = React.useId();
   const sensors = useSensors(
     useSensor(MouseSensor, {}), 
@@ -196,8 +210,9 @@ export function CustomerTable({
       sortBy: filters.sortBy,
       sortOrder: filters.sortOrder,
       companyId: filters.companyId,
+      customer_group_id: pricingContext.customerGroupId
     };
-  }, [activeView, filters, pagination.pageIndex, pagination.pageSize]);
+  }, [activeView, filters, pagination.pageIndex, pagination.pageSize, pricingContext]);
 
   // React Query hook for fetching customers
   const {
@@ -497,7 +512,7 @@ export function CustomerTable({
               )}
             </div>
             
-            <Sheet open={isFilterOpen} onOpenChange={setIsFilterOpen}>
+            {/* <Sheet open={isFilterOpen} onOpenChange={setIsFilterOpen}>
               <SheetTrigger asChild>
                 <Button variant="outline" size="sm" className="relative">
                   <FilterIcon className="size-4 mr-2" />
@@ -653,7 +668,7 @@ export function CustomerTable({
                   </SheetClose>
                 </SheetFooter>
               </SheetContent>
-            </Sheet>
+            </Sheet> */}
           </div>
           
           <div className="flex items-center gap-2">

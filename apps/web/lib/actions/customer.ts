@@ -15,7 +15,6 @@ import {
   getCustomerGroupId,
   removeAuthToken,
   removeCartId,
-  setAuthToken,
 } from "@/lib/data/cookies"
 import { z } from "zod"
 
@@ -41,6 +40,7 @@ export interface CustomerFilters {
   companyId?: string
   sortBy?: string
   sortOrder?: "ASC" | "DESC"
+  customer_group_id?: string
   includeCompany?: boolean
   includeOrders?: boolean
 }
@@ -80,6 +80,7 @@ const GetCustomersSchema = z.object({
   city: z.string().optional(),
   hasCompany: z.boolean().optional(),
   companyId: z.string().optional(),
+  customer_group_id: z.string().optional(),
   sortBy: z.enum(["created_at", "email", "first_name", "last_name", "orders", "total_spent"]).default("created_at"),
   sortOrder: z.enum(["ASC", "DESC"]).default("DESC"),
   includeCompany: z.boolean().default(false),
@@ -109,6 +110,7 @@ export async function getCustomers(
       city: params.city,
       hasCompany: params.hasCompany,
       companyId: params.companyId,
+      customer_group_id: params.customer_group_id,
       sortBy: params.sortBy,
       sortOrder: params.sortOrder,
       includeCompany: params.includeCompany,
@@ -143,6 +145,11 @@ export async function getCustomers(
     // Add company filter
     if (validatedParams.companyId) {
       queryParams.company_id = validatedParams.companyId
+    }
+
+        // Add company filter
+    if (validatedParams.customer_group_id) {
+      queryParams.customer_group_id = validatedParams.customer_group_id
     }
 
     // Add date range filters

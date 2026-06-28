@@ -92,7 +92,21 @@ function transformToWaterDeliveryOrder(customer: CustomerWithOrders): any {
   };
 }
 
-export default function DashboardPage() {
+export default function DashboardPage({user}: any) {
+  // Pricing strategy from user context
+  const pricingContext = React.useMemo(() => ({
+    priceListId: user?.metadata?.role === 'company' 
+      ? user.employee?.company?.price_list_id 
+      : user?.driver?.price_list_id,
+    customerGroupId: user?.metadata?.role === 'company' 
+      ? user.employee?.company?.customer_group_id 
+      : user?.driver?.customer_group_id,
+    customerId: user?.id,
+    stockLocationId: user?.metadata?.role == 'company' ? user.employee?.company?.stock_location_id : user?.driver?.stock_location_id,
+    pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
+  }), [user]);
+
+
   // Use React Query for data fetching
   const { 
     data, 
@@ -108,6 +122,7 @@ export default function DashboardPage() {
         offset: 0,
         sort_field: "created_at",
         sort_order: "DESC",
+        customer_group_id: pricingContext.customerGroupId
       });
       return result;
     },
@@ -124,7 +139,7 @@ export default function DashboardPage() {
     
     // Transform customers to orders
     const orders = customers
-      .filter((c: CustomerWithOrders) => c.latest_order !== null)
+      // .filter((c: CustomerWithOrders) => c.latest_order !== null)
       .map(transformToWaterDeliveryOrder);
 
     // Calculate KPI data
@@ -241,7 +256,7 @@ export default function DashboardPage() {
       />
 
       {/* Task Reminders */}
-      <TaskReminders />
+      <TaskReminders customerId={pricingContext.customerId} locationId={pricingContext.stockLocationId}/>
 
       {/* Water Delivery Orders */}
       <WaterDeliveryOrdersSection 

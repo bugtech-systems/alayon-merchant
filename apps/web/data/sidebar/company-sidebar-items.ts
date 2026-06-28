@@ -61,12 +61,6 @@ export const companySidebarItems: NavGroup[] = [
         // comingSoon: true
       },
       {
-        title: "Team",
-        url: "/team",
-        icon: Users,
-        // comingSoon: true
-      },
-      {
         title: "Customers",
         url: "/company/customers",
         icon: Banknote,
