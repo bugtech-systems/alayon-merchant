@@ -102,6 +102,7 @@ export default function DashboardPage({user}: any) {
       ? user.employee?.company?.customer_group_id 
       : user?.driver?.customer_group_id,
     customerId: user?.id,
+    driverId: user?.metadata?.role == 'company' ? user.id : user?.driver?.id,
     stockLocationId: user?.metadata?.role == 'company' ? user.employee?.company?.stock_location_id : user?.driver?.stock_location_id,
     pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
   }), [user]);

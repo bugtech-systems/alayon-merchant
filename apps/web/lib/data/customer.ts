@@ -557,6 +557,8 @@ export async function listCustomersWithOrders(
       method: "GET",
       headers,
     });
+
+    
     console.log(response, "RESSPP", url)
     return response;
   } catch (error) {

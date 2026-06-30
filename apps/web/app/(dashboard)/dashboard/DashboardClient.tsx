@@ -10,6 +10,7 @@ import type { DashboardOrder } from "@/lib/data/orders";
 import { CompanyOrdersTable } from "@/components/company-orders-table/table";
 import React from "react";
 import { useMedusaOrders } from "@/hooks/useMedusaOrders";
+import { assignDriverToOrder } from "@/lib/data";
 
 interface DashboardClientProps {
   user: any;
@@ -35,18 +36,13 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   const { data, refetch } = useMedusaOrders({filters: { company_id: pricingContext.companyId}})
 
   
-  const handleAssignRider = async (orderId: string, riderName: string | null, riderId: string | null) => {
+  const handleAssignRider = async (orderId: string, riderId: string | null) => {
     try {
-      const response = await fetch("/api/orders/assign-rider", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId, riderName, riderId }),
-      });
-      
-      if (!response.ok) throw new Error("Failed to assign rider");
-      
+      const response = await assignDriverToOrder(orderId, riderId);
+      await refetch()
+
       // Show success notification
-      console.log("Rider assigned successfully");
+      console.log("Rider assigned successfully", response);
     } catch (error) {
       console.error("Error assigning rider:", error);
     }

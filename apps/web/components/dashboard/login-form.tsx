@@ -43,6 +43,7 @@ import {
 
 // Import your login action
 import { login } from "@/lib/actions";
+import { removeCartId, removeSession } from "@/lib/data/cookies";
 
 // Login validation schema
 const loginSchema = z.object({
@@ -108,6 +109,8 @@ export function LoginForm({onSuccess }: LoginFormProps) {
     setServerError("");
     setSuccessMessage("");
     clearErrors();
+
+    console.log('LOGGING')
     let redirectUrl = watchedUserType == 'store' ? '/pos' : '/dashboard';
     startTransition(async () => {
       try {
@@ -118,7 +121,11 @@ export function LoginForm({onSuccess }: LoginFormProps) {
           }
         });
         localStorage.removeItem('pos_cart_id');
+        await removeCartId()
+        removeSession();
+        console.log( data, 'DATAA')
         const result = await login(data, formData);
+        console.log(result, 'RESSS')
         if (!result?.success) {
           setServerError(result.error ?? result);
           

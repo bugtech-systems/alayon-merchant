@@ -48,7 +48,6 @@ export async function retrieveDriver(driverId: string): Promise<DriverDTO> {
 
 
 export async function retrieveDriverStocks(customerId: any, locationId: string): Promise<any> {
-  console.log(customerId, locationId, 'rettrr')
       const headers = await getAuthHeaders();
  
   const queryParams = new URLSearchParams();
@@ -71,7 +70,6 @@ export async function retrieveDriverStocks(customerId: any, locationId: string):
   // });
 
 
-  console.log(response, 'STOCKS')
   return response;
 }
 
@@ -80,12 +78,18 @@ export async function retrieveDriverStocks(customerId: any, locationId: string):
 
 
 // Fetch all available drivers
-export async function fetchAvailableDrivers(locationId?: string): Promise<Driver[]> {
+export async function fetchAvailableDrivers({locationId, companyId}: any): Promise<Driver[]> {
   try {
     const queryParams = new URLSearchParams();
     if (locationId) {
       queryParams.append('location_id', locationId);
     }
+
+    if (companyId) {
+      queryParams.append('company_id', companyId);
+    }
+    
+
     
     const response = await sdk.client.fetch(`/dashboard/company/drivers?${queryParams.toString()}`);
     return response.data?.drivers || [];
@@ -112,9 +116,9 @@ export async function assignDriverToOrder(
   driverId: string | null
 ): Promise<DriverAssignmentResponse> {
   try {
-    const response = await sdk.client.fetch(`/store/orders/${orderId}/assign-driver`, {
+    const response = await sdk.client.fetch(`/dashboard/company/orders/assign`, {
       method: 'POST',
-      body: JSON.stringify({ driverId }),
+      body: { driverId, orderId },
       headers: {
         'Content-Type': 'application/json',
       },

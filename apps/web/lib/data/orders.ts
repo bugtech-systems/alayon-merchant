@@ -308,10 +308,8 @@ export const listOrders = async (
         next,
       }
     );
-console.log(response.orders, 'RESSSPPON')
     // Transform orders for dashboard
     const transformedOrders = response.orders?.map(transformOrderForDashboard) || [];
-    console.log(transformedOrders, 'TRANSFORMM RESSSPPON')
 
     const totalPages = Math.ceil((response.count || 0) / limit);
     const currentPage = Math.floor(offset / limit) + 1;

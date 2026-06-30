@@ -353,6 +353,7 @@ export async function login(_currentState: unknown, formData: FormData) {
 
     await removeAuthToken();
     await removeCartId()
+    console.log(email, password, 'passs')
     return await sdk.auth
       .login("customer", "emailpass", { email, password })
       .then(async (token) => {
@@ -379,6 +380,8 @@ export async function login(_currentState: unknown, formData: FormData) {
         //     },
         //   })
         // }
+
+        console.log(userData, 'USSERR')
                 if(userData && userData?.metadata?.role){
                     if(userData?.metadata?.role == 'driver'){
                         setCustomerGroupId(userData.driver.customer_group_id)
