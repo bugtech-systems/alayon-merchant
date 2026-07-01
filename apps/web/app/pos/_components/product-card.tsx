@@ -30,6 +30,7 @@ interface ProductCardProps {
     unitPrice: number;
     originalPrice: number;
     pricingStrategy: string;
+    companyId?: string;
   }) => Promise<void>;
   region?: Region;
   isLoading: boolean;
@@ -37,6 +38,7 @@ interface ProductCardProps {
   onVariantChange: (productId: string, variantId: string) => void;
   priceListId?: string;
   customerGroupId?: string;
+  companyId?: string;
 }
 
 // Helper function to extract the best price from variant prices
@@ -105,6 +107,7 @@ export function ProductCard({
   onVariantChange,
   priceListId,
   customerGroupId,
+  companyId
 }: ProductCardProps) {
   const { toast } = useToast();
   const [isAdding, setIsAdding] = useState(false);
@@ -197,7 +200,8 @@ export function ProductCard({
         productTitle: product.title,
         unitPrice: price,
         originalPrice: originalPrice,
-        pricingStrategy: pricingStrategy
+        pricingStrategy: pricingStrategy,
+        companyId: companyId
       });
       
       toast({ 

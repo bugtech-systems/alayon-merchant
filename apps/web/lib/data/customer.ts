@@ -553,7 +553,7 @@ export async function listCustomersWithOrders(
 
     const url = `/dashboard/drivers/customers-order?${queryParams.toString()}`;
     
-    const response = await sdk.client.fetch<ListCustomersWithOrdersResponse>(url, {
+    const response = await sdk.client.fetch(url, {
       method: "GET",
       headers,
     });

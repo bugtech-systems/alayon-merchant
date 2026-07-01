@@ -27,7 +27,7 @@ import {
   type Row,
 } from "@tanstack/react-table";
 import { ChevronDownIcon, ListFilter, XIcon, PackageIcon, TruckIcon, UserIcon, PhoneIcon, MapPinIcon, CalendarIcon, TrendingUpIcon } from "lucide-react";
-
+import { formatDistanceToNow, parseISO, format } from 'date-fns';
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -70,6 +70,7 @@ const statusConfig = {
   ready_for_pickup: { label: "Ready for Pickup", variant: "default" },
   in_transit: { label: "In Transit", variant: "default" },
   delivered: { label: "Delivered", variant: "success" },
+  completed: { label: "Completed", variant: "success" },
 } as const;
 
 // Stock health bar slots
@@ -100,6 +101,7 @@ function getStatusColor(status: string) {
     ready_for_pickup: "bg-cyan-100 text-cyan-800 border-cyan-200",
     in_transit: "bg-emerald-100 text-emerald-800 border-emerald-200",
     delivered: "bg-green-100 text-green-800 border-green-200",
+    completed: "bg-green-100 text-green-800 border-green-200",
   };
   return colors[status] || "bg-gray-100 text-gray-800 border-gray-200";
 }
@@ -133,6 +135,7 @@ const getStatusLabel = (status: string) => {
     ready_for_pickup: "Ready for Pickup",
     in_transit: "In Transit",
     delivered: "Delivered",
+    completed: "Delivered",
   };
   return labels[status] || status;
 };
@@ -166,22 +169,27 @@ export const waterDeliveryColumns = [
   {
     accessorKey: "orderNumber",
     header: "Order #",
-    cell: ({ row }: { row: any }) => (
+    cell: ({ row }: { row: any }) => {
+    const fullNumber = row.original.latest_order?.delivery?.id || row.original.latest_order?.id;
+    const last4 = fullNumber?.slice(-4) || row.original._display.last_order_number || 'N/A';
+    
+      return (
       <div className="flex items-center gap-2">
         <PackageIcon className="size-3.5 text-muted-foreground" />
         <span className="font-mono text-sm font-medium">
-          #{row.original.orderNumber}
+          #{last4}
         </span>
       </div>
-    ),
+    )
+  },
     size: 120,
   },
   {
     accessorKey: "customer",
     header: "Customer",
     cell: ({ row }: { row: any }) => {
-      const initials = row.original.customer
-        .split(" ")
+      console.log(row, 'ROWWW')
+      const initials = row.original.customer.split(" ")
         .map((n: string) => n[0])
         .join("")
         .toUpperCase()
@@ -198,7 +206,7 @@ export const waterDeliveryColumns = [
             <span className="font-medium text-sm">{row.original.customer}</span>
             <span className="text-xs text-muted-foreground flex items-center gap-1">
               <PhoneIcon className="size-3" />
-              {row.original.customerPhone}
+              {row.original.phone}
             </span>
           </div>
         </div>
@@ -212,7 +220,7 @@ export const waterDeliveryColumns = [
     cell: ({ row }: { row: any }) => (
       <div className="flex items-center gap-2">
         <MapPinIcon className="size-3.5 text-muted-foreground" />
-        <span className="text-sm">{row.original.location}</span>
+        <span className="text-sm">{row.original._display.shipping_city}</span>
       </div>
     ),
     size: 150,
@@ -221,7 +229,8 @@ export const waterDeliveryColumns = [
     accessorKey: "status",
     header: "Status",
     cell: ({ row }: { row: any }) => {
-      const status = row.original.status;
+      const status = row.original.status || row.original?._display?.latest_order_status;
+      console.log(status, 'STATSS')
       return (
         <Badge className={`${getStatusColor(status)} border`}>
           {getStatusLabel(status)}
@@ -235,9 +244,10 @@ export const waterDeliveryColumns = [
     accessorKey: "stockHealth",
     header: "Stock Bar",
     cell: ({ row }: { row: any }) => {
-      const { remainingStock, previousOrderQty } = row.original;
-      const healthScore = getStockHealthScore(remainingStock, previousOrderQty);
-      const percentage = Math.round((remainingStock / previousOrderQty) * 100);
+      const { remainingStock, previousOrderQty } = row.original?.stock_health;
+      console.log(remainingStock, previousOrderQty, 'ORGG')
+      const healthScore = getStockHealthScore(previousOrderQty, previousOrderQty);
+      const percentage = Math.round((previousOrderQty / previousOrderQty) * 100);
       
       return (
         <div className="flex items-center gap-3">
@@ -267,6 +277,7 @@ export const waterDeliveryColumns = [
     },
     filterFn: (row: any, _: any, filterValue: string) => {
       const { remainingStock, previousOrderQty } = row.original;
+      console.log(row.original, 'flterr')
       const percentage = (remainingStock / previousOrderQty) * 100;
       
       switch (filterValue) {
@@ -287,7 +298,7 @@ export const waterDeliveryColumns = [
     header: () => <div className="text-right">Qty</div>,
     cell: ({ row }: { row: any }) => (
       <div className="text-right tabular-nums">
-        {row.original.quantity.toLocaleString()}
+        {row.original.stock_health.previousOrderQty}
       </div>
     ),
     size: 80,
@@ -297,38 +308,49 @@ export const waterDeliveryColumns = [
     header: () => <div className="text-right">Total</div>,
     cell: ({ row }: { row: any }) => (
       <div className="text-right font-medium tabular-nums">
-        ₱{row.original.total.toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}
+        ₱{row.original.latest_order?.total
+        // .toLocaleString(undefined, {
+        //   minimumFractionDigits: 2,
+        //   maximumFractionDigits: 2,
+        // })
+        }
       </div>
     ),
     size: 120,
   },
-  {
-    accessorKey: "assignedDriver",
-    header: "Driver",
-    cell: ({ row }: { row: any }) => (
-      <div className="flex items-center gap-2">
-        <TruckIcon className="size-3.5 text-muted-foreground" />
-        <span className="text-sm">
-          {row.original.assignedDriver || "Unassigned"}
+
+  // {
+  //   accessorKey: "orderDate",
+  //   header: "Last Order Date",
+  //   cell: ({ row }: { row: any }) => (
+  //     <div className="flex items-center gap-2 text-sm">
+  //       <CalendarIcon className="size-3.5 text-muted-foreground" />
+  //       <span>{ row.original.last_order_at}</span>
+  //     </div>
+  //   ),
+  //   size: 130,
+  // },
+
+// In your column definition
+{
+  accessorKey: "last_order_at",
+  header: "Last Order",
+  cell: ({ row }) => {
+    const date = row.original.last_order_at;
+    if (!date) return <span className="text-muted-foreground">Never</span>;
+    
+    try {
+      const parsedDate = typeof date === 'string' ? parseISO(date) : date;
+      return (
+        <span title={format(parsedDate, 'PPP pp')}>
+          {formatDistanceToNow(parsedDate, { addSuffix: true })}
         </span>
-      </div>
-    ),
-    size: 140,
+      );
+    } catch {
+      return <span className="text-muted-foreground">Invalid date</span>;
+    }
   },
-  {
-    accessorKey: "orderDate",
-    header: "Order Date",
-    cell: ({ row }: { row: any }) => (
-      <div className="flex items-center gap-2 text-sm">
-        <CalendarIcon className="size-3.5 text-muted-foreground" />
-        <span>{row.original.orderDate}</span>
-      </div>
-    ),
-    size: 130,
-  },
+}
 ] as const;
 
 // Status options for filtering
@@ -394,6 +416,8 @@ export function WaterDeliveryOrdersSection({
     useSensor(KeyboardSensor, {})
   );
 
+
+  console.log(data, 'DATAA')
   const table = useReactTable({
     data: data,
     columns: waterDeliveryColumns as any,
@@ -500,6 +524,8 @@ export function WaterDeliveryOrdersSection({
     );
   }
 
+
+  console.log(selectedOrder, 'SLECTTED')
   return (
     <section>
       <Card>
@@ -672,7 +698,7 @@ export function WaterDeliveryOrdersSection({
           {filteredOrderCount > 0 && (
             <div className="flex items-center justify-between gap-4 px-4 pb-1">
               <p className="text-muted-foreground text-sm">
-                Showing {visibleOrderCount} of {filteredOrderCount.toLocaleString()} orders
+                Showing {visibleOrderCount} of {filteredOrderCount} orders
               </p>
 
               <Pagination className="mx-0 w-auto justify-end">
@@ -786,11 +812,11 @@ export function WaterDeliveryOrdersSection({
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <p className="text-muted-foreground text-xs">Quantity</p>
-                    <p className="font-medium">{selectedOrder.quantity.toLocaleString()} units</p>
+                    <p className="font-medium">{selectedOrder.quantity} units</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground text-xs">Total</p>
-                    <p className="font-medium">₱{selectedOrder.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                    <p className="font-medium">₱{selectedOrder.total}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground text-xs">Stock Health</p>
@@ -815,7 +841,7 @@ export function WaterDeliveryOrdersSection({
                   </div>
                   <div>
                     <p className="text-muted-foreground text-xs">Remaining Stock</p>
-                    <p className="font-medium">{selectedOrder.remainingStock.toLocaleString()} units</p>
+                    <p className="font-medium">{selectedOrder.remainingStock} units</p>
                   </div>
                   {selectedOrder.assignedDriver && (
                     <div className="col-span-2">

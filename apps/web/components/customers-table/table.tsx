@@ -724,10 +724,10 @@ export function CustomerTable({
               </DropdownMenuContent>
             </DropdownMenu>
             
-            <Button variant="outline" size="sm" onClick={onAddCustomer}>
+            {/* <Button variant="outline" size="sm" onClick={onAddCustomer}>
               <PlusIcon className="size-4" />
               <span className="hidden lg:inline ml-2">Add Customer</span>
-            </Button>
+            </Button> */}
           </div>
         </div>
         

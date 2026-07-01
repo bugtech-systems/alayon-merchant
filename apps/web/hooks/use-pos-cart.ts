@@ -13,6 +13,7 @@ interface UsePosCartProps {
   customerGroupId?: string;
   userId?: string;
   customerId?: any;
+  companyId?: any;
 }
 
 interface CustomPriceMetadata {
@@ -23,7 +24,7 @@ interface CustomPriceMetadata {
   original_strategy?: string;
 }
 
-export function usePosCart({ region, priceListId, customerGroupId, userId, customerId }: UsePosCartProps) {
+export function usePosCart({ region, priceListId, customerGroupId, userId, customerId, companyId }: UsePosCartProps) {
   const { toast } = useToast();
   const [cart, setCart] = useState<MedusaCart | null>(null);
   const [cartItems, setCartItems] = useState<MedusaCartItem[]>([]);
@@ -164,6 +165,7 @@ const updateCartState = useCallback((cartData: MedusaCart | null) => {
       const newCart = await sdk.store.cart.create({
         currency_code: region?.currency_code || "php",
         metadata: {
+          company_id: companyId,
           seller_id: userId,
           price_list_id: priceListId,
           customer_group_id: customerGroupId,

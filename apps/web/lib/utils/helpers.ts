@@ -27,6 +27,49 @@ const getNestedValue = (obj: any, path: string): any => {
   return current;
 };
 
+/**
+ * Gets nested value from object using path array
+ * @param {object} obj - Source object
+ * @param {string[]} pathParts - Path segments
+ * @returns {any} Found value or undefined
+ */
+
+
+function formatToTenDigits(str: any) {
+    if (!str || typeof str !== 'string') return str; // default fallback
+
+    if (str[0] !== '9') str = '9' + str;
+    while (str.length < 10) {
+        str += '0';
+    }
+    return str.slice(0, 10); // In case it's longer than 10
+}
+
+
+export function sanitizePhoneNumber(phoneNumber: any) {
+    // Remove any non-numeric characters from the phone number
+    if(!phoneNumber) return null;
+console.log(phoneNumber, "PHOONE")
+    const sanitized = String(phoneNumber).replace(/\D/g, '');
+
+    if (sanitized.length > 12) throw Error('Invalid phone number format');
+
+    // Check for common prefixes and remove them
+    if (sanitized.startsWith('09')) {
+        return sanitized.slice(1); // Remove the '09' prefix
+    } else if (sanitized.startsWith('639')) {
+        return sanitized.slice(2); // Remove the '639' prefix
+    } else if (sanitized.startsWith('+639')) {
+        return sanitized.slice(3); // Remove the '+639' prefix
+    } else if (sanitized.length === 10) {
+        return sanitized; // Already a 10-digit number
+    } else {
+        return formatToTenDigits(sanitized)
+    }
+    // If the number is not in a valid format, return null or throw an error
+}
+
+
 // Helper to compare values
 const compareValues = (a: any, b: any, direction: any): number => {
   // Handle null/undefined values

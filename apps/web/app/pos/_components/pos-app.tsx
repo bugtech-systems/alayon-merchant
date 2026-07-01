@@ -50,6 +50,9 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
       ? user.employee?.company?.customer_group_id 
       : user?.driver?.customer_group_id,
     customerId: user?.id,
+    companyId: user?.metadata?.role === 'company' 
+      ? user.employee?.company_id 
+      : user?.driver?.company_id,
     pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
   }), [user]);
   
@@ -61,6 +64,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
   } = usePosCart({ 
     region, 
     priceListId: pricingContext.priceListId,
+    companyId: pricingContext.companyId,
     customerGroupId: pricingContext.customerGroupId,
     userId: user?.id,
     customerId: selectedCustomer?.id
@@ -171,6 +175,7 @@ const handleCheckout = useCallback(async () => {
     unitPrice: number;
     originalPrice: number;
     pricingStrategy: string;
+    companyId?: any;
   }) => {
     await addToCart({
       ...pricingContext,
@@ -178,6 +183,7 @@ const handleCheckout = useCallback(async () => {
       variantId: params.variantId,
       quantity: params.quantity,
       metadata: {
+        compnay_id: params.companyId,
         variant_title: params.variantTitle,
         original_price: params.originalPrice,
         pricing_strategy: params.pricingStrategy,
@@ -435,6 +441,7 @@ const handleCheckout = useCallback(async () => {
                   onVariantChange={handleVariantChange}
                   priceListId={pricingContext.priceListId}
                   customerGroupId={pricingContext.customerGroupId}
+                  companyId={pricingContext?.companyId}
                 />
               ))}
             </div>

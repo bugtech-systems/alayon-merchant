@@ -1,16 +1,16 @@
 // app/dashboard/DashboardClient.tsx
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DeliveryActivityPipeline } from "@/components/pipeline-activity";
-import { DynamicOrdersTable } from "@/components/proposal-sections-table/table";
 import { DeliverySectionCards } from "@/components/company/section-cards";
 import DriverDashboard from "./rider/page";
 import type { DashboardOrder } from "@/lib/data/orders";
 import { CompanyOrdersTable } from "@/components/company-orders-table/table";
 import React from "react";
 import { useMedusaOrders } from "@/hooks/useMedusaOrders";
-import { assignDriverToOrder } from "@/lib/data";
+import { assignDriverToOrder, unassignDriverToOrder } from "@/lib/data";
+import { toast } from "sonner";
 
 interface DashboardClientProps {
   user: any;
@@ -19,6 +19,13 @@ interface DashboardClientProps {
 
 export function DashboardClient({ user, userRole }: DashboardClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // Get pagination and filter params from URL
+  const page = parseInt(searchParams?.get('page') || '1', 10);
+  const limit = parseInt(searchParams?.get('limit') || '10', 10);
+  const search = searchParams?.get('search') || '';
+  const statusFilter = searchParams?.get('status') || '';
 
   const pricingContext = React.useMemo(() => ({
     priceListId: user?.metadata?.role === 'company' 
@@ -33,18 +40,32 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
   }), [user]);
 
-  const { data, refetch } = useMedusaOrders({filters: { company_id: pricingContext.companyId}})
+  // Fetch orders with pagination and filters
+  const { data, refetch, isLoading } = useMedusaOrders({
+    filters: { 
+      company_id: pricingContext.companyId,
+      search: search || undefined,
+      status: statusFilter || undefined,
+      page,
+      limit
+    }
+  });
 
-  
   const handleAssignRider = async (orderId: string, riderId: string | null) => {
     try {
-      const response = await assignDriverToOrder(orderId, riderId);
-      await refetch()
-
-      // Show success notification
+      let response;
+      if (!riderId) {
+        response = await unassignDriverToOrder(orderId);
+        toast.success(`Driver unassigned from order`);
+      } else {
+        response = await assignDriverToOrder(orderId, riderId);
+        toast.success(`Driver assigned successfully`);
+      }
+      await refetch();
       console.log("Rider assigned successfully", response);
     } catch (error) {
       console.error("Error assigning rider:", error);
+      toast.error("Failed to assign driver. Please try again.");
     }
   };
 
@@ -58,9 +79,11 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
       
       if (!response.ok) throw new Error("Failed to update status");
       
-      console.log("Status updated successfully");
+      toast.success(`Order status updated to ${status}`);
+      await refetch();
     } catch (error) {
       console.error("Error updating status:", error);
+      toast.error("Failed to update order status");
     }
   };
 
@@ -69,55 +92,100 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   };
 
   const handleContactRider = async (riderPhone: string) => {
-    // Handle contact logic (e.g., open phone dialer)
     window.location.href = `tel:${riderPhone}`;
   };
 
-  const handleRowClick = (order: DashboardOrder) => {
-    router.push(`/orders/${order.id}`);
+  const handleRowClick = (order: any) => {
+    console.log(order, 'ORDER')
+    // router.push(`/orders/${order.id}`);
   };
 
   const handleBulkAction = async (action: string, orders: DashboardOrder[]) => {
-    switch (action) {
-      case "export":
-        // Handle export
-        console.log(`Exporting ${orders.length} orders`);
-        break;
-      case "update-status":
-        // Handle bulk status update
-        console.log(`Updating status for ${orders.length} orders`);
-        break;
-      default:
-        console.log(`Bulk ${action} on ${orders.length} orders`);
+    try {
+      switch (action) {
+        case "update-status":
+          // Show dialog for bulk status update
+          const status = window.prompt("Enter new status for selected orders:");
+          if (status) {
+            const promises = orders.map(order => 
+              handleUpdateStatus(order.id, status)
+            );
+            await Promise.all(promises);
+            toast.success(`Updated ${orders.length} orders to ${status}`);
+            await refetch();
+          }
+          break;
+        case "export":
+          // Handle export
+          console.log(`Exporting ${orders.length} orders`);
+          toast.success(`Exporting ${orders.length} orders`);
+          break;
+        default:
+          console.log(`Bulk ${action} on ${orders.length} orders`);
+      }
+    } catch (error) {
+      console.error("Bulk action failed:", error);
+      toast.error("Failed to perform bulk action");
     }
   };
 
+  // Update URL query params
+  const updateQueryParams = (params: Record<string, string | number | undefined>) => {
+    const current = new URLSearchParams(searchParams?.toString() || '');
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        current.set(key, String(value));
+      } else {
+        current.delete(key);
+      }
+    });
+    const queryString = current.toString();
+    router.push(queryString ? `?${queryString}` : window.location.pathname, { scroll: false });
+  };
+
+  const handleSearchChange = (query: string) => {
+    updateQueryParams({ search: query, page: 1 });
+  };
+
+  // Company role view
   if (userRole === "company") {
-    let {company} = user.employee
+    const { company } = user.employee;
+    
     return (
       <div className="@container/main flex flex-col gap-4 md:gap-6">
         <DeliverySectionCards 
           metricsWebhookUrl={process.env.NEXT_PUBLIC_N8N_WEBHOOK_BASE + '/webhook/get-company-drivers' || ""} 
           ridersWebhookUrl={process.env.NEXT_PUBLIC_N8N_WEBHOOK_BASE + '/webhook/get-company-drivers'} 
         />
+        
         <DeliveryActivityPipeline 
           onAssignRider={handleAssignRider}
           onUpdateStatus={handleUpdateStatus}
           onAddOrder={handleAddOrder}
           onContactRider={handleContactRider}
         />
-       <CompanyOrdersTable
-       data={data?.orders || []}
-  onAssignDriver={handleAssignRider}
-  onUpdateStatus={handleUpdateStatus}
-  onContactRider={handleContactRider}
-  onRefresh={() => refetch()}
-  companyId={company?.id}
-/>
+        
+        <CompanyOrdersTable
+          data={data?.orders || []}
+          totalCount={data?.total || 0}
+          isLoading={isLoading}
+          onAssignDriver={handleAssignRider}
+          onStatusChange={handleUpdateStatus}
+          onRefresh={() => refetch()}
+          onRowClick={handleRowClick}
+          onBulkAction={handleBulkAction}
+          companyId={company?.id}
+          searchQuery={search}
+          onSearchChange={handleSearchChange}
+          enableDragDrop={true}
+          enableColumnVisibility={true}
+          enableRowSelection={true}
+        />
       </div>
     );
   }
   
+  // Driver role view
   if (userRole === "driver") {
     return (
       <div className="@container/main flex flex-col gap-4 md:gap-6">
@@ -126,7 +194,8 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     );
   }
 
-    if (userRole === "store") {
+  // Store role view (similar to driver)
+  if (userRole === "store") {
     return (
       <div className="@container/main flex flex-col gap-4 md:gap-6">
         <DriverDashboard user={user}/>
@@ -134,6 +203,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     );
   }
   
+  // Default fallback
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
       <p>Welcome {user.first_name || user.email}</p>

@@ -15,6 +15,7 @@ import { updateCart } from "../data/cart";
 import { retrieveCart } from "./cart";
 import { retrieveCustomerPhone } from "../data/customer";
 import { retrieveUser } from "../data";
+import { sanitizePhoneNumber } from "../utils/helpers";
 
 
 type FormState = {
@@ -68,7 +69,7 @@ export async function signup(prevState: FormState, data: FormData): Promise<Form
     company_id: data.get("company_id") as string,
     first_name: data.get("first_name") as string,
     last_name: data.get("last_name") as string,
-    phone: data.get("phone") as string,
+    phone: sanitizePhoneNumber(data.get("phone")) as string,
     email: data.get("email") as string,
     password: data.get("password") as string,
   };

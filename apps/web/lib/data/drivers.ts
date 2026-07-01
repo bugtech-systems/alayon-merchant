@@ -130,6 +130,24 @@ export async function assignDriverToOrder(
   }
 }
 
+export async function unassignDriverToOrder(
+  orderId: string,
+): Promise<DriverAssignmentResponse> {
+  try {
+    const response = await sdk.client.fetch(`/dashboard/company/orders/unassign`, {
+      method: 'POST',
+      body: { orderId },
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    return response;
+  } catch (error) {
+    console.error(`Error unassigning driver to order ${orderId}:`, error);
+    throw error;
+  }
+}
+
 // Get current driver assignment for an order
 export async function getOrderDriver(orderId: string): Promise<Driver | null> {
   try {

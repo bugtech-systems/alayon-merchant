@@ -102,6 +102,7 @@ export default function DashboardPage({user}: any) {
       ? user.employee?.company?.customer_group_id 
       : user?.driver?.customer_group_id,
     customerId: user?.id,
+    companyId: user?.driver?.company_id,
     driverId: user?.metadata?.role == 'company' ? user.id : user?.driver?.id,
     stockLocationId: user?.metadata?.role == 'company' ? user.employee?.company?.stock_location_id : user?.driver?.stock_location_id,
     pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
@@ -140,9 +141,9 @@ export default function DashboardPage({user}: any) {
     
     // Transform customers to orders
     const orders = customers
-      // .filter((c: CustomerWithOrders) => c.latest_order !== null)
-      .map(transformToWaterDeliveryOrder);
-
+      .filter((c: CustomerWithOrders) => c.latest_order !== null)
+      // .map(transformToWaterDeliveryOrder);
+console.log(orders, customers, 'ORDERS')
     // Calculate KPI data
     const totalCustomers = data.meta?.total_customers || customers.length;
     const activeCustomers = data.meta?.active_customers || customers.filter((c: CustomerWithOrders) => c.total_orders > 0).length;
