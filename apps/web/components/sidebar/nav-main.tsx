@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { redirect, usePathname } from "next/navigation";
-import { ChevronRight, MailIcon } from "lucide-react";
+import { ChevronRight, MailIcon, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -32,6 +32,7 @@ import { MinimalSMSDialog} from "./send-sms";
 
 interface NavMainProps {
   readonly items: readonly any[];
+  role?: any
 }
 
 const IsComingSoon = () => (
@@ -169,7 +170,7 @@ const NavItemCollapsedSimple = ({
   );
 };
 
-export function NavMain({ items }: NavMainProps) {
+export function NavMain({ items, role }: NavMainProps) {
   const path = usePathname();
   const { state, isMobile } = useSidebar();
 
@@ -184,13 +185,21 @@ export function NavMain({ items }: NavMainProps) {
     return subItems?.some((sub) => path.startsWith(sub.url)) ?? false;
   };
 
+
+  let rolePath = role == 'company' ? 'company' : 'rider'
   return (
     <>
       <SidebarGroup>
         <SidebarGroupContent className="flex flex-col gap-2">
           <SidebarMenu>
             <SidebarMenuItem className="flex items-center gap-2">
-              <QuickCreateDropdown/>
+              {/* <QuickCreateDropdown/> */}
+              <Link href={`/dashboard/pos`} className="w-full">
+               <Button variant="default" className="w-full bg-green-600 hover:bg-green-700 flex-1">
+            <Plus className="mr-2 h-4 w-4" />
+            Quick Create
+          </Button>
+          </Link>
               {/* <QuickCreateButton 
                 actions={quickCreateActions}
                 buttonText="Quick Create"

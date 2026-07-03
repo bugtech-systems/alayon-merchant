@@ -143,7 +143,6 @@ export default function DashboardPage({user}: any) {
     const orders = customers
       .filter((c: CustomerWithOrders) => c.latest_order !== null)
       // .map(transformToWaterDeliveryOrder);
-console.log(orders, customers, 'ORDERS')
     // Calculate KPI data
     const totalCustomers = data.meta?.total_customers || customers.length;
     const activeCustomers = data.meta?.active_customers || customers.filter((c: CustomerWithOrders) => c.total_orders > 0).length;

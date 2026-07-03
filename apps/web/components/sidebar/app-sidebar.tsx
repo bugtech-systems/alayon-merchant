@@ -53,7 +53,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar> | 
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={user?.metadata?.role == 'company' ? companySidebarItems : user?.metadata?.role == 'driver' ? riderSidebarItems : storeSidebarItems} {...props}/>
+        <NavMain role={user?.metadata?.role} items={user?.metadata?.role == 'company' ? companySidebarItems : user?.metadata?.role == 'driver' ? riderSidebarItems : storeSidebarItems} {...props}/>
         {/* <NavDocuments items={_data.documents} /> */}
         {/* <NavSecondary items={_data.navSecondary} className="mt-auto" /> */}
       </SidebarContent>

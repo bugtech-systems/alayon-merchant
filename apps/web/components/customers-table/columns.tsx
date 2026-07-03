@@ -73,6 +73,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { ActionsCell } from "./customer-action";
 
 // Enhanced Customer type matching Medusa's customer structure
 export interface CustomerRow {
@@ -495,78 +496,78 @@ function OrdersCell({ customer }: { customer: any }) {
 }
 
 // Actions Dropdown Menu
-function ActionsCell({ customer, onAction }: { customer: CustomerRow; onAction?: (action: string, data: any) => void }) {
-  const handleAction = (action: string) => {
-    if (onAction) {
-      onAction(action, { customerId: customer.id, customer });
-    }
-  };
+// function ActionsCell({ customer, onAction }: { customer: CustomerRow; onAction?: (action: string, data: any) => void }) {
+//   const handleAction = (action: string) => {
+//     if (onAction) {
+//       onAction(action, { customerId: customer.id, customer });
+//     }
+//   };
 
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="flex size-8 text-muted-foreground data-[state=open]:bg-muted" size="icon">
-          <MoreHorizontal className="size-4" />
-          <span className="sr-only">Open menu</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => handleAction('view')}>
-          <Eye className="size-4 mr-2" />
-          View Details
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleAction('edit')}>
-          <Edit className="size-4 mr-2" />
-          Edit Customer
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleAction('sendEmail')}>
-          <Send className="size-4 mr-2" />
-          Send Email
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleAction('viewOrders')}>
-          <ShoppingBag className="size-4 mr-2" />
-          View Orders
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <Tag className="size-4 mr-2" />
-            Change Status
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent>
-            <DropdownMenuItem onClick={() => handleAction('setStatus', { status: 'active' })}>
-              <CheckCircle2 className="size-4 mr-2 text-green-600" />
-              Active
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleAction('setStatus', { status: 'vip' })}>
-              <Star className="size-4 mr-2 text-amber-600" />
-              VIP
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleAction('setStatus', { status: 'at_risk' })}>
-              <AlertCircle className="size-4 mr-2 text-red-600" />
-              At Risk
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleAction('setStatus', { status: 'inactive' })}>
-              <XCircle className="size-4 mr-2 text-gray-600" />
-              Inactive
-            </DropdownMenuItem>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => handleAction('copyEmail')} className="text-blue-600">
-          <Copy className="size-4 mr-2" />
-          Copy Email
-        </DropdownMenuItem>
-        <DropdownMenuItem variant="destructive" onClick={() => handleAction('deactivate')}>
-          <Trash2 className="size-4 mr-2" />
-          Deactivate Account
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
+//   return (
+//     <DropdownMenu>
+//       <DropdownMenuTrigger asChild>
+//         <Button variant="ghost" className="flex size-8 text-muted-foreground data-[state=open]:bg-muted" size="icon">
+//           <MoreHorizontal className="size-4" />
+//           <span className="sr-only">Open menu</span>
+//         </Button>
+//       </DropdownMenuTrigger>
+//       <DropdownMenuContent align="end" className="w-48">
+//         <DropdownMenuLabel>Actions</DropdownMenuLabel>
+//         <DropdownMenuSeparator />
+//         <DropdownMenuItem onClick={() => handleAction('view')}>
+//           <Eye className="size-4 mr-2" />
+//           View Details
+//         </DropdownMenuItem>
+//         <DropdownMenuItem onClick={() => handleAction('edit')}>
+//           <Edit className="size-4 mr-2" />
+//           Edit Customer
+//         </DropdownMenuItem>
+//         <DropdownMenuItem onClick={() => handleAction('sendEmail')}>
+//           <Send className="size-4 mr-2" />
+//           Send Email
+//         </DropdownMenuItem>
+//         <DropdownMenuItem onClick={() => handleAction('viewOrders')}>
+//           <ShoppingBag className="size-4 mr-2" />
+//           View Orders
+//         </DropdownMenuItem>
+//         <DropdownMenuSeparator />
+//         <DropdownMenuSub>
+//           <DropdownMenuSubTrigger>
+//             <Tag className="size-4 mr-2" />
+//             Change Status
+//           </DropdownMenuSubTrigger>
+//           <DropdownMenuSubContent>
+//             <DropdownMenuItem onClick={() => handleAction('setStatus', { status: 'active' })}>
+//               <CheckCircle2 className="size-4 mr-2 text-green-600" />
+//               Active
+//             </DropdownMenuItem>
+//             <DropdownMenuItem onClick={() => handleAction('setStatus', { status: 'vip' })}>
+//               <Star className="size-4 mr-2 text-amber-600" />
+//               VIP
+//             </DropdownMenuItem>
+//             <DropdownMenuItem onClick={() => handleAction('setStatus', { status: 'at_risk' })}>
+//               <AlertCircle className="size-4 mr-2 text-red-600" />
+//               At Risk
+//             </DropdownMenuItem>
+//             <DropdownMenuItem onClick={() => handleAction('setStatus', { status: 'inactive' })}>
+//               <XCircle className="size-4 mr-2 text-gray-600" />
+//               Inactive
+//             </DropdownMenuItem>
+//           </DropdownMenuSubContent>
+//         </DropdownMenuSub>
+//         <DropdownMenuSeparator />
+//         <DropdownMenuItem onClick={() => handleAction('copyEmail')} className="text-blue-600">
+//           <Copy className="size-4 mr-2" />
+//           Copy Email
+//         </DropdownMenuItem>
+//         <DropdownMenuItem variant="destructive" onClick={() => handleAction('deactivate')}>
+//           <Trash2 className="size-4 mr-2" />
+//           Deactivate Account
+//         </DropdownMenuItem>
+//       </DropdownMenuContent>
+//     </DropdownMenu>
+//   );
+// }
 
 // Column Definitions
 export const customerColumns: ColumnDef<CustomerRow>[] = [

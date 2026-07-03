@@ -198,7 +198,6 @@ export function DriverAssignment({
     try {
       const response = await fetchAvailableDrivers({companyId});
       
-      console.log(response, 'RESPPP DRIRVERE');
       
       // Handle different response structures
       const driversList = Array.isArray(response) ? response : response || [];
@@ -283,7 +282,6 @@ export function DriverAssignment({
   };
 
 
-  console.log(order, 'ORDERS')
   // Get current driver info
   const currentDriverInfo = React.useMemo(() => {
     if (!currentDriverId) return null;
@@ -292,7 +290,6 @@ export function DriverAssignment({
 
   // If driver is assigned - show with change option
   if (currentDriver) {
-  console.log(order, 'ORDERS')
 
     return (
       <div className="flex items-center gap-2">

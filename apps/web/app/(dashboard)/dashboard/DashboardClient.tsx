@@ -10,7 +10,6 @@ import { CompanyOrdersTable } from "@/components/company-orders-table/table";
 import React from "react";
 import { useMedusaOrders } from "@/hooks/useMedusaOrders";
 import { assignDriverToOrder, unassignDriverToOrder } from "@/lib/data";
-import { toast } from "sonner";
 
 interface DashboardClientProps {
   user: any;
@@ -56,34 +55,31 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
       let response;
       if (!riderId) {
         response = await unassignDriverToOrder(orderId);
-        toast.success(`Driver unassigned from order`);
       } else {
         response = await assignDriverToOrder(orderId, riderId);
-        toast.success(`Driver assigned successfully`);
+
       }
       await refetch();
       console.log("Rider assigned successfully", response);
     } catch (error) {
       console.error("Error assigning rider:", error);
-      toast.error("Failed to assign driver. Please try again.");
     }
   };
 
   const handleUpdateStatus = async (orderId: string, status: string) => {
     try {
-      const response = await fetch("/api/orders/update-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId, status }),
-      });
+      // const response = await fetch("/api/orders/update-status", {
+      //   method: "POST",
+      //   headers: { "Content-Type": "application/json" },
+      //   body: JSON.stringify({ orderId, status }),
+      // });
       
-      if (!response.ok) throw new Error("Failed to update status");
-      
-      toast.success(`Order status updated to ${status}`);
+      // if (!response.ok) throw new Error("Failed to update status");
+      console.log(orderId, status, 'UPDATE STATUS')
+      // toast.success(`Order ${orderId} status updated to ${status}`);
       await refetch();
     } catch (error) {
       console.error("Error updating status:", error);
-      toast.error("Failed to update order status");
     }
   };
 
@@ -173,7 +169,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           onStatusChange={handleUpdateStatus}
           onRefresh={() => refetch()}
           onRowClick={handleRowClick}
-          onBulkAction={handleBulkAction}
           companyId={company?.id}
           searchQuery={search}
           onSearchChange={handleSearchChange}

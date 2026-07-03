@@ -55,9 +55,9 @@ export const companySidebarItems: NavGroup[] = [
         icon: LayoutDashboard,
       },
       {
-        title: "Analytics",
-        url: "/analytics",
-        icon: Users,
+        title: "Orders",
+        url: "/company/orders",
+        icon: Banknote,
         // comingSoon: true
       },
       {
@@ -72,12 +72,12 @@ export const companySidebarItems: NavGroup[] = [
         icon: Forklift,
         comingSoon: false,
       },
-      {
-        title: "POS",
-        url: "/pos",
-        icon: Banknote,
-        // comingSoon: true
-      },
+      // {
+      //   title: "POS",
+      //   url: "/pos",
+      //   icon: Banknote,
+      //   // comingSoon: true
+      // },
       // {
       //   title: "Analytics",
       //   url: "/dashboard/analytics",
@@ -125,6 +125,12 @@ export const riderSidebarItems: NavGroup[] = [
         icon: LayoutDashboard,
       },
       {
+        title: "Orders",
+        url: "/rider/orders",
+        icon: Banknote,
+        // comingSoon: true
+      },
+      {
         title: "Customers",
         url: "/rider/customers",
         icon: Users,
@@ -137,12 +143,12 @@ export const riderSidebarItems: NavGroup[] = [
         icon: Forklift,
         comingSoon: false,
       },
-      {
-        title: "POS",
-        url: "/pos",
-        icon: Banknote,
-        // comingSoon: true
-      },
+      // {
+      //   title: "POS",
+      //   url: "/pos",
+      //   icon: Banknote,
+      //   // comingSoon: true
+      // },
       // {
       //   title: "Finance",
       //   url: "/dashboard/finance",

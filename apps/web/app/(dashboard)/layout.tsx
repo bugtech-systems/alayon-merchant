@@ -12,7 +12,6 @@ import { getPreference } from "@/server/server-actions";
 
 import { AccountSwitcher } from "@/components/sidebar/account-switcher";
 import { LayoutControls } from "@/components/sidebar/layout-controls";
-import { SearchDialog } from "@/components/sidebar/search-dialog";
 import { ThemeSwitcher } from "@/components/sidebar/theme-switcher";
 import { retrieveUser } from "@/lib/data";
 

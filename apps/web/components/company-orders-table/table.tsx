@@ -57,6 +57,7 @@ import { fetchAvailableDrivers } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { ORDER_STATUS_CONFIG, OrderStatusBadge } from "./OrderStatusBadge";
 import { DriverAssignment } from "./driver-assignment";
+import { OrderDetailsView } from "./OrderDetailsView";
 
 // ==================== Types ====================
 
@@ -249,130 +250,7 @@ function DragHandle({ id }: { id: string }) {
   );
 }
 
-// Order Details View Component
-function OrderDetailsView({ order }: { order: Order }) {
-  const getStatusColor = (status: Order["status"]) => {
-    const colors = {
-      pending: "bg-amber-100 text-amber-800",
-      accepted: "bg-blue-100 text-blue-800",
-      preparing: "bg-indigo-100 text-indigo-800",
-      ready: "bg-cyan-100 text-cyan-800",
-      in_transit: "bg-emerald-100 text-emerald-800",
-      delivered: "bg-green-100 text-green-800",
-      declined: "bg-red-100 text-red-800",
-    };
-    return colors[status] || "bg-gray-100 text-gray-800";
-  };
 
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="link" className="w-fit px-0 text-left font-medium text-foreground">
-          {order.display_id}
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Order {order.display_id}</DialogTitle>
-          <DialogDescription>View complete order details</DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          {/* Customer Information */}
-          <div className="rounded-lg border p-4">
-            <h4 className="mb-3 font-medium flex items-center gap-2">
-              <User className="size-4" />
-              Customer Information
-            </h4>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <span className="text-muted-foreground">Name:</span>
-                <p className="font-medium">{order?.customer?.first_name} {order?.customer?.last_name}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Phone:</span>
-                <p className="font-medium">{order?.customer?.phone}</p>
-              </div>
-              <div className="col-span-2">
-                <span className="text-muted-foreground">Address:</span>
-                <p className="font-medium">
-                  {order?.address?.street}, {order?.address?.barangay}, {order?.address?.city}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Order Details */}
-          <div className="rounded-lg border p-4">
-            <h4 className="mb-3 font-medium flex items-center gap-2">
-              <Package className="size-4" />
-              Order Details
-            </h4>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <span className="text-muted-foreground">Quantity:</span>
-                <p className="font-medium">{order.quantity} units</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Total:</span>
-                <p className="font-medium">₱{order.total.toLocaleString()}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Status:</span>
-                <Badge className={`ml-1 ${getStatusColor(order.status)}`}>
-                  {order.status.replace(/_/g, ' ').toUpperCase()}
-                </Badge>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Order Date:</span>
-                <p className="font-medium">{order.orderDate}</p>
-              </div>
-            </div>
-
-            {/* Items List */}
-            {order.items.length > 0 && (
-              <div className="mt-3">
-                <span className="text-muted-foreground text-sm">Items:</span>
-                <div className="mt-1 space-y-1">
-                  {order.items.map((item) => (
-                    <div key={item.id} className="flex justify-between text-sm border-b last:border-0 py-1">
-                      <span>{item.name} × {item.quantity}</span>
-                      <span>₱{(item.price * item.quantity).toLocaleString()}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Driver Assignment */}
-          {order.assignedDriver && (
-            <div className="rounded-lg border p-4">
-              <h4 className="mb-2 font-medium flex items-center gap-2">
-                <Truck className="size-4" />
-                Assigned Driver
-              </h4>
-              <div className="flex items-center gap-2 text-sm">
-                <span className="font-medium">{order.assignedDriver}</span>
-                <span className="text-muted-foreground">•</span>
-                <span className="text-muted-foreground">
-                  {order.assignedDriverId || "No contact"}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {order.notes && (
-            <div className="rounded-lg border p-4">
-              <h4 className="mb-2 font-medium">Notes</h4>
-              <p className="text-sm text-muted-foreground">{order.notes}</p>
-            </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 // Customer View Component
 function CustomerView({ customer }: { customer: Order["customer"] }) {
@@ -661,14 +539,14 @@ export function getOrderColumns({
                 </div>
                 <div className="col-span-2">
                   <DriverAssignment
-                    orderId={order.id}
-                    currentDriver={order.assignedDriverId}
-                    currentDriverId={order.assignedDriverId}
+                    order={row.original}
+                    currentDriver={row.original.assignedDriverId}
+                    currentDriverId={row.original.assignedDriverId}
                     companyId={companyId}
                     onAssign={(driverId, driverName) => {
-                      onAssignDriver?.(order.id, driverId, driverName);
-                      order.assignedDriver = driverName;
-                      order.assignedDriverId = driverId;
+                      onAssignDriver?.(row.original.id, driverId, driverName);
+                      row.original.assignedDriver = driverName;
+                      row.original.assignedDriverId = driverId;
                     }}
                     onError={onError}
                   />
