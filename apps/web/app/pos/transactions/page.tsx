@@ -22,7 +22,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const user = await retrieveUser();
 
-  const limit = parseInt(params.limit || '10');
+  const limit = parseInt(params.limit || '10000');
   const page = parseInt(params.page || '1');
   const offset = (page - 1) * limit;
 
@@ -42,7 +42,6 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
   const initialData = await listTransactions(limit, offset, filters);
 
 
-console.log(user, 'USSSER', initialData)
 
   return (
     <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8">
