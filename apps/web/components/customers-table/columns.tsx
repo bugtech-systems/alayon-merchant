@@ -482,8 +482,9 @@ function SpendingCell({ customer }: { customer: CustomerRow }) {
 }
 
 // Orders Cell
-function OrdersCell({ customer }: { customer: CustomerRow }) {
-  const totalOrders = customer.metadata?.order_count || customer.totalOrders || 0;
+function OrdersCell({ customer }: { customer: any }) {
+  console.log(customer, 'CUSTOMER')
+  const totalOrders = customer?.orderCount || customer.totalOrders || 0;
   
   return (
     <div className="flex items-center gap-2">
@@ -569,14 +570,6 @@ function ActionsCell({ customer, onAction }: { customer: CustomerRow; onAction?:
 
 // Column Definitions
 export const customerColumns: ColumnDef<CustomerRow>[] = [
-  {
-    id: "drag",
-    header: () => null,
-    cell: ({ row }) => <DragHandle id={row.original.id} />,
-    enableSorting: false,
-    enableHiding: false,
-    size: 30,
-  },
   // {
   //   id: "select",
   //   header: ({ table }) => (
@@ -642,7 +635,7 @@ export const customerColumns: ColumnDef<CustomerRow>[] = [
     size: 180,
   },
   {
-    accessorKey: "totalOrders",
+    accessorKey: "orderCount",
     header: () => (
       <div className="flex items-center gap-1">
         <ShoppingBag className="size-3.5" />
@@ -701,7 +694,7 @@ export const customerColumns: ColumnDef<CustomerRow>[] = [
     size: 110,
   },
   {
-    accessorKey: "lastOrderDate",
+    accessorKey: "lastOrder",
     header: () => (
       <div className="flex items-center gap-1">
         <Clock className="size-3.5" />
@@ -709,7 +702,7 @@ export const customerColumns: ColumnDef<CustomerRow>[] = [
       </div>
     ),
     cell: ({ row }) => {
-      const lastOrder = row.original.metadata?.last_order_date || row.original.lastOrderDate;
+      const lastOrder = row.original.lastOrder;
       if (!lastOrder) {
         return <span className="text-sm text-muted-foreground">—</span>;
       }

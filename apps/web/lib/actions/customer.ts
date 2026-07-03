@@ -200,74 +200,9 @@ export async function getCustomers(
     let customers = response.customers || []
     let total = response.count || 0
 
-    // Apply additional filters that can't be done via API
-    if (validatedParams.minSpent || validatedParams.maxSpent || 
-        validatedParams.minOrders || validatedParams.maxOrders || 
-        validatedParams.city || validatedParams.hasCompany !== undefined) {
-      
-      customers = customers.filter(customer => {
-        let matches = true
 
-        // Filter by total spent
-        if (validatedParams.minSpent !== undefined) {
-          const totalSpent = customer.metadata?.total_spent as number || 0
-          if (totalSpent < validatedParams.minSpent) matches = false
-        }
-        if (matches && validatedParams.maxSpent !== undefined) {
-          const totalSpent = customer.metadata?.total_spent as number || 0
-          if (totalSpent > validatedParams.maxSpent) matches = false
-        }
 
-        // Filter by order count
-        if (matches && validatedParams.minOrders !== undefined) {
-          const orderCount = customer.metadata?.order_count as number || 0
-          if (orderCount < validatedParams.minOrders) matches = false
-        }
-        if (matches && validatedParams.maxOrders !== undefined) {
-          const orderCount = customer.metadata?.order_count as number || 0
-          if (orderCount > validatedParams.maxOrders) matches = false
-        }
 
-        // Filter by city
-        if (matches && validatedParams.city) {
-          const customerCity = customer.metadata?.city as string || ""
-          if (!customerCity.toLowerCase().includes(validatedParams.city.toLowerCase())) {
-            matches = false
-          }
-        }
-
-        // Filter by company association
-        if (matches && validatedParams.hasCompany !== undefined) {
-          const hasCompany = !!customer.metadata?.company_id
-          if (hasCompany !== validatedParams.hasCompany) matches = false
-        }
-
-        return matches
-      })
-
-      total = customers.length
-    }
-
-    // Apply sorting for fields not supported by API
-    if (validatedParams.sortBy === "total_spent" || 
-        validatedParams.sortBy === "orders") {
-      customers.sort((a, b) => {
-        let aValue = 0
-        let bValue = 0
-        
-        if (validatedParams.sortBy === "total_spent") {
-          aValue = a.metadata?.total_spent as number || 0
-          bValue = b.metadata?.total_spent as number || 0
-        } else if (validatedParams.sortBy === "orders") {
-          aValue = a.metadata?.order_count as number || 0
-          bValue = b.metadata?.order_count as number || 0
-        }
-        
-        return validatedParams.sortOrder === "DESC" 
-          ? bValue - aValue 
-          : aValue - bValue
-      })
-    }
 
     // Apply pagination after filtering
     const start = (validatedParams.page - 1) * validatedParams.limit
@@ -275,7 +210,7 @@ export async function getCustomers(
     const paginatedCustomers = customers.slice(start, end)
 
     const totalPages = Math.ceil(total / validatedParams.limit)
-
+    console.log(paginatedCustomers, 'PAGINATEDD')
     return {
       success: true,
       data: {

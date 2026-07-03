@@ -9,6 +9,7 @@ import { getAuthHeaders, getCacheTag } from "../medusa/data/cookies";
 import { StoreCompaniesResponse, StoreCompanyResponse, StoreCreateCompany, StoreCreateEmployee, StoreEmployeeResponse, StoreUpdateCompany } from "@/types";
 import { track } from "@vercel/analytics";
 import { getCacheOptions } from "../data/cookies";
+import { z } from "zod"
 
 
 const FRONTEND_URL =
@@ -268,4 +269,218 @@ export const updateApprovalSettings = async (
 
   const cacheTag = await getCacheTag("companies")
   revalidateTag(cacheTag, "max")
+}
+
+// Types
+export interface CustomerFilters {
+  page?: number
+  limit?: number
+  search?: string
+  status?: string
+  group?: string
+  dateFrom?: Date
+  dateTo?: Date
+  minSpent?: number
+  maxSpent?: number
+  minOrders?: number
+  maxOrders?: number
+  city?: string
+  hasCompany?: boolean
+  companyId?: string
+  sortBy?: string
+  sortOrder?: "ASC" | "DESC"
+  customer_group_id?: string
+  includeCompany?: boolean
+  includeOrders?: boolean
+}
+
+export interface CustomerListResponse {
+  customers: B2BCustomer[]
+  total: number
+  page: number
+  limit: number
+  totalPages: number
+  filters?: CustomerFilters
+}
+
+export interface CustomerStats {
+  totalCustomers: number
+  activeCustomers: number
+  newCustomersThisMonth: number
+  averageOrderValue: number
+  totalRevenue: number
+  topCities: Array<{ city: string; count: number }>
+  customerSegments: Array<{ segment: string; count: number }>
+}
+
+// Validation schemas
+const GetCustomersSchema = z.object({
+  page: z.number().min(1).default(1),
+  limit: z.number().min(1).max(100).default(20),
+  search: z.string().optional(),
+  status: z.string().optional(),
+  group: z.string().optional(),
+  dateFrom: z.date().optional(),
+  dateTo: z.date().optional(),
+  minSpent: z.number().min(0).optional(),
+  maxSpent: z.number().min(0).optional(),
+  minOrders: z.number().min(0).optional(),
+  maxOrders: z.number().min(0).optional(),
+  city: z.string().optional(),
+  hasCompany: z.boolean().optional(),
+  companyId: z.string().optional(),
+  customer_group_id: z.string().optional(),
+  sortBy: z.enum(["created_at", "email", "first_name", "last_name", "orders", "total_spent"]).default("created_at"),
+  sortOrder: z.enum(["ASC", "DESC"]).default("DESC"),
+  includeCompany: z.boolean().default(false),
+  includeOrders: z.boolean().default(false),
+})
+
+export async function getCompanyCustomers(
+  params: CustomerFilters = {}
+): Promise<{ success: boolean; data?: CustomerListResponse; error?: string }> {
+  try {
+    // Validate parameters
+    const validatedParams = GetCustomersSchema.parse({
+      page: params.page || 1,
+      limit: params.limit || 20,
+      search: params.search,
+      status: params.status,
+      group: params.group,
+      dateFrom: params.dateFrom,
+      dateTo: params.dateTo,
+      minSpent: params.minSpent,
+      maxSpent: params.maxSpent,
+      minOrders: params.minOrders,
+      maxOrders: params.maxOrders,
+      city: params.city,
+      hasCompany: params.hasCompany,
+      companyId: params.companyId,
+      customer_group_id: params.customer_group_id,
+      sortBy: params.sortBy,
+      sortOrder: params.sortOrder,
+      includeCompany: params.includeCompany,
+      includeOrders: params.includeOrders,
+    })
+
+    const authHeaders = await getAuthHeaders()
+    if (!authHeaders) {
+      return {
+        success: false,
+        error: "Authentication required",
+      }
+    }
+
+    // Build query parameters
+    const queryParams: Record<string, any> = {
+      limit: validatedParams.limit,
+      offset: (validatedParams.page - 1) * validatedParams.limit,
+      fields: "*",
+    }
+
+    // Add sorting
+    if (validatedParams.sortBy) {
+      queryParams.order = `${validatedParams.sortBy}:${validatedParams.sortOrder.toLowerCase()}`
+    }
+
+    // Add search
+    if (validatedParams.search) {
+      queryParams.q = validatedParams.search
+    }
+
+    // Add company filter
+    if (validatedParams.companyId) {
+      queryParams.company_id = validatedParams.companyId
+    }
+
+        // Add company filter
+    if (validatedParams.customer_group_id) {
+      queryParams.customer_group_id = validatedParams.customer_group_id
+    }
+
+    // Add date range filters
+    if (validatedParams.dateFrom) {
+      queryParams.created_at = { $gte: validatedParams.dateFrom.toISOString() }
+    }
+    if (validatedParams.dateTo) {
+      queryParams.created_at = { 
+        ...queryParams.created_at,
+        $lte: validatedParams.dateTo.toISOString() 
+      }
+    }
+
+    // Add customer group filter
+    if (validatedParams.group) {
+      queryParams.groups = { $in: [validatedParams.group] }
+    }
+
+    // Build expand fields
+    const expand: string[] = []
+    if (validatedParams.includeCompany) {
+      expand.push("company")
+    }
+    if (validatedParams.includeOrders) {
+      expand.push("orders")
+    }
+    if (expand.length > 0) {
+      queryParams.expand = expand.join(",")
+    }
+
+    const headers = {
+      ...authHeaders,
+    }
+
+    const next = {
+      ...(await getCacheOptions("customers")),
+      tags: [await getCacheTag("customers-list")],
+    }
+
+    // Fetch customers from Medusa
+    const response = await sdk.client.fetch(`/dashboard/company/customers`, {
+      method: "GET",
+      query: queryParams,
+      headers,
+      next,
+    })
+
+    let customers = response.customers || []
+    let total = response.count || 0
+
+
+    console.log(response, 'RESPPonse')
+
+
+    // Apply pagination after filtering
+    const start = (validatedParams.page - 1) * validatedParams.limit
+    const end = start + validatedParams.limit
+    const paginatedCustomers = customers.slice(start, end)
+
+    const totalPages = Math.ceil(total / validatedParams.limit)
+    console.log(paginatedCustomers, 'PAGINATEDD')
+    return {
+      success: true,
+      data: {
+        customers: paginatedCustomers,
+        total,
+        page: validatedParams.page,
+        limit: validatedParams.limit,
+        totalPages,
+        filters: validatedParams,
+      },
+    }
+  } catch (error) {
+    console.error("Error in getCustomers:", error)
+    
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        error: `Invalid parameters: ${error.errors.map(e => e.message).join(", ")}`,
+      }
+    }
+    
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to fetch customers",
+    }
+  }
 }

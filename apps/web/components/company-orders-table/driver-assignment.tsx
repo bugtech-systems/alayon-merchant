@@ -161,7 +161,7 @@ function DriverSelectionList({
 
 
 interface DriverAssignmentProps {
-  orderId: string;
+  order: any;
   currentDriver: string | null;
   currentDriverId?: string | null;
   companyId: string;
@@ -170,7 +170,7 @@ interface DriverAssignmentProps {
 }
 
 export function DriverAssignment({
-  orderId,
+  order,
   currentDriver,
   currentDriverId,
   companyId,
@@ -184,7 +184,7 @@ export function DriverAssignment({
   const [isLoading, setIsLoading] = React.useState(false);
   const [hasLoaded, setHasLoaded] = React.useState(false);
   const fetchRef = React.useRef<boolean>(false);
-
+  const orderId = order?.id;
   // Fetch drivers from API - using a ref to prevent multiple calls
   const fetchDrivers = React.useCallback(async () => {
     // Prevent concurrent fetches
@@ -282,6 +282,8 @@ export function DriverAssignment({
     }
   };
 
+
+  console.log(order, 'ORDERS')
   // Get current driver info
   const currentDriverInfo = React.useMemo(() => {
     if (!currentDriverId) return null;
@@ -290,6 +292,8 @@ export function DriverAssignment({
 
   // If driver is assigned - show with change option
   if (currentDriver) {
+  console.log(order, 'ORDERS')
+
     return (
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-2 min-w-0">
@@ -308,7 +312,7 @@ export function DriverAssignment({
             </span>
           )}
         </div>
-
+{order?.status_display != 'delivered' && 
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button
@@ -336,6 +340,7 @@ export function DriverAssignment({
             />
           </PopoverContent>
         </Popover>
+        }
       </div>
     );
   }

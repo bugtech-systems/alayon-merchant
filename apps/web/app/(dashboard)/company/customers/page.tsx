@@ -48,7 +48,6 @@ async function handleContactRider(riderPhone: string) {
 
 
 
-console.log(user, 'USEER')
 
 
   return (

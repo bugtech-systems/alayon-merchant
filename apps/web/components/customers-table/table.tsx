@@ -79,6 +79,7 @@ import { format } from "date-fns";
 import { DraggableCustomerRow, customerColumns } from "./columns";
 import type { CustomerRow, CustomerStatus } from "./schema";
 import { getCustomers } from "@/lib/actions/customer";
+import { getCompanyCustomers } from "@/lib/actions";
 
 const VIEW_OPTIONS = [
   { value: "all-customers", label: "All Customers", paramValue: "all", defaultFilters: {} },
@@ -226,8 +227,8 @@ export function CustomerTable({
     queryKey: ["customers", buildQueryParams()],
     queryFn: async () => {
       const params = buildQueryParams();
-      const result = await getCustomers(params);
-      
+      const result = await getCompanyCustomers(params);
+      console.log(result, "RESSS")
       if (!result.success) {
         throw new Error(result.error || "Failed to fetch customers");
       }

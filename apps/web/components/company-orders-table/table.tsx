@@ -752,7 +752,7 @@ export function getOrderColumns({
       header: "Driver",
       cell: ({ row }) => (
         <DriverAssignment
-          orderId={row.original.id}
+          order={row.original}
           currentDriver={row.original.assignedDriverId}
           currentDriverId={row.original.assignedDriverId}
           companyId={companyId}
