@@ -290,7 +290,7 @@ const buildQueryString = (
 
 // Main list orders function using Medusa SDK client to fetch from custom endpoint
 export const listOrders = async (
-  limit: number = 10,
+  limit: number = 10000,
   offset: number = 0,
   filters?: any,
   sort?: OrderSortOptions

@@ -107,6 +107,7 @@ import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { sortOrders } from '@/lib/utils/helpers';
+import { useMedusaOrders } from '@/hooks/useMedusaOrders';
 
 // ============================================
 // STATUS CONFIGURATIONS
@@ -958,6 +959,28 @@ export function OrdersClient({
   user,
   orderType
 }: OrdersClientProps) {
+  
+  const pricingContext = React.useMemo(() => ({
+    priceListId: user?.metadata?.role === 'company' 
+      ? user.employee?.company?.price_list_id 
+      : user?.driver?.price_list_id,
+    customerGroupId: user?.metadata?.role === 'company' 
+      ? user.employee?.company?.customer_group_id 
+      : user?.driver?.customer_group_id,
+    customerId: user?.id,
+    companyId: user?.metadata?.role == 'company' ? user.employee?.company_id : user?.driver?.company_id,
+    stockLocationId: user?.metadata?.role == 'company' ? user.employee?.company?.stock_location_id : user?.driver?.stock_location_id,
+    pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
+  }), [user]);
+
+    // Fetch orders with pagination and filters
+    const { data, refetch } = useMedusaOrders({
+      filters: { 
+        company_id: pricingContext.companyId,
+      }
+    }) as any;
+  
+console.log(data, 'DATAA')
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -983,7 +1006,7 @@ export function OrdersClient({
   );
   
   const [orders, setOrders] = useState(
-    orderType === 'drafts' ? initialData.draft_orders || [] : initialData.orders || []
+    data?.orders || []
   );
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [pagination, setPagination] = useState({
@@ -1006,6 +1029,11 @@ export function OrdersClient({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  useEffect(() => {
+    setOrders(data?.orders || [])
+
+  }, [data])
+
   // Update URL params
   const updateUrlParams = useCallback((updates: Record<string, string | number | null | undefined>) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -1026,66 +1054,66 @@ export function OrdersClient({
   }, [router, pathname, searchParams, orderType]);
 
   // Fetch data
-  const fetchData = useCallback(async (page?: number) => {
-    const currentPage = page || parseInt(searchParams.get('page') || String(initialPage));
-    const limit = parseInt(searchParams.get('limit') || String(initialLimit));
-    const offset = (currentPage - 1) * limit;
+  // const fetchData = useCallback(async (page?: number) => {
+  //   const currentPage = page || parseInt(searchParams.get('page') || String(initialPage));
+  //   const limit = parseInt(searchParams.get('limit') || String(initialLimit));
+  //   const offset = (currentPage - 1) * limit;
     
-    const filters: Record<string, any> = {};
-    const search = searchParams.get('search');
-    if (search) filters.search = search;
-    if (user?.id) filters.seller_id = user.id;
+  //   const filters: Record<string, any> = {};
+  //   const search = searchParams.get('search');
+  //   if (search) filters.search = search;
+  //   if (user?.id) filters.seller_id = user.id;
     
-    // Date filters
-    const dateFromParam = searchParams.get('date_from');
-    const dateToParam = searchParams.get('date_to');
-    if (dateFromParam) filters.date_from = dateFromParam;
-    if (dateToParam) filters.date_to = dateToParam;
+  //   // Date filters
+  //   const dateFromParam = searchParams.get('date_from');
+  //   const dateToParam = searchParams.get('date_to');
+  //   if (dateFromParam) filters.date_from = dateFromParam;
+  //   if (dateToParam) filters.date_to = dateToParam;
     
-    setIsLoading(true);
-    try {
-      let response;
-      if (orderType === 'drafts') {
-        response = await listDraftOrders(limit, offset, filters);
-        setOrders(response.draft_orders || []);
-      } else {
-        response = await listPosOrders(limit, offset, filters);
-        console.log(response, "RESSSPSP")
-        let orders = sortOrders(response.orders, initialSortField, 'desc')
-        console.log(orders, 'ORDERSS')
-        setOrders(orders || []);
-      }
+  //   setIsLoading(true);
+  //   try {
+  //     let response;
+  //     if (orderType === 'drafts') {
+  //       response = await listDraftOrders(limit, offset, filters);
+  //       setOrders(response.draft_orders || []);
+  //     } else {
+  //       response = await listPosOrders(limit, offset, filters);
+  //       console.log(response, "RESSSPSP")
+  //       let orders = sortOrders(response.orders, initialSortField, 'desc')
+  //       console.log(orders, 'ORDERSS')
+  //       setOrders(orders || []);
+  //     }
       
-      setPagination({
-        count: response.count,
-        page: response.page,
-        total_pages: response.total_pages,
-        has_next: response.has_next,
-        has_previous: response.has_previous
-      });
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      toast.error(`Failed to fetch ${orderType}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user, searchParams, initialPage, initialLimit, orderType]);
+  //     setPagination({
+  //       count: response.count,
+  //       page: response.page,
+  //       total_pages: response.total_pages,
+  //       has_next: response.has_next,
+  //       has_previous: response.has_previous
+  //     });
+  //   } catch (error) {
+  //     console.error('Error fetching data:', error);
+  //     toast.error(`Failed to fetch ${orderType}`);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // }, [user, searchParams, initialPage, initialLimit, orderType]);
 
   // Handle page change
   const handlePageChange = useCallback((page: number) => {
     updateUrlParams({ page });
-    fetchData(page);
-  }, [updateUrlParams, fetchData]);
+    refetch();
+  }, [updateUrlParams, refetch]);
 
   // Handle search
   const handleSearchChange = useCallback((term: string) => {
     setSearchTerm(term);
     const timeoutId = setTimeout(() => {
       updateUrlParams({ search: term || null, page: 1 });
-      fetchData(1);
+      refetch();
     }, 500);
     return () => clearTimeout(timeoutId);
-  }, [updateUrlParams, fetchData]);
+  }, [updateUrlParams, refetch]);
 
   // Handle date change
   const handleDateChange = useCallback((from: Date | null, to: Date | null) => {
@@ -1096,8 +1124,8 @@ export function OrdersClient({
       date_to: to ? format(to, 'yyyy-MM-dd') : null,
       page: 1
     });
-    fetchData(1);
-  }, [updateUrlParams, fetchData]);
+    refetch();
+  }, [updateUrlParams, refetch]);
 
   // Handle status update
   const handleStatusUpdate = async (orderId: string, status: string) => {
@@ -1106,7 +1134,7 @@ export function OrdersClient({
       const result = await updateOrderStatus(orderId, status);
       if (result.success) {
         toast.success(`Order status updated to ${status}`);
-        await fetchData(pagination.page);
+        await refetch();
       } else {
         throw new Error(result.error);
       }
@@ -1133,7 +1161,7 @@ export function OrdersClient({
       console.log(result, 'RESLL')
         if(result?.id){
         toast.success('Payment captured successfully');
-        await fetchData(pagination.page);
+        await refetch();
 
         }
              
@@ -1157,7 +1185,7 @@ export function OrdersClient({
       
       if (result.success) {
         toast.success(`${orderType === 'drafts' ? 'Draft order' : 'Order'} deleted successfully`);
-        await fetchData(pagination.page);
+        await refetch();
       } else {
         throw new Error(result.error);
       }
@@ -1176,7 +1204,7 @@ export function OrdersClient({
       const result = await convertDraftToOrder(order.id);
       if (result.success) {
         toast.success('Draft order converted to regular order successfully');
-        await fetchData(pagination.page);
+        await refetch();
         const params = new URLSearchParams(searchParams.toString());
         params.set('type', 'orders');
         router.push(`${pathname}?${params.toString()}`);
@@ -1214,7 +1242,7 @@ export function OrdersClient({
   };
 
   const { page, total_pages, has_next, has_previous, count } = pagination;
-
+console.log(orders, 'oRDDS', data?.orders)
   return (
     <TooltipProvider>
       <div className="space-y-6">
