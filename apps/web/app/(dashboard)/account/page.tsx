@@ -10,7 +10,7 @@ const fullPageFormConfig: FormConfig = {
   description: "Fill in the product details below. Press Cmd+Enter to submit.",
   size: "full", // or "xl", "lg", "md", "sm"
   fields: [
-    {
+    { 
       name: "name",
       label: "Product Name",
       type: "text",
