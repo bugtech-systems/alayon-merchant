@@ -1,4 +1,4 @@
-import { CustomerMap } from "@/components/map/customer-map";
+import  CustomerMap from "@/components/map/customer-map";
 import { retrieveUser } from "@/lib/data";
 import { listCustomerGroupCustomers, listCustomers, listCustomersWithOrders } from "@/lib/data/customer";
 

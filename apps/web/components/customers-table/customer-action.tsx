@@ -94,10 +94,19 @@ import {
   RefreshCw,
   Menu,
   MoreVertical,
+  Info,
+  User,
+  Globe,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { Switch } from "../ui/switch";
+import { Checkbox } from "../ui/checkbox";
+
+const SMS_URL = process.env.SMS_URL || 'https://maretext.sharewin.pro';
 
 // Types
 interface CustomerRow {
@@ -638,6 +647,231 @@ export function SendEmailModal({ isOpen, onClose, customer }: ActionModalProps) 
   );
 }
 
+// Send SMS Modal - Single Customer with API Integration
+interface SendSMSModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  customer: {
+    id: string;
+    name: string;
+    phone: string;
+    email?: string;
+  };
+}
+
+export function SendSMSModal({ isOpen, onClose, customer }: SendSMSModalProps) {
+  const [smsData, setSmsData] = useState({
+    message: "",
+    isFlashMessage: false,
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const maxLength = 600;
+
+  const sendSMS = async (phoneNumber: string, message: string, isFlash: boolean) => {
+    // Remove any non-numeric characters from phone number
+    const cleanNumber = phoneNumber.replace(/\D/g, '');
+    
+    // Construct the payload according to the specified format
+    const payload = {
+      number: cleanNumber,
+      message: message
+    };
+
+    // Select endpoint based on flash message toggle
+    const endpoint = isFlash 
+      ? `${SMS_URL}/send-flash-sms`
+        : `${SMS_URL}/send-sms`;
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('SMS API Error:', error);
+      throw error;
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!smsData.message.trim()) {
+      toast.error("Please enter a message");
+      return;
+    }
+
+    if (!customer.phone) {
+      toast.error("Customer phone number is missing");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await sendSMS(
+        customer.phone, 
+        smsData.message, 
+        smsData.isFlashMessage
+      );
+      
+      toast.success(
+        `SMS ${smsData.isFlashMessage ? '(Flash) ' : ''}sent to ${customer.name} successfully`
+      );
+      onClose();
+      // Reset form
+      setSmsData({ message: "", isFlashMessage: false });
+    } catch (error: any) {
+      console.error('Failed to send SMS:', error);
+      
+      // Provide more specific error messages
+      if (error.message.includes('404')) {
+        toast.error("SMS service endpoint not found. Please check the URL configuration.");
+      } else if (error.message.includes('500')) {
+        toast.error("Server error. Please try again later.");
+      } else if (error.message.includes('Network')) {
+        toast.error("Network error. Please check your internet connection.");
+      } else {
+        toast.error(`Failed to send SMS: ${error.message || 'Unknown error'}`);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const remainingChars = maxLength - smsData.message.length;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Send SMS</DialogTitle>
+          <DialogDescription>
+            Send an SMS message to {customer.name} ({customer.phone}).
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit}>
+          <div className="grid gap-4 py-4">
+            {/* Customer Info */}
+            <div className="bg-muted/50 rounded-md p-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <User className="size-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">{customer.name}</p>
+                  <p className="text-xs text-muted-foreground">{customer.phone}</p>
+                </div>
+              </div>
+              <Badge variant="secondary" className="text-xs">
+                {smsData.isFlashMessage ? 'Flash SMS' : 'Standard SMS'}
+              </Badge>
+            </div>
+
+            {/* Message Content */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="message">Message</Label>
+                <span className={`text-xs ${
+                  remainingChars < 50 ? 'text-orange-500' : 'text-muted-foreground'
+                }`}>
+                  {remainingChars} characters remaining
+                </span>
+              </div>
+              <Textarea
+                id="message"
+                value={smsData.message}
+                onChange={(e) => {
+                  if (e.target.value.length <= maxLength) {
+                    setSmsData({ ...smsData, message: e.target.value });
+                  }
+                }}
+                placeholder="Write your SMS message here..."
+                rows={5}
+                required
+                className="resize-none"
+              />
+              <p className="text-xs text-muted-foreground">
+                Maximum {maxLength} characters
+              </p>
+            </div>
+
+            {/* Flash Message Toggle */}
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="flash-message"
+                checked={smsData.isFlashMessage}
+                onCheckedChange={(checked) =>
+                  setSmsData({ ...smsData, isFlashMessage: checked })
+                }
+              />
+              <Label htmlFor="flash-message" className="text-sm cursor-pointer">
+                Send as Flash Message
+              </Label>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="size-4 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="max-w-xs text-xs">
+                    Flash messages appear directly on the recipient's screen 
+                    without being saved to their inbox. Uses a different endpoint.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+
+            {/* Endpoint Info */}
+            <div className="bg-blue-50 dark:bg-blue-950/20 rounded-md p-2">
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                <Globe className="size-3 inline mr-1" />
+                {smsData.isFlashMessage 
+                  ? 'Sending via: https://maretext.sharewin.pro/send-flash-sms'
+                  : 'Sending via: https://maretext.sharewin.pro/send-sms'}
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="flex items-center justify-between gap-2">
+            <div className="text-xs text-muted-foreground">
+              Sending to 1 recipient
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" type="button" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={isLoading || !smsData.message.trim()}
+              >
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="size-4 animate-spin" />
+                    Sending...
+                  </span>
+                ) : (
+                  <>
+                    <Send className="size-4 mr-2" />
+                    Send SMS
+                  </>
+                )}
+              </Button>
+            </div>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // 5. Customer Location Map Modal
 export function CustomerLocationModal({ isOpen, onClose, customer }: ActionModalProps) {
   const location = customer.metadata?.city || "Manila, Philippines";
@@ -836,7 +1070,7 @@ export function ActionsCell({ customer, onAction }: { customer: CustomerRow; onA
         customer={customer}
       />
       
-      <SendEmailModal
+      <SendSMSModal
         isOpen={modalState.type === 'email' && modalState.isOpen}
         onClose={closeModal}
         customer={customer}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   Map,
   MapTileLayer,
@@ -38,9 +38,45 @@ import {
   Search,
   X,
   Building2,
+  Star,
+  StarOff,
+  Eye,
+  EyeOff,
+  BarChart3,
+  Car,
+  Bike,
+  Footprints,
+  Gauge,
+  Fuel,
+  Calendar,
+  DollarSign,
+  UserCircle,
+  FileText,
+  Info,
+  Layers,
+  Compass,
+  LocateFixed,
+  Wifi,
+  WifiOff,
+  Signal,
+  SignalLow,
+  SignalMedium,
+  SignalHigh,
+  Shield,
+  ShieldCheck,
+  Timer,
+  MapPinPlus,
+  Navigation2,
+  RefreshCw,
+  Home,
+  Briefcase,
 } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import { Input } from "@workspace/ui/components/input";
+import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs";
+import { Slider } from "@workspace/ui/components/slider";
+import { Switch } from "@workspace/ui/components/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@workspace/ui/components/tooltip";
 
 // ============================================================
 // 1. Types
@@ -60,6 +96,10 @@ interface Customer {
   nextVisit: string;
   revenue: number;
   notes?: string;
+  category?: string;
+  rating?: number;
+  visitFrequency?: "daily" | "weekly" | "monthly" | "quarterly";
+  tags?: string[];
 }
 
 interface Route {
@@ -69,6 +109,10 @@ interface Route {
   distance: number;
   duration: number;
   color: string;
+  trafficConditions?: "light" | "moderate" | "heavy";
+  estimatedTime?: number;
+  routeSummary?: string;
+  waypoints?: { name: string; lat: number; lng: number }[];
 }
 
 interface RouteDetails {
@@ -77,6 +121,23 @@ interface RouteDetails {
   distance: number;
   duration: number;
   routeId: string;
+  traffic?: "light" | "moderate" | "heavy";
+  estimatedArrival?: Date;
+  fuelCost?: number;
+  tolls?: number;
+  turns?: number;
+  elevationGain?: number;
+}
+
+interface RouteMetrics {
+  totalDistance: number;
+  totalDuration: number;
+  averageDistance: number;
+  averageDuration: number;
+  fuelCost: number;
+  tollCost: number;
+  totalCustomers: number;
+  activeRoutes: number;
 }
 
 // ============================================================
@@ -98,6 +159,10 @@ const SAMPLE_CUSTOMERS: Customer[] = [
     nextVisit: "2024-02-15",
     revenue: 150000,
     notes: "Key account - monthly visit required",
+    category: "Enterprise",
+    rating: 4.8,
+    visitFrequency: "monthly",
+    tags: ["VIP", "Government", "Large Account"],
   },
   {
     id: "c2",
@@ -113,6 +178,10 @@ const SAMPLE_CUSTOMERS: Customer[] = [
     lastVisit: "2024-01-20",
     nextVisit: "2024-02-20",
     revenue: 85000,
+    category: "Trading",
+    rating: 4.2,
+    visitFrequency: "weekly",
+    tags: ["Trading", "Regular"],
   },
   {
     id: "c3",
@@ -129,6 +198,10 @@ const SAMPLE_CUSTOMERS: Customer[] = [
     nextVisit: "2024-02-10",
     revenue: 220000,
     notes: "VIP customer - needs special attention",
+    category: "Manufacturing",
+    rating: 4.9,
+    visitFrequency: "monthly",
+    tags: ["VIP", "Manufacturing", "High Revenue"],
   },
   {
     id: "c4",
@@ -144,6 +217,10 @@ const SAMPLE_CUSTOMERS: Customer[] = [
     lastVisit: "2024-01-25",
     nextVisit: "2024-02-25",
     revenue: 45000,
+    category: "Retail",
+    rating: 3.8,
+    visitFrequency: "quarterly",
+    tags: ["Retail", "New"],
   },
   {
     id: "c5",
@@ -159,6 +236,10 @@ const SAMPLE_CUSTOMERS: Customer[] = [
     lastVisit: "2024-01-18",
     nextVisit: "2024-02-18",
     revenue: 120000,
+    category: "Real Estate",
+    rating: 4.5,
+    visitFrequency: "weekly",
+    tags: ["Real Estate", "Property"],
   },
   {
     id: "c6",
@@ -174,6 +255,10 @@ const SAMPLE_CUSTOMERS: Customer[] = [
     lastVisit: "2024-01-12",
     nextVisit: "2024-02-12",
     revenue: 180000,
+    category: "Professional Services",
+    rating: 4.7,
+    visitFrequency: "monthly",
+    tags: ["Professional", "Medical"],
   },
   {
     id: "c7",
@@ -189,21 +274,25 @@ const SAMPLE_CUSTOMERS: Customer[] = [
     lastVisit: "2023-12-20",
     nextVisit: "2024-03-20",
     revenue: 30000,
+    category: "Trading",
+    rating: 3.5,
+    visitFrequency: "quarterly",
+    tags: ["Trading", "Inactive"],
   },
 ];
 
 // ============================================================
-// 3. Helper: Fetch OSRM Route
+// 3. Helper: Enhanced Route Fetching with Traffic Simulation
 // ============================================================
-async function fetchOSRMRoute(
+async function fetchOSRMRouteEnhanced(
   startLat: number,
   startLng: number,
   endLat: number,
   endLng: number,
   profile: "driving" | "walking" | "cycling" = "driving"
-): Promise<{ coordinates: [number, number][]; distance: number; duration: number }> {
+): Promise<{ coordinates: [number, number][]; distance: number; duration: number; traffic?: "light" | "moderate" | "heavy" }> {
   try {
-    const url = `https://router.project-osrm.org/route/v1/${profile}/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson`;
+    const url = `https://router.project-osrm.org/route/v1/${profile}/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson&steps=true`;
     const response = await fetch(url, {
       headers: {
         'Accept': 'application/json',
@@ -225,10 +314,29 @@ async function fetchOSRMRoute(
       ([lng, lat]) => [lat, lng]
     );
 
+    // Simulate traffic conditions based on time of day and distance
+    const hour = new Date().getHours();
+    let traffic: "light" | "moderate" | "heavy" = "moderate";
+    if (hour >= 7 && hour <= 9 || hour >= 17 && hour <= 19) {
+      traffic = "heavy";
+    } else if (hour >= 10 && hour <= 16) {
+      traffic = "moderate";
+    } else {
+      traffic = "light";
+    }
+
+    // Adjust duration based on traffic
+    let trafficMultiplier = 1;
+    if (traffic === "heavy") trafficMultiplier = 1.5;
+    else if (traffic === "moderate") trafficMultiplier = 1.2;
+
+    const adjustedDuration = (route.duration / 60) * trafficMultiplier;
+
     return {
       coordinates,
       distance: route.distance / 1000,
-      duration: route.duration / 60,
+      duration: adjustedDuration,
+      traffic,
     };
   } catch (error) {
     console.error("OSRM fetch error:", error);
@@ -239,14 +347,12 @@ async function fetchOSRMRoute(
       ],
       distance: 0,
       duration: 0,
+      traffic: "light",
     };
   }
 }
 
-// ============================================================
-// 4. Route Generation
-// ============================================================
-async function generateRoutes(
+async function generateRoutesEnhanced(
   customers: Customer[],
   profile: "driving" | "walking" | "cycling" = "driving"
 ): Promise<Route[]> {
@@ -260,13 +366,20 @@ async function generateRoutes(
     const end = validCustomers[i + 1];
 
     try {
-      const result = await fetchOSRMRoute(
+      const result = await fetchOSRMRouteEnhanced(
         start.lat,
         start.lng,
         end.lat,
         end.lng,
         profile
       );
+
+      // Generate waypoints based on route coordinates
+      const waypoints = result.coordinates.slice(0, 3).map((coord, idx) => ({
+        name: `Waypoint ${idx + 1}`,
+        lat: coord[0],
+        lng: coord[1],
+      }));
 
       routes.push({
         id: `route-${i}`,
@@ -275,6 +388,10 @@ async function generateRoutes(
         distance: result.distance,
         duration: result.duration,
         color: `hsl(${(i * 60) % 360}, 70%, 50%)`,
+        trafficConditions: result.traffic,
+        estimatedTime: result.duration,
+        routeSummary: `${profile} route from ${start.name} to ${end.name}`,
+        waypoints: waypoints.slice(0, 2),
       });
     } catch (error) {
       console.error(`Failed to fetch route ${i}:`, error);
@@ -288,6 +405,10 @@ async function generateRoutes(
         distance: 0,
         duration: 0,
         color: `hsl(${(i * 60) % 360}, 70%, 50%)`,
+        trafficConditions: "light",
+        estimatedTime: 0,
+        routeSummary: `Route from ${start.name} to ${end.name}`,
+        waypoints: [],
       });
     }
   }
@@ -296,7 +417,7 @@ async function generateRoutes(
 }
 
 // ============================================================
-// 5. Status & Priority Badges
+// 4. Enhanced Status & Priority Badges
 // ============================================================
 function CustomerStatusBadge({ status }: { status: Customer["status"] }) {
   const variants = {
@@ -327,10 +448,36 @@ function CustomerPriorityBadge({ priority }: { priority: Customer["priority"] })
 }
 
 // ============================================================
-// 6. Route Details Card Component
+// 5. Traffic Indicator Component
 // ============================================================
-function RouteDetailsCard({ routeDetails }: { routeDetails: RouteDetails | null }) {
+function TrafficIndicator({ traffic }: { traffic?: "light" | "moderate" | "heavy" }) {
+  if (!traffic) return null;
+
+  const config = {
+    light: { color: "text-green-500", icon: SignalLow, label: "Light" },
+    moderate: { color: "text-yellow-500", icon: SignalMedium, label: "Moderate" },
+    heavy: { color: "text-red-500", icon: SignalHigh, label: "Heavy" },
+  };
+
+  const { color, icon: Icon, label } = config[traffic];
+
+  return (
+    <div className="flex items-center gap-1">
+      <Icon className={cn("size-3", color)} />
+      <span className="text-xs text-muted-foreground">{label}</span>
+    </div>
+  );
+}
+
+// ============================================================
+// 6. Enhanced Route Details Component
+// ============================================================
+function RouteDetailsCardEnhanced({ routeDetails }: { routeDetails: RouteDetails | null }) {
   if (!routeDetails) return null;
+
+  const priorityColor = 
+    routeDetails.from.priority === "high" ? "#ef4444" : 
+    routeDetails.from.priority === "medium" ? "#eab308" : "#3b82f6";
 
   return (
     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] w-[90%] max-w-2xl pointer-events-none">
@@ -341,6 +488,9 @@ function RouteDetailsCard({ routeDetails }: { routeDetails: RouteDetails | null 
               <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground mb-1">
                 <Route className="size-3 sm:size-4" />
                 <span>Route Details</span>
+                {routeDetails.traffic && (
+                  <TrafficIndicator traffic={routeDetails.traffic} />
+                )}
               </div>
               <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
                 <span className="font-medium text-xs sm:text-sm truncate max-w-[80px] sm:max-w-[150px]">
@@ -360,22 +510,26 @@ function RouteDetailsCard({ routeDetails }: { routeDetails: RouteDetails | null 
                   <Clock className="size-3 sm:size-4 text-muted-foreground" />
                   <span className="font-medium">{Math.round(routeDetails.duration)} min</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Target className="size-3 sm:size-4 text-muted-foreground" />
-                  <span className="text-[10px] sm:text-xs text-muted-foreground">via {routeDetails.routeId}</span>
-                </div>
+                {routeDetails.fuelCost && (
+                  <div className="flex items-center gap-1">
+                    <DollarSign className="size-3 sm:size-4 text-muted-foreground" />
+                    <span className="font-medium">₱{routeDetails.fuelCost.toFixed(2)}</span>
+                  </div>
+                )}
+                {routeDetails.estimatedArrival && (
+                  <div className="flex items-center gap-1">
+                    <Calendar className="size-3 sm:size-4 text-muted-foreground" />
+                    <span className="text-xs">
+                      {routeDetails.estimatedArrival.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex-shrink-0">
               <div 
                 className="size-2 sm:size-3 rounded-full" 
-                style={{ 
-                  backgroundColor: routeDetails.from.priority === "high" 
-                    ? "#ef4444" 
-                    : routeDetails.from.priority === "medium" 
-                    ? "#eab308" 
-                    : "#3b82f6" 
-                }} 
+                style={{ backgroundColor: priorityColor }} 
               />
             </div>
           </div>
@@ -386,9 +540,71 @@ function RouteDetailsCard({ routeDetails }: { routeDetails: RouteDetails | null 
 }
 
 // ============================================================
-// 7. Customer List Item Component
+// 7. Route Metrics Dashboard
 // ============================================================
-function CustomerListItem({
+function RouteMetricsDashboard({ metrics }: { metrics: RouteMetrics }) {
+  return (
+    <div className="absolute top-2 sm:top-4 right-2 sm:right-4 z-[1000] pointer-events-none">
+      <Card className="pointer-events-auto bg-background/90 backdrop-blur-sm shadow-lg w-[180px] sm:w-[220px]">
+        <CardContent className="p-2 sm:p-3">
+          <div className="space-y-1.5 sm:space-y-2">
+            <div className="flex items-center justify-between text-xs sm:text-sm">
+              <span className="text-muted-foreground flex items-center gap-1">
+                <Route className="size-3" />
+                Routes
+              </span>
+              <span className="font-medium">{metrics.activeRoutes}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs sm:text-sm">
+              <span className="text-muted-foreground flex items-center gap-1">
+                <Users className="size-3" />
+                Customers
+              </span>
+              <span className="font-medium">{metrics.totalCustomers}</span>
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between text-xs sm:text-sm">
+              <span className="text-muted-foreground flex items-center gap-1">
+                <Navigation className="size-3" />
+                Distance
+              </span>
+              <span className="font-medium">{metrics.totalDistance.toFixed(1)} km</span>
+            </div>
+            <div className="flex items-center justify-between text-xs sm:text-sm">
+              <span className="text-muted-foreground flex items-center gap-1">
+                <Clock className="size-3" />
+                Duration
+              </span>
+              <span className="font-medium">{Math.round(metrics.totalDuration)} min</span>
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between text-xs sm:text-sm">
+              <span className="text-muted-foreground flex items-center gap-1">
+                <DollarSign className="size-3" />
+                Fuel Cost
+              </span>
+              <span className="font-medium">₱{metrics.fuelCost.toFixed(2)}</span>
+            </div>
+            {metrics.tollCost > 0 && (
+              <div className="flex items-center justify-between text-xs sm:text-sm">
+                <span className="text-muted-foreground flex items-center gap-1">
+                  <ShieldCheck className="size-3" />
+                  Tolls
+                </span>
+                <span className="font-medium">₱{metrics.tollCost.toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// 8. Customer List Item with Enhanced Info
+// ============================================================
+function CustomerListItemEnhanced({
   customer,
   isSelected,
   onSelect,
@@ -421,6 +637,13 @@ function CustomerListItem({
             <Building2 className="size-3" />
             {customer.company}
           </p>
+          {customer.rating && (
+            <div className="flex items-center gap-1 mt-0.5">
+              <Star className="size-3 fill-yellow-500 text-yellow-500" />
+              <span className="text-xs font-medium">{customer.rating.toFixed(1)}</span>
+              <span className="text-xs text-muted-foreground">({customer.visitFrequency})</span>
+            </div>
+          )}
         </div>
         <CustomerPriorityBadge priority={customer.priority} />
       </div>
@@ -435,6 +658,21 @@ function CustomerListItem({
           <span className="truncate">{customer.phone}</span>
         </div>
       </div>
+
+      {customer.tags && customer.tags.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-0.5">
+          {customer.tags.slice(0, 2).map((tag) => (
+            <Badge key={tag} variant="outline" className="text-[8px] sm:text-[10px] px-1 py-0">
+              {tag}
+            </Badge>
+          ))}
+          {customer.tags.length > 2 && (
+            <Badge variant="outline" className="text-[8px] sm:text-[10px] px-1 py-0">
+              +{customer.tags.length - 2}
+            </Badge>
+          )}
+        </div>
+      )}
 
       {showInfo && (
         <div className="mt-1 sm:mt-2 grid grid-cols-2 gap-1 sm:gap-2 text-[10px] sm:text-xs text-muted-foreground border-t pt-1 sm:pt-2">
@@ -457,9 +695,9 @@ function CustomerListItem({
 }
 
 // ============================================================
-// 8. Customer List Component (Desktop - Fully Scrollable)
+// 9. Enhanced Customer List Desktop
 // ============================================================
-function CustomerListDesktop({
+function CustomerListDesktopEnhanced({
   customers,
   selectedCustomer,
   onSelectCustomer,
@@ -467,6 +705,10 @@ function CustomerListDesktop({
   totalCustomers,
   searchQuery,
   onSearchChange,
+  filterPriority,
+  onFilterPriorityChange,
+  filterStatus,
+  onFilterStatusChange,
 }: {
   customers: Customer[];
   selectedCustomer: Customer | null;
@@ -475,38 +717,82 @@ function CustomerListDesktop({
   totalCustomers: number;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  filterPriority: string;
+  onFilterPriorityChange: (priority: string) => void;
+  filterStatus: string;
+  onFilterStatusChange: (status: string) => void;
 }) {
   return (
     <Card className="w-72 sm:w-80 flex-shrink-0 overflow-hidden hidden lg:flex lg:flex-col h-full max-h-full">
       {/* Fixed Header */}
-      <CardHeader className="border-b p-3 sm:p-4 flex-shrink-0">
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-              <Users className="size-4 sm:size-5" />
-              Customers
-              <Badge variant="secondary" className="text-xs">
-                {totalCustomers}
-              </Badge>
-            </CardTitle>
+      <CardHeader className="border-b p-3 sm:p-4 flex-shrink-0 space-y-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+            <Users className="size-4 sm:size-5" />
+            Customers
+            <Badge variant="secondary" className="text-xs">
+              {totalCustomers}
+            </Badge>
+          </CardTitle>
+          <div className="flex items-center gap-1">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="h-7 w-7"
+                    onClick={() => onFilterPriorityChange(filterPriority === "high" ? "all" : "high")}
+                  >
+                    <Star className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Filter high priority</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="h-7 w-7"
+                    onClick={() => onFilterStatusChange(filterStatus === "active" ? "all" : "active")}
+                  >
+                    <ShieldCheck className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Filter active customers</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-            <Input
-              placeholder="Search customers..."
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className="pl-7 h-8 text-sm"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => onSearchChange("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="size-3.5" />
-              </button>
-            )}
-          </div>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Search customers..."
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="pl-7 h-8 text-sm"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => onSearchChange("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
+        </div>
+        <div className="flex gap-1">
+          <Tabs value={filterPriority} onValueChange={onFilterPriorityChange} className="w-full">
+            <TabsList className="h-7 w-full">
+              <TabsTrigger value="all" className="text-xs h-6 flex-1">All</TabsTrigger>
+              <TabsTrigger value="high" className="text-xs h-6 flex-1">High</TabsTrigger>
+              <TabsTrigger value="medium" className="text-xs h-6 flex-1">Med</TabsTrigger>
+              <TabsTrigger value="low" className="text-xs h-6 flex-1">Low</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
       </CardHeader>
 
@@ -521,7 +807,7 @@ function CustomerListDesktop({
             </div>
           ) : (
             customers.map((customer) => (
-              <CustomerListItem
+              <CustomerListItemEnhanced
                 key={customer.id}
                 customer={customer}
                 isSelected={selectedCustomer?.id === customer.id}
@@ -537,112 +823,7 @@ function CustomerListDesktop({
 }
 
 // ============================================================
-// 9. Customer List Component (Mobile - Fully Scrollable)
-// ============================================================
-function CustomerListMobile({
-  customers,
-  selectedCustomer,
-  onSelectCustomer,
-  showCustomerInfo,
-  totalCustomers,
-  searchQuery,
-  onSearchChange,
-  isOpen,
-  onOpenChange,
-}: {
-  customers: Customer[];
-  selectedCustomer: Customer | null;
-  onSelectCustomer: (customer: Customer) => void;
-  showCustomerInfo: boolean;
-  totalCustomers: number;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  return (
-    <Sheet open={isOpen} onOpenChange={onOpenChange}>
-      <SheetTrigger asChild>
-        <Button
-          size="icon"
-          variant="secondary"
-          className="lg:hidden fixed bottom-4 right-4 z-[1000] shadow-lg rounded-full size-12 sm:size-14"
-        >
-          <Menu className="size-5 sm:size-6" />
-        </Button>
-      </SheetTrigger>
-      <SheetContent side="left" className="w-[90vw] sm:w-[400px] p-0">
-        <Card className="h-full border-0 rounded-none flex flex-col">
-          {/* Fixed Header */}
-          <CardHeader className="border-b p-4 flex-shrink-0">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                  <Users className="size-5" />
-                  Customers
-                  <Badge variant="secondary">{totalCustomers}</Badge>
-                </CardTitle>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8"
-                  onClick={() => onOpenChange(false)}
-                >
-                  <X className="size-4" />
-                </Button>
-              </div>
-              <div className="relative">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-                <Input
-                  placeholder="Search customers..."
-                  value={searchQuery}
-                  onChange={(e) => onSearchChange(e.target.value)}
-                  className="pl-7 h-9 text-sm"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => onSearchChange("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
-          </CardHeader>
-
-          {/* Scrollable Content */}
-          <ScrollArea className="flex-1 h-full min-h-0">
-            <div className="p-3 sm:p-4 space-y-3">
-              {customers.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Users className="size-8 text-muted-foreground/50 mb-2" />
-                  <p className="text-sm text-muted-foreground">No customers found</p>
-                </div>
-              ) : (
-                customers.map((customer) => (
-                  <CustomerListItem
-                    key={customer.id}
-                    customer={customer}
-                    isSelected={selectedCustomer?.id === customer.id}
-                    onSelect={(c) => {
-                      onSelectCustomer(c);
-                      onOpenChange(false);
-                    }}
-                    showInfo={showCustomerInfo}
-                  />
-                ))
-              )}
-            </div>
-          </ScrollArea>
-        </Card>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-// ============================================================
-// 10. Main Customer Map Component
+// 10. Main Enhanced Customer Map Component
 // ============================================================
 interface CustomerMapProps {
   customers?: Customer[];
@@ -651,7 +832,7 @@ interface CustomerMapProps {
   user?: any;
 }
 
-export function CustomerMap({
+export function CustomerMapEnhanced({
   customers = SAMPLE_CUSTOMERS,
   initialProfile = "driving",
   className,
@@ -670,27 +851,60 @@ export function CustomerMap({
   const [highlightedRoute, setHighlightedRoute] = useState<string | null>(null);
   const [isSwitchingView, setIsSwitchingView] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterPriority, setFilterPriority] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [showMetrics, setShowMetrics] = useState(true);
+  const [animateMarkers, setAnimateMarkers] = useState(true);
+  const [selectedProfile, setSelectedProfile] = useState<"driving" | "walking" | "cycling">(initialProfile);
 
-  // Filter customers based on search query
+  // Filter customers based on search query and filters
   const filteredCustomers = useMemo(() => {
-    if (!searchQuery.trim()) return customers;
+    let filtered = customers;
     
-    const query = searchQuery.toLowerCase().trim();
-    return customers.filter(
-      (c) =>
-        c.name.toLowerCase().includes(query) ||
-        c.company.toLowerCase().includes(query) ||
-        c.email.toLowerCase().includes(query) ||
-        c.phone.includes(query) ||
-        c.address.toLowerCase().includes(query)
-    );
-  }, [customers, searchQuery]);
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(
+        (c) =>
+          c.name.toLowerCase().includes(query) ||
+          c.company.toLowerCase().includes(query) ||
+          c.email.toLowerCase().includes(query) ||
+          c.phone.includes(query) ||
+          c.address.toLowerCase().includes(query)
+      );
+    }
 
-  // Calculate total metrics
-  const totalCustomers = filteredCustomers.length;
-  const activeCustomers = filteredCustomers.filter(c => c.status === "active").length;
-  const totalRevenue = filteredCustomers.reduce((sum, c) => sum + c.revenue, 0);
-  const avgRevenue = totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
+    if (filterPriority !== "all") {
+      filtered = filtered.filter(c => c.priority === filterPriority);
+    }
+
+    if (filterStatus !== "all") {
+      filtered = filtered.filter(c => c.status === filterStatus);
+    }
+
+    return filtered;
+  }, [customers, searchQuery, filterPriority, filterStatus]);
+
+  // Calculate metrics
+  const metrics = useMemo<RouteMetrics>(() => {
+    const totalDistance = routes.reduce((sum, r) => sum + r.distance, 0);
+    const totalDuration = routes.reduce((sum, r) => sum + r.duration, 0);
+    const activeRoutes = routes.filter(r => r.distance > 0).length;
+    
+    // Simulate fuel and toll costs
+    const fuelCost = totalDistance * 0.15; // ₱0.15 per km
+    const tollCost = Math.floor(totalDistance / 20) * 50; // ₱50 per 20km
+
+    return {
+      totalDistance,
+      totalDuration,
+      averageDistance: activeRoutes > 0 ? totalDistance / activeRoutes : 0,
+      averageDuration: activeRoutes > 0 ? totalDuration / activeRoutes : 0,
+      fuelCost,
+      tollCost,
+      totalCustomers: filteredCustomers.length,
+      activeRoutes,
+    };
+  }, [routes, filteredCustomers]);
 
   // Map center
   const center = useMemo(() => {
@@ -706,7 +920,7 @@ export function CustomerMap({
       setLoading(true);
       try {
         const customerRoutes = filteredCustomers.filter(a => (a?.lat && a?.lng));
-        const generatedRoutes = await generateRoutes(customerRoutes, profile);
+        const generatedRoutes = await generateRoutesEnhanced(customerRoutes, profile);
         setRoutes(generatedRoutes);
       } catch (error) {
         console.error("Failed to generate routes:", error);
@@ -734,12 +948,21 @@ export function CustomerMap({
       const to = filteredCustomers.find(c => c.id === route.customerIds[1]);
       
       if (from && to) {
+        const estimatedArrival = new Date();
+        estimatedArrival.setMinutes(estimatedArrival.getMinutes() + route.duration);
+        
         setRouteDetails({
           from,
           to,
           distance: route.distance,
           duration: route.duration,
           routeId: route.id,
+          traffic: route.trafficConditions,
+          estimatedArrival,
+          fuelCost: route.distance * 0.15,
+          tolls: Math.floor(route.distance / 20) * 50,
+          turns: Math.floor(route.coordinates.length * 0.1),
+          elevationGain: Math.floor(route.distance * 2),
         });
         setHighlightedRoute(route.id);
       }
@@ -748,10 +971,6 @@ export function CustomerMap({
       setHighlightedRoute(null);
     }
   }, [selectedCustomer, routes, filteredCustomers]);
-
-  // Calculate route stats
-  const totalDistance = routes.reduce((sum, r) => sum + r.distance, 0);
-  const totalDuration = routes.reduce((sum, r) => sum + r.duration, 0);
 
   // Handle map type change
   const handleMapTypeChange = (type: "street" | "satellite") => {
@@ -793,24 +1012,28 @@ export function CustomerMap({
 
   return (
     <div className={cn("flex flex-col lg:flex-row h-[calc(100vh-120px)] min-h-[500px] sm:min-h-[600px] w-full gap-2 sm:gap-4", className)}>
-      {/* Desktop Customer List - Fully Scrollable */}
-      <CustomerListDesktop
+      {/* Desktop Customer List */}
+      <CustomerListDesktopEnhanced
         customers={filteredCustomers}
         selectedCustomer={selectedCustomer}
         onSelectCustomer={setSelectedCustomer}
         showCustomerInfo={showCustomerInfo}
-        totalCustomers={totalCustomers}
+        totalCustomers={filteredCustomers.length}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        filterPriority={filterPriority}
+        onFilterPriorityChange={setFilterPriority}
+        filterStatus={filterStatus}
+        onFilterStatusChange={setFilterStatus}
       />
 
-      {/* Mobile Customer List - Fully Scrollable */}
-      <CustomerListMobile
+      {/* Mobile Customer List */}
+      <CustomerListMobileEnhanced
         customers={filteredCustomers}
         selectedCustomer={selectedCustomer}
         onSelectCustomer={setSelectedCustomer}
         showCustomerInfo={showCustomerInfo}
-        totalCustomers={totalCustomers}
+        totalCustomers={filteredCustomers.length}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         isOpen={isMobileListOpen}
@@ -824,29 +1047,24 @@ export function CustomerMap({
       >
         <CardContent className="p-0 h-full relative">
           {/* Stats Bar - Responsive */}
-          <div className="absolute top-2 sm:top-4 left-2 sm:left-4 right-2 sm:right-4 z-[1000] flex flex-wrap gap-1 sm:gap-2 pointer-events-none">
+          <div className="absolute top-2 sm:top-4 left-2 sm:left-4 z-[1000] flex flex-wrap gap-1 sm:gap-2 pointer-events-none">
             <div className="pointer-events-auto bg-background/90 backdrop-blur-sm border rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 shadow-sm flex items-center gap-1.5 sm:gap-3 text-xs sm:text-sm">
               <div className="flex items-center gap-1 sm:gap-1.5">
                 <Users className="size-3 sm:size-4 text-muted-foreground" />
-                <span className="font-medium">{totalCustomers}</span>
-                <span className="text-muted-foreground hidden sm:inline">total</span>
+                <span className="font-medium">{filteredCustomers.length}</span>
+                <span className="text-muted-foreground hidden sm:inline">customers</span>
               </div>
               <Separator orientation="vertical" className="h-3 sm:h-4" />
               <div className="flex items-center gap-1 sm:gap-1.5">
-                <div className="size-1.5 sm:size-2 rounded-full bg-green-500" />
-                <span className="font-medium">{activeCustomers}</span>
-                <span className="text-muted-foreground hidden sm:inline">active</span>
+                <Route className="size-3 sm:size-4 text-muted-foreground" />
+                <span className="font-medium">{metrics.activeRoutes}</span>
+                <span className="text-muted-foreground hidden sm:inline">routes</span>
               </div>
-              {totalCustomers > 0 && (
-                <>
-                  <Separator orientation="vertical" className="h-3 sm:h-4 hidden sm:block" />
-                  <div className="flex items-center gap-1 sm:gap-1.5 hidden sm:flex">
-                    <TrendingUp className="size-3 sm:size-4 text-green-500" />
-                    <span className="font-medium">₱{avgRevenue.toLocaleString()}</span>
-                    <span className="text-muted-foreground hidden lg:inline">avg revenue</span>
-                  </div>
-                </>
-              )}
+              <Separator orientation="vertical" className="h-3 sm:h-4" />
+              <div className="flex items-center gap-1 sm:gap-1.5">
+                <Navigation className="size-3 sm:size-4 text-muted-foreground" />
+                <span className="font-medium">{metrics.totalDistance.toFixed(1)} km</span>
+              </div>
             </div>
 
             {/* Map Type Controls */}
@@ -884,6 +1102,15 @@ export function CustomerMap({
                   <Maximize className="size-3 sm:size-4" />
                 )}
               </Button>
+              <Button
+                size="icon-sm"
+                variant={showMetrics ? "default" : "secondary"}
+                onClick={() => setShowMetrics(!showMetrics)}
+                title="Show metrics"
+                className="shadow-sm h-7 w-7 sm:h-8 sm:w-8"
+              >
+                <BarChart3 className="size-3 sm:size-4" />
+              </Button>
             </div>
 
             {/* Route Profile Controls */}
@@ -896,7 +1123,7 @@ export function CustomerMap({
                   title="Driving"
                   className="shadow-sm h-7 w-7 sm:h-8 sm:w-8"
                 >
-                  <Navigation className="size-3 sm:size-4" />
+                  <Car className="size-3 sm:size-4" />
                 </Button>
                 <Button
                   size="icon-sm"
@@ -905,7 +1132,7 @@ export function CustomerMap({
                   title="Walking"
                   className="shadow-sm h-7 w-7 sm:h-8 sm:w-8"
                 >
-                  <Users className="size-3 sm:size-4" />
+                  <Footprints className="size-3 sm:size-4" />
                 </Button>
                 <Button
                   size="icon-sm"
@@ -914,29 +1141,28 @@ export function CustomerMap({
                   title="Cycling"
                   className="shadow-sm h-7 w-7 sm:h-8 sm:w-8"
                 >
-                  <Route className="size-3 sm:size-4" />
+                  <Bike className="size-3 sm:size-4" />
                 </Button>
-              </div>
-            )}
-
-            {/* Route Stats */}
-            {!loading && routes.length > 0 && totalDistance > 0 && (
-              <div className="pointer-events-auto bg-background/90 backdrop-blur-sm border rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 shadow-sm flex items-center gap-1.5 sm:gap-3 text-xs sm:text-sm hidden md:flex">
-                <div className="flex items-center gap-1 sm:gap-1.5">
-                  <Route className="size-3 sm:size-4 text-muted-foreground" />
-                  <span className="font-medium">{totalDistance.toFixed(1)} km</span>
-                </div>
-                <Separator orientation="vertical" className="h-3 sm:h-4" />
-                <div className="flex items-center gap-1 sm:gap-1.5">
-                  <Clock className="size-3 sm:size-4 text-muted-foreground" />
-                  <span className="font-medium">{Math.round(totalDuration)} min</span>
-                </div>
+                <Button
+                  size="icon-sm"
+                  variant={showRoutes ? "default" : "secondary"}
+                  onClick={() => setShowRoutes(!showRoutes)}
+                  title="Toggle routes"
+                  className="shadow-sm h-7 w-7 sm:h-8 sm:w-8"
+                >
+                  <Layers className="size-3 sm:size-4" />
+                </Button>
               </div>
             )}
           </div>
 
           {/* Route Details Card */}
-          <RouteDetailsCard routeDetails={routeDetails} />
+          <RouteDetailsCardEnhanced routeDetails={routeDetails} />
+
+          {/* Route Metrics Dashboard */}
+          {showMetrics && (
+            <RouteMetricsDashboard metrics={metrics} />
+          )}
 
           {/* View Switching Loading Overlay */}
           {isSwitchingView && (
@@ -990,12 +1216,13 @@ export function CustomerMap({
                       lineJoin="round"
                       lineCap="round"
                       smoothFactor={0}
+                      dashArray={highlightedRoute === route.id ? undefined : "5, 5"}
                     />
                   ))}
                 </>
               )}
 
-              {/* Customer Markers */}
+              {/* Customer Markers with Enhanced Info */}
               {filteredCustomers.map((customer) => {
                 const isSelected = selectedCustomer?.id === customer.id;
 
@@ -1004,6 +1231,7 @@ export function CustomerMap({
                     key={customer.id}
                     position={[customer.lat, customer.lng]}
                     onClick={() => setSelectedCustomer(customer)}
+                    animation={animateMarkers ? "bounce" : undefined}
                   >
                     <MapPopup>
                       <div className="space-y-2 p-1 min-w-[200px] max-w-[280px]">
@@ -1017,6 +1245,15 @@ export function CustomerMap({
                           <Building2 className="size-3" />
                           {customer.company}
                         </div>
+                        {customer.rating && (
+                          <div className="flex items-center gap-1">
+                            <Star className="size-3 fill-yellow-500 text-yellow-500" />
+                            <span className="text-xs font-medium">{customer.rating.toFixed(1)}</span>
+                            <span className="text-xs text-muted-foreground">
+                              ({customer.visitFrequency})
+                            </span>
+                          </div>
+                        )}
                         <Separator />
                         <div className="grid grid-cols-2 gap-1 sm:gap-2 text-xs sm:text-sm">
                           <div>
@@ -1040,6 +1277,18 @@ export function CustomerMap({
                             <span className="text-xs break-all">{customer.email}</span>
                           </div>
                         </div>
+                        {customer.tags && customer.tags.length > 0 && (
+                          <>
+                            <Separator />
+                            <div className="flex flex-wrap gap-1">
+                              {customer.tags.map((tag) => (
+                                <Badge key={tag} variant="outline" className="text-[10px]">
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          </>
+                        )}
                         {customer.notes && (
                           <>
                             <Separator />
@@ -1074,8 +1323,8 @@ export function CustomerMap({
                 <AlertCircle className="size-8 sm:size-10 text-muted-foreground" />
                 <h3 className="font-semibold text-sm sm:text-base">No Customers Found</h3>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  {searchQuery 
-                    ? "No customers match your search criteria. Try adjusting your filters."
+                  {searchQuery || filterPriority !== "all" || filterStatus !== "all"
+                    ? "No customers match your filters. Try adjusting your search criteria."
                     : "No customers have been added to this company yet."}
                 </p>
               </div>
@@ -1088,6 +1337,109 @@ export function CustomerMap({
 }
 
 // ============================================================
-// 11. Export
+// 11. Mobile Customer List Component
 // ============================================================
-export default CustomerMap;
+function CustomerListMobileEnhanced({
+  customers,
+  selectedCustomer,
+  onSelectCustomer,
+  showCustomerInfo,
+  totalCustomers,
+  searchQuery,
+  onSearchChange,
+  isOpen,
+  onOpenChange,
+}: {
+  customers: Customer[];
+  selectedCustomer: Customer | null;
+  onSelectCustomer: (customer: Customer) => void;
+  showCustomerInfo: boolean;
+  totalCustomers: number;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <Sheet open={isOpen} onOpenChange={onOpenChange}>
+      <SheetTrigger asChild>
+        <Button
+          size="icon"
+          variant="secondary"
+          className="lg:hidden fixed bottom-4 right-4 z-[1000] shadow-lg rounded-full size-12 sm:size-14"
+        >
+          <Menu className="size-5 sm:size-6" />
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="left" className="w-[90vw] sm:w-[400px] p-0">
+        <Card className="h-full border-0 rounded-none flex flex-col">
+          {/* Fixed Header */}
+          <CardHeader className="border-b p-4 flex-shrink-0 space-y-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <Users className="size-5" />
+                Customers
+                <Badge variant="secondary">{totalCustomers}</Badge>
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                onClick={() => onOpenChange(false)}
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search customers..."
+                value={searchQuery}
+                onChange={(e) => onSearchChange(e.target.value)}
+                className="pl-7 h-9 text-sm"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => onSearchChange("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
+          </CardHeader>
+
+          {/* Scrollable Content */}
+          <ScrollArea className="flex-1 h-full min-h-0">
+            <div className="p-3 sm:p-4 space-y-3">
+              {customers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <Users className="size-8 text-muted-foreground/50 mb-2" />
+                  <p className="text-sm text-muted-foreground">No customers found</p>
+                </div>
+              ) : (
+                customers.map((customer) => (
+                  <CustomerListItemEnhanced
+                    key={customer.id}
+                    customer={customer}
+                    isSelected={selectedCustomer?.id === customer.id}
+                    onSelect={(c) => {
+                      onSelectCustomer(c);
+                      onOpenChange(false);
+                    }}
+                    showInfo={showCustomerInfo}
+                  />
+                ))
+              )}
+            </div>
+          </ScrollArea>
+        </Card>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ============================================================
+// 12. Export
+// ============================================================
+export default CustomerMapEnhanced;
