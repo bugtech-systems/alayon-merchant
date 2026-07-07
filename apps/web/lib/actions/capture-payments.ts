@@ -5,6 +5,7 @@ import { getAuthHeaders } from "@/lib/data/cookies";
 import { capturePayment } from "../data/cart";
 import { createDelivery } from "./checkout";
 import { retrieveUser } from "../data";
+import { acceptDelivery } from "./deliveries";
 
 // ============================================================================
 // TYPES
@@ -418,8 +419,11 @@ export async function processPOSPayment(params: {
           headersWithIdempotency
         );
 
-         await createDelivery({cart_id: cart?.id, order_id: orderResult.order.id, company_id: pricingContext.companyId})
-        
+        let orderDelivery = await createDelivery({cart_id: cart?.id, order_id: orderResult.order.id, company_id: pricingContext.companyId})
+        if(orderDelivery){
+          console.log(orderDelivery, 'ORDDDEL')
+          await acceptDelivery(orderDelivery?.id)
+        }
 
         break; // Success, exit retry loop
       } catch (completeError: any) {

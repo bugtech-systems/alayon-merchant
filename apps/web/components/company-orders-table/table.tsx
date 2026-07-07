@@ -84,7 +84,7 @@ export interface Order {
   }[];
   quantity: number;
   total: number;
-  status: "pending" | "accepted" | "company_accepted" | "ready_for_pickup" | "preparing" | "ready" | "in_transit" | "delivered" | "declined" | "completed";
+  status: "pending" | "company_accepted" | "driver_accepted" | "preparing" | "ready_for_pickup" | "in_transit" | "delivered" | "declined" | "completed";
   orderDate: string;
   assignedDriver: string | null;
   assignedDriverId: string | null;
@@ -127,8 +127,8 @@ const StatusDropdown = ({
 }: StatusDropdownProps) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isUpdating, setIsUpdating] = React.useState(false);
-  
-  const statuses = ['pending', 'accepted', 'company_accepted', 'preparing', 'ready', 'in_transit', 'delivered', 'completed', 'declined'];
+  console.log(currentStatus, 'CURR')
+  const statuses = ['pending', 'company_accepted', 'driver_accepted',  'preparing', 'ready_for_pickup', 'in_transit', 'delivered', 'completed', 'declined'];
   const currentConfig = ORDER_STATUS_CONFIG[currentStatus?.toLowerCase()];
 
   const handleStatusChange = async (status: string) => {
@@ -458,7 +458,7 @@ export function getOrderColumns({
   const getStatusColor = (status: Order["status"]) => {
     const colors = {
       pending: "bg-amber-100 text-amber-800",
-      accepted: "bg-blue-100 text-blue-800",
+      driver_accepted: "bg-blue-100 text-blue-800",
       company_accepted: "bg-blue-100 text-blue-800",
       preparing: "bg-indigo-100 text-indigo-800",
       ready: "bg-cyan-100 text-cyan-800",
@@ -473,11 +473,11 @@ export function getOrderColumns({
 
   const statusLabels: Record<Order["status"], string> = {
     pending: "Pending",
-    accepted: "Accepted",
+    driver_accepted: "Driver Accepted",
     company_accepted: "Company Accepted",
     preparing: "Preparing",
     ready: "Ready",
-    ready_for_pickup: "Ready for Pickup",
+    // ready_for_pickup: "Ready for Pickup",
     in_transit: "In Transit",
     delivered: "Delivered",
     declined: "Declined",

@@ -29,8 +29,8 @@ export const ORDER_STATUS_CONFIG: Record<string, {
     textColor: "text-amber-800",
     borderColor: "border-amber-200",
   },
-  accepted: {
-    label: "Accepted",
+  driver_accepted: {
+    label: "Driver Accepted",
     icon: <CheckCircle className="h-3.5 w-3.5" />,
     color: "bg-blue-50 text-blue-700 border-blue-200",
     bgColor: "bg-blue-100",
@@ -53,15 +53,15 @@ export const ORDER_STATUS_CONFIG: Record<string, {
     textColor: "text-indigo-800",
     borderColor: "border-indigo-200",
   },
+  // ready_for_pickup: {
+  //   label: "Ready for Pickup",
+  //   icon: <Package className="h-3.5 w-3.5" />,
+  //   color: "bg-cyan-50 text-cyan-700 border-cyan-200",
+  //   bgColor: "bg-cyan-100",
+  //   textColor: "text-cyan-800",
+  //   borderColor: "border-cyan-200",
+  // },
   ready_for_pickup: {
-    label: "Ready for Pickup",
-    icon: <Package className="h-3.5 w-3.5" />,
-    color: "bg-cyan-50 text-cyan-700 border-cyan-200",
-    bgColor: "bg-cyan-100",
-    textColor: "text-cyan-800",
-    borderColor: "border-cyan-200",
-  },
-  ready: {
     label: "Ready",
     icon: <CheckCircle className="h-3.5 w-3.5" />,
     color: "bg-cyan-50 text-cyan-700 border-cyan-200",

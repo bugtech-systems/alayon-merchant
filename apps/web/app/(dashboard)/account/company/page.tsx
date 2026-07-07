@@ -140,7 +140,7 @@ async function DashboardContent() {
       </div>
 
       <div className="overflow-x-auto whitespace-nowrap">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 p-px">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-px">
           <DeliveryColumn
             title="Incoming orders"
             deliveries={deliveries}
@@ -150,12 +150,12 @@ async function DashboardContent() {
             ]}
             type="company"
           />
-          <DeliveryColumn
+          {/* <DeliveryColumn
             title="Ready to prepare"
             deliveries={deliveries}
             statusFilters={[DeliveryStatus.PICKUP_CLAIMED]}
             type="company"
-          />
+          /> */}
           <DeliveryColumn
             title="Preparing"
             deliveries={deliveries}

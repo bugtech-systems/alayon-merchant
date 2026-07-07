@@ -327,6 +327,7 @@ const handleCheckout = useCallback(async () => {
 
 
 
+
   // Pricing info component for header
   const PricingInfoBadge = () => (
     <div className="flex items-center gap-2">
@@ -480,6 +481,7 @@ const handleCheckout = useCallback(async () => {
           region={region} 
         />
         <PaymentDialog 
+          {...pricingContext}
           cart={cart}
           cartItems={cart?.items ?? []}
           open={paymentDialogOpen} 

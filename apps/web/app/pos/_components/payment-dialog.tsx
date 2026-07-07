@@ -39,6 +39,7 @@ interface PaymentDialogProps {
   orderNumber?: string;
   customerName?: string;
   tableNumbers?: string[];
+  companyId?: string;
 }
 
 export function PaymentDialog({
@@ -53,6 +54,7 @@ export function PaymentDialog({
   orderNumber,
   customerName,
   tableNumbers,
+  companyId
 }: PaymentDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
@@ -114,7 +116,6 @@ export function PaymentDialog({
       }
       
    
-      console.log(completeResult, 'COMPLEE')
   
       
       setPaymentSuccess(true);
@@ -256,7 +257,7 @@ export function PaymentDialog({
                 ) : (
                   <>
                     <Receipt className="mr-2 h-4 w-4" />
-                    Complete Order
+                    Create Order
                   </>
                 )}
               </Button>

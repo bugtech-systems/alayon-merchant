@@ -2,7 +2,7 @@ import { DeliveryDTO, DeliveryStatus } from "@/lib/types";
 import { CircleQuarterSolid } from "@medusajs/icons";
 import { Badge } from "@medusajs/ui";
 
-export async function DriverDeliveryStatusBadge({
+export function DriverDeliveryStatusBadge({
   delivery,
 }: {
   delivery: DeliveryDTO;

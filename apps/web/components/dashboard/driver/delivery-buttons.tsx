@@ -38,6 +38,8 @@ export default function DriverDeliveryButtons({
       )}
       {[
         DeliveryStatus.COMPANY_ACCEPTED,
+        DeliveryStatus.COMPANY_PREPARING,
+        DeliveryStatus.PICKUP_CLAIMED,
         DeliveryStatus.READY_FOR_PICKUP,
         DeliveryStatus.IN_TRANSIT,
       ].includes(delivery.delivery_status) && (
@@ -48,6 +50,10 @@ export default function DriverDeliveryButtons({
         >
           {delivery.delivery_status === DeliveryStatus.COMPANY_ACCEPTED &&
             "Claim delivery"}
+          {delivery.delivery_status === DeliveryStatus.COMPANY_PREPARING &&
+            "Start Processing"}
+          {delivery.delivery_status === DeliveryStatus.PICKUP_CLAIMED &&
+            "Start preparing"}
           {delivery.delivery_status === DeliveryStatus.READY_FOR_PICKUP &&
             "Set order picked up"}
           {delivery.delivery_status === DeliveryStatus.IN_TRANSIT &&
