@@ -3,6 +3,8 @@
 import sdk from "@/lib/config";
 import { getAuthHeaders } from "@/lib/data/cookies";
 import { capturePayment } from "../data/cart";
+import { createDelivery } from "./checkout";
+import { retrieveUser } from "../data";
 
 // ============================================================================
 // TYPES
@@ -330,8 +332,8 @@ export async function processPOSPayment(params: {
   payment: any;
   message: string;
 }> {
-  const { cart, orderId, paymentMethod, amount, cashAmount, change, customerId } = params;
-  
+  const { cart, paymentMethod, amount, cashAmount, change, customerId } = params;
+  const user = await retrieveUser();
   // Validate required params
   if (!cart?.id) {
     return {
@@ -341,6 +343,23 @@ export async function processPOSPayment(params: {
       message: "Cart ID is required",
     };
   }
+
+  // Pricing strategy from user context
+  const pricingContext = {
+    priceListId: user?.metadata?.role === 'company' 
+      ? user.employee?.company?.price_list_id 
+      : user?.driver?.price_list_id,
+    customerGroupId: user?.metadata?.role === 'company' 
+      ? user.employee?.company?.customer_group_id 
+      : user?.driver?.customer_group_id,
+    customerId: user?.id,
+    companyId: user?.metadata?.role === 'company' 
+      ? user.employee?.company_id 
+      : user?.driver?.company_id,
+    pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
+  }
+
+  console.log(user, "USERRs")
 
   const headers = await getAuthHeaders();
   
@@ -398,6 +417,10 @@ export async function processPOSPayment(params: {
           {}, 
           headersWithIdempotency
         );
+
+         await createDelivery({cart_id: cart?.id, order_id: orderResult.order.id, company_id: pricingContext.companyId})
+        
+
         break; // Success, exit retry loop
       } catch (completeError: any) {
         // Handle idempotency conflicts

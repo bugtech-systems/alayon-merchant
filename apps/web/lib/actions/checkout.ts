@@ -43,7 +43,7 @@ export async function completeCart(cartId: string) {
     }
   );
 
-  revalidateTag(getCacheOptions("carts"));
+  revalidateTag("carts", "max");
 
   return response;
 }
@@ -84,15 +84,15 @@ export async function addPaymentSession(cartId: string) {
   return res;
 }
 
-export async function createDelivery(cartId: string, company_id: any) {
+export async function createDelivery(data: any) {
   const { delivery } = await sdk.client.fetch<{
     delivery: DeliveryDTO;
   }>("/store/deliveries", {
     method: "POST",
-    body: { cart_id: cartId, company_id },
+    body: data,
     headers: {
       "Content-Type": "application/json",
-      ...(await getAuthHeaders()),
+      ...(await getAuthHeaders())
     }
   });
 

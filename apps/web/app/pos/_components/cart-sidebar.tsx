@@ -22,7 +22,6 @@ import {
 import { cn, getFinalPrice } from "@/lib/utils";
 import { PrintDialog } from "./print-dialog";
 import { CartItem } from "./cart-item";
-import { TableSelector } from "./table-selector";
 import { CustomerSelector } from "./customer-selector";
 import type { 
   MedusaCart, 
@@ -191,7 +190,7 @@ const handleTablesChange = (ids: string[]) => {
           </div>
 
           <div className="space-y-3">
-            <TableSelector
+            {/* <TableSelector
               selectedIds={selectedTableIds}
               onSelect={handleTablesChange}
               currentOrderTableIds={currentOrderTables}
@@ -210,7 +209,7 @@ const handleTablesChange = (ids: string[]) => {
               onReserve={async (tableId) => {
                 // Reserve table
               }}
-            />
+            /> */}
 
             <CustomerSelector
               selected={selectedCustomer}

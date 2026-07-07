@@ -64,9 +64,9 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 // User type configuration
 const userTypes = [
   // { value: "customer", label: "Customer", icon: User, color: "blue", description: "Shop as a customer" },
-  { value: "store", label: "Store", icon: Store, color: "green", description: "Manage your store", email: "rufrance@example.com", password: "123123" },
-  { value: "driver", label: "Driver", icon: Truck, color: "orange", description: "Delivery operations", email: "drive@example.com", password: "123123" },
-  { value: "company", label: "Admin", icon: Building2, color: "purple", description: "Platform management", email: "leo@example.com", password: "123123" },
+  { value: "store", label: "Store", icon: Store, color: "green", description: "Manage your store", email: "cashier@example.com", password: "123123" },
+  { value: "driver", label: "Driver", icon: Truck, color: "orange", description: "Fullfilment operations", email: "driver@example.com", password: "123123" },
+  { value: "company", label: "Admin", icon: Building2, color: "purple", description: "Platform management", email: "belly@example.com", password: "123123" },
 ];
 
 interface LoginFormProps {
@@ -103,7 +103,6 @@ export function LoginForm({onSuccess }: LoginFormProps) {
 
   const watchedUserType = watch("user_type");
   const selectedUserType = userTypes.find(type => type.value === watchedUserType);
-  const SelectedIcon = selectedUserType?.icon || Store;
 
   const onSubmit = async (data: LoginFormValues) => {
     setServerError("");
