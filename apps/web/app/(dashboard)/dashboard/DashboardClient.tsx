@@ -149,7 +149,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     
     return (
       <div className="@container/main flex flex-col gap-4 md:gap-6">
-        <DeliverySectionCards 
+        {/* <DeliverySectionCards 
           metricsWebhookUrl={process.env.NEXT_PUBLIC_N8N_WEBHOOK_BASE + '/webhook/get-company-drivers' || ""} 
           ridersWebhookUrl={process.env.NEXT_PUBLIC_N8N_WEBHOOK_BASE + '/webhook/get-company-drivers'} 
         />
@@ -159,7 +159,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           onUpdateStatus={handleUpdateStatus}
           onAddOrder={handleAddOrder}
           onContactRider={handleContactRider}
-        />
+        /> */}
         
         <CompanyOrdersTable
           data={data?.orders || []}

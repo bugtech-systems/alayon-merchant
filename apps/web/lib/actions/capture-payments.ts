@@ -4,7 +4,7 @@ import sdk from "@/lib/config";
 import { getAuthHeaders } from "@/lib/data/cookies";
 import { capturePayment } from "../data/cart";
 import { createDelivery } from "./checkout";
-import { retrieveUser } from "../data";
+import { fetchAvailableDrivers, retrieveUser } from "../data";
 import { acceptDelivery } from "./deliveries";
 
 // ============================================================================
@@ -333,8 +333,11 @@ export async function processPOSPayment(params: {
   payment: any;
   message: string;
 }> {
+  
   const { cart, paymentMethod, amount, cashAmount, change, customerId } = params;
   const user = await retrieveUser();
+
+
   // Validate required params
   if (!cart?.id) {
     return {
@@ -360,7 +363,9 @@ export async function processPOSPayment(params: {
     pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
   }
 
-  console.log(user, "USERRs")
+  const drivers = await fetchAvailableDrivers(pricingContext)
+
+  console.log(user, drivers, "USERRs")
 
   const headers = await getAuthHeaders();
   

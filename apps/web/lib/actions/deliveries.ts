@@ -150,9 +150,7 @@ export async function acceptDelivery(
         },
       }
     );
-
     revalidateTag("deliveries", "max");
-
     return delivery;
   } catch (error) {
     return { message: "Error accepting delivery" };

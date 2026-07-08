@@ -31,6 +31,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatDistanceToNow, formatDistanceToNowStrict } from 'date-fns';
 
 import {
   closestCenter,
@@ -58,6 +59,7 @@ import { cn } from "@/lib/utils";
 import { ORDER_STATUS_CONFIG, OrderStatusBadge } from "./OrderStatusBadge";
 import { DriverAssignment } from "./driver-assignment";
 import { OrderDetailsView } from "./OrderDetailsView";
+import { TimeFromNow } from "./time-from-now";
 
 // ==================== Types ====================
 
@@ -254,7 +256,10 @@ function DragHandle({ id }: { id: string }) {
 
 // Customer View Component
 function CustomerView({ customer }: { customer: Order["customer"] }) {
+  console.log(customer, 'CUSTOMM')
   return (
+    <>
+    {!customer ? 'Guest' : 
     <Dialog>
       <DialogTrigger asChild>
         <Button variant="link" className="w-fit px-0 text-left font-medium">
@@ -295,6 +300,8 @@ function CustomerView({ customer }: { customer: Order["customer"] }) {
         </div>
       </DialogContent>
     </Dialog>
+    }
+    </>
   );
 }
 
@@ -611,6 +618,13 @@ export function getOrderColumns({
       header: "Total",
       cell: ({ row }) => (
         <div className="font-medium">₱{row.original.total.toLocaleString()}</div>
+      ),
+    },
+    {
+      accessorKey: "eta",
+      header: "ETA",
+      cell: ({ row }) => (
+<TimeFromNow date={row.original.delivery?.eta} />
       ),
     },
     {

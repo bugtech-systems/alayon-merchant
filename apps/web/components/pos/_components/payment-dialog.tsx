@@ -84,7 +84,6 @@ export function PaymentDialog({
       // First, ensure cart items have proper pricing metadata
       // This is critical - update each line item with its pricing strategy
       for (const item of cartItems) {
-        console.log(item, 'ITEMMSSS')
         await sdk.store.cart.updateLineItem(cart?.id, item.id, {
           quantity: item.quantity,
           metadata: {

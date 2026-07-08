@@ -2,7 +2,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { getProductPrice, listPriceListProducts } from "@/lib/data/products";
-import { MedusaProduct } from "../types";
+import { listCategories } from "@/lib/data/categories";
+import { MedusaProduct, ProductCategory } from "../types";
 
 interface UsePosProductsProps {
   countryCode?: string;
@@ -10,6 +11,24 @@ interface UsePosProductsProps {
   customerGroupId?: string;
   customerId?: string;
   regionId?: string;
+  includeCategoryTree?: boolean;
+  categoryId?: string;
+}
+
+interface UsePosProductsReturn {
+  categories: ProductCategory[];
+  products: MedusaProduct[];
+  isLoading: boolean;
+  isCategoriesLoading: boolean;
+  isProductsLoading: boolean;
+  productVariants: Record<string, string>;
+  refreshProducts: () => Promise<void>;
+  refreshCategories: () => Promise<void>;
+  refreshAll: () => Promise<void>;
+  handleVariantChange: (productId: string, variantId: string) => void;
+  getVariantPrice: (variant: any) => number;
+  getProductsByCategory: (categoryId: string) => MedusaProduct[];
+  getCategoryTree: () => ProductCategory[];
 }
 
 export function usePosProducts({ 
@@ -17,36 +36,94 @@ export function usePosProducts({
   priceListId, 
   customerGroupId,
   customerId,
-  regionId
-}: UsePosProductsProps) {
+  regionId,
+  includeCategoryTree = true,
+  categoryId
+}: UsePosProductsProps): UsePosProductsReturn {
   const { toast } = useToast();
-  const [categories, setCategories] = useState<any[]>([]);
+  
+  // State
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [products, setProducts] = useState<MedusaProduct[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isProductsLoading, setIsProductsLoading] = useState(false);
+  const [isCategoriesLoading, setIsCategoriesLoading] = useState(false);
   const [productVariants, setProductVariants] = useState<Record<string, string>>({});
+  
+  // Refs
   const isMountedRef = useRef(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
+  // Lifecycle
   useEffect(() => {
     isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
+    return () => {
+      isMountedRef.current = false;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, []);
 
-  const fetchProducts = useCallback(async () => {
-    setIsLoading(true);
+  // Fetch categories
+  const fetchCategories = useCallback(async () => {
+    setIsCategoriesLoading(true);
+    
     try {
+      const response = await listCategories({
+        include_tree: includeCategoryTree,
+        parent_category_id: categoryId,
+      });
+
+      if (isMountedRef.current) {
+        // Handle different response structures
+        const categoriesData = response.categories || response || [];
+        setCategories(categoriesData);
+        
+        console.log(`Loaded ${categoriesData.length} categories`);
+      }
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+      if (isMountedRef.current) {
+        toast({ 
+          title: "Error", 
+          description: "Failed to load categories", 
+          variant: "destructive" 
+        });
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setIsCategoriesLoading(false);
+      }
+    }
+  }, [includeCategoryTree, categoryId, toast]);
+
+  // Fetch products
+  const fetchProducts = useCallback(async () => {
+    setIsProductsLoading(true);
+    
+    try {
+      // Cancel previous request if any
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      abortControllerRef.current = new AbortController();
+
       const response = await listPriceListProducts({ 
         countryCode, 
         priceListId, 
         customerGroupId,
-        customerId 
+        customerId,
+        categoryId,
+        signal: abortControllerRef.current.signal,
       }) as any;
-      
 
       if (isMountedRef.current) {
-        setProducts(response.products || []);
+        const productsData = response.products || [];
+        setProducts(productsData);
         
+        // Initialize variant selection
         const initialVariants: Record<string, string> = {};
-        (response.products || []).forEach((product: MedusaProduct) => {
+        productsData.forEach((product: MedusaProduct) => {
           if (product.variants?.[0]) {
             initialVariants[product.id] = product.variants[0].id;
           }
@@ -54,40 +131,123 @@ export function usePosProducts({
         setProductVariants(initialVariants);
         
         // Log pricing summary
-        const productsWithPrices = response.products?.filter((p: any) => 
-          p.variants?.some((v: any) => v.has_price_list_price || v.has_customer_group_price || v.has_customer_price)
+        const productsWithPrices = productsData.filter((p: any) => 
+          p.variants?.some((v: any) => 
+            v.has_price_list_price || 
+            v.has_customer_group_price || 
+            v.has_customer_price
+          )
         );
-        console.log(`Loaded ${response.products?.length || 0} products, ${productsWithPrices?.length || 0} have special pricing`);
+        
+        console.log(
+          `Loaded ${productsData.length} products, ` +
+          `${productsWithPrices.length} have special pricing`
+        );
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Ignore abort errors
+      if (error.name === 'AbortError') {
+        console.log('Product fetch aborted');
+        return;
+      }
+      
       console.error("Error fetching products:", error);
       if (isMountedRef.current) {
-        toast({ title: "Error", description: "Failed to load products", variant: "destructive" });
+        toast({ 
+          title: "Error", 
+          description: "Failed to load products", 
+          variant: "destructive" 
+        });
       }
     } finally {
-      if (isMountedRef.current) setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsProductsLoading(false);
+      }
     }
-  }, [priceListId, customerGroupId, customerId, countryCode, toast]);
+  }, [priceListId, customerGroupId, customerId, countryCode, categoryId, toast]);
 
+  // Fetch both products and categories
+  const fetchAll = useCallback(async () => {
+    // Reset states
+    setProducts([]);
+    setCategories([]);
+    
+    // Fetch in parallel
+    await Promise.all([
+      fetchProducts(),
+      fetchCategories(),
+    ]);
+  }, [fetchProducts, fetchCategories]);
+
+  // Initial fetch
   useEffect(() => {
-    fetchProducts();
+    fetchAll();
+  }, [fetchAll]);
+
+  // Refresh functions
+  const refreshProducts = useCallback(async () => {
+    await fetchProducts();
   }, [fetchProducts]);
 
+  const refreshCategories = useCallback(async () => {
+    await fetchCategories();
+  }, [fetchCategories]);
+
+  const refreshAll = useCallback(async () => {
+    await fetchAll();
+  }, [fetchAll]);
+
+  // Get variant price
   const getVariantPrice = useCallback((variant: any) => {
-    return getProductPrice(variant, { priceListId, customerGroupId, customerId });
+    return getProductPrice(variant, { 
+      priceListId, 
+      customerGroupId, 
+      customerId 
+    });
   }, [priceListId, customerGroupId, customerId]);
 
+  // Handle variant change
   const handleVariantChange = useCallback((productId: string, variantId: string) => {
     setProductVariants(prev => ({ ...prev, [productId]: variantId }));
   }, []);
 
+  // Filter products by category
+  const getProductsByCategory = useCallback((categoryId: string) => {
+    return products.filter(product => 
+      product.categories?.some(cat => cat.id === categoryId)
+    );
+  }, [products]);
+
+  // Get category tree
+  const getCategoryTree = useCallback(() => {
+    if (!includeCategoryTree) return categories;
+    
+    // Build tree structure
+    const buildTree = (items: ProductCategory[], parentId: string | null = null): ProductCategory[] => {
+      return items
+        .filter(item => item.parent_category_id === parentId)
+        .map(item => ({
+          ...item,
+          children: buildTree(items, item.id)
+        }));
+    };
+    
+    return buildTree(categories, null);
+  }, [categories, includeCategoryTree]);
+
   return {
     categories,
     products,
-    isLoading,
+    isLoading: isProductsLoading || isCategoriesLoading,
+    isCategoriesLoading,
+    isProductsLoading,
     productVariants,
-    refreshProducts: fetchProducts,
+    refreshProducts,
+    refreshCategories,
+    refreshAll,
     handleVariantChange,
     getVariantPrice,
+    getProductsByCategory,
+    getCategoryTree,
   };
 }
