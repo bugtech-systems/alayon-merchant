@@ -29,7 +29,8 @@ export default  function DeliveryCard({
 
   return (
     <>
-                      <PrintDialog open={printOpen} onOpenChange={setPrintOpen} cart={delivery?.cart} />
+
+  <PrintDialog open={printOpen} onOpenChange={setPrintOpen} cart={delivery?.cart} />
     
     <Container className="flex flex-col gap-6 p-4 shadow-elevation-card-rest hover:shadow-elevation-card-hover w-full">
       <div className="flex justify-between gap-2 flex-wrap">

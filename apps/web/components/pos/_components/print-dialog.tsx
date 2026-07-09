@@ -31,7 +31,6 @@ interface PrintDialogProps {
   cart: any;
   receiptData?: any;
   region?: any;
-  type?: any;
 }
 
 function formatCartToPrintData(cart: any, receiptData?: any): PrintOrderData {
@@ -188,15 +187,16 @@ function formatCartToPrintData(cart: any, receiptData?: any): PrintOrderData {
   };
 }
 
-export function PrintDialog({ open, onOpenChange, cart, receiptData, type = 'reciept' }: PrintDialogProps) {
+export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: PrintDialogProps) {
   const [printerSettings, setPrinterSettings] = useState<PrinterSettings>({
     paperSize: "58mm",
     copies: 1,
     autoCut: true,
+    printType: true
   });
   const [isPrinting, setIsPrinting] = useState(false);
   const [printData, setPrintData] = useState<PrintOrderData | null>(null);
-  
+
   const handlePrint = async () => {
     if (!printData) return;
     
@@ -204,7 +204,7 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, type = 'rec
     try {
       // Print with copies setting
       for (let i = 0; i < printerSettings.copies; i++) {
-        await printOrder(printData, type, printerSettings);
+        await printOrder(printData, printerSettings?.printType ? "receipt" : "kitchen", printerSettings);
         // Small delay between copies
         if (i < printerSettings.copies - 1) {
           await new Promise(resolve => setTimeout(resolve, 500));
@@ -339,7 +339,20 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, type = 'rec
                 }
               />
             </div>
-
+            {/* Type Cut */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Scissors className="h-4 w-4" />
+                <Label htmlFor="print-type">Receipt?</Label>
+              </div>
+              <Switch
+                id="print-type"
+                checked={printerSettings.printType}
+                onCheckedChange={(checked) => 
+                  setPrinterSettings(prev => ({ ...prev, printType: checked }))
+                }
+              />
+            </div>
             {/* Order Summary */}
             <div className="rounded-lg border p-3 space-y-2">
               <p className="font-medium text-sm">Order Summary</p>

@@ -72,6 +72,7 @@ export interface PrinterSettings {
   paperSize: "58mm" | "80mm";
   copies: number;
   autoCut: boolean;
+  printType: boolean;
 }
 
 export enum DeliveryStatus {
