@@ -7,9 +7,10 @@ import { DeliverySectionCards } from "@/components/company/section-cards";
 import DriverDashboard from "./rider/page";
 import type { DashboardOrder } from "@/lib/data/orders";
 import { CompanyOrdersTable } from "@/components/company-orders-table/table";
-import React from "react";
+import React, { useState } from "react";
 import { useMedusaOrders } from "@/hooks/useMedusaOrders";
 import { assignDriverToOrder, unassignDriverToOrder } from "@/lib/data";
+import { PrintDialog } from "@/components/pos/_components/print-dialog";
 
 interface DashboardClientProps {
   user: any;
@@ -17,6 +18,7 @@ interface DashboardClientProps {
 }
 
 export function DashboardClient({ user, userRole }: DashboardClientProps) {
+  const [cartPrint, setCartPrint] = useState(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -83,46 +85,11 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     }
   };
 
-  const handleAddOrder = async () => {
-    router.push("/orders/new");
-  };
 
-  const handleContactRider = async (riderPhone: string) => {
-    window.location.href = `tel:${riderPhone}`;
-  };
 
   const handleRowClick = (order: any) => {
     console.log(order, 'ORDER')
     // router.push(`/orders/${order.id}`);
-  };
-
-  const handleBulkAction = async (action: string, orders: DashboardOrder[]) => {
-    try {
-      switch (action) {
-        case "update-status":
-          // Show dialog for bulk status update
-          const status = window.prompt("Enter new status for selected orders:");
-          if (status) {
-            const promises = orders.map(order => 
-              handleUpdateStatus(order.id, status)
-            );
-            await Promise.all(promises);
-            toast.success(`Updated ${orders.length} orders to ${status}`);
-            await refetch();
-          }
-          break;
-        case "export":
-          // Handle export
-          console.log(`Exporting ${orders.length} orders`);
-          toast.success(`Exporting ${orders.length} orders`);
-          break;
-        default:
-          console.log(`Bulk ${action} on ${orders.length} orders`);
-      }
-    } catch (error) {
-      console.error("Bulk action failed:", error);
-      toast.error("Failed to perform bulk action");
-    }
   };
 
   // Update URL query params
@@ -146,9 +113,11 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   // Company role view
   if (userRole === "company") {
     const { company } = user.employee;
-    
+      console.log(cartPrint, 'cccart')
     return (
       <div className="@container/main flex flex-col gap-4 md:gap-6">
+              <PrintDialog open={cartPrint} onOpenChange={setCartPrint} cart={cartPrint} />
+        
         {/* <DeliverySectionCards 
           metricsWebhookUrl={process.env.NEXT_PUBLIC_N8N_WEBHOOK_BASE + '/webhook/get-company-drivers' || ""} 
           ridersWebhookUrl={process.env.NEXT_PUBLIC_N8N_WEBHOOK_BASE + '/webhook/get-company-drivers'} 
@@ -175,6 +144,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           enableDragDrop={true}
           enableColumnVisibility={true}
           enableRowSelection={true}
+          onPrint={setCartPrint}
         />
       </div>
     );

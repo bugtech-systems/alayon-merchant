@@ -169,7 +169,7 @@ const handleTablesChange = (ids: string[]) => {
                 variant="ghost" 
                 size="sm" 
                 className="h-7 md:h-8"
-                onClick={() => setPrintOpen(true)}
+                onClick={() => setPrintOpen(cart)}
               >
                 <Printer className="h-3 w-3 md:h-4 md:w-4" />
               </Button>

@@ -3,7 +3,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import type { ColumnDef, Row } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
-import { GripVerticalIcon, Package, Phone, Truck, User, X, ChevronsUpDown, Check, ChevronDown, Loader2, RefreshCw, Settings2, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MoreVertical, Banknote, Search } from "lucide-react";
+import { GripVerticalIcon, Package, Phone, Truck, User, X, ChevronsUpDown, Check, ChevronDown, Loader2, RefreshCw, Settings2, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MoreVertical, Banknote, Search, Printer } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 
@@ -449,6 +449,7 @@ function CustomerView({ customer }: { customer: Order["customer"] }) {
 
 export function getOrderColumns({
   onAssignDriver,
+  onPrint,
   onRowClick,
   companyId,
   onStatusChange,
@@ -461,6 +462,7 @@ export function getOrderColumns({
   onStatusChange?: (orderId: string, newStatus: string) => Promise<void>;
   onError?: (error: Error) => void;
   isMobile?: boolean;
+  onPrint?: any;
 }): ColumnDef<Order>[] {
   const getStatusColor = (status: Order["status"]) => {
     const colors = {
@@ -468,7 +470,6 @@ export function getOrderColumns({
       driver_accepted: "bg-blue-100 text-blue-800",
       company_accepted: "bg-blue-100 text-blue-800",
       preparing: "bg-indigo-100 text-indigo-800",
-      ready: "bg-cyan-100 text-cyan-800",
       ready_for_pickup: "bg-cyan-100 text-cyan-800",
       in_transit: "bg-emerald-100 text-emerald-800",
       delivered: "bg-green-100 text-green-800",
@@ -483,7 +484,7 @@ export function getOrderColumns({
     driver_accepted: "Driver Accepted",
     company_accepted: "Company Accepted",
     preparing: "Preparing",
-    ready: "Ready",
+    ready_for_pickup: "Ready",
     // ready_for_pickup: "Ready for Pickup",
     in_transit: "In Transit",
     delivered: "Delivered",
@@ -499,6 +500,7 @@ export function getOrderColumns({
         header: () => null,
         cell: ({ row }) => {
           const order = row.original;
+          console.log(order, 'ORDDD')
           return (
             <div className="flex flex-col gap-2 p-2 w-full">
               <div className="flex items-center justify-between">
@@ -540,12 +542,16 @@ export function getOrderColumns({
                   <span className="text-muted-foreground">Customer:</span>
                   <p className="font-medium truncate">{order.customer?.first_name} {order.customer?.last_name}</p>
                 </div>
+
+                <TimeFromNow date={row.original.delivery?.eta} />
+
                 <div>
                   <span className="text-muted-foreground">Total:</span>
                   <p className="font-medium">₱{order.total.toLocaleString()}</p>
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-2 w-full space-between d-flex">
                   <DriverAssignment
+                  
                     order={row.original}
                     currentDriver={row.original.assignedDriverId}
                     currentDriverId={row.original.assignedDriverId}
@@ -557,7 +563,11 @@ export function getOrderColumns({
                     }}
                     onError={onError}
                   />
+                <Button onClick={() => onPrint(order?.cart)}>
+                  <Printer/>
+                </Button>
                 </div>
+                
               </div>
             </div>
           );
@@ -708,9 +718,10 @@ interface OrdersTableProps {
   companyId?: string;
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
+  onPrint?: (query: string) => void;
 }
 
-export function CompanyOrdersTable({
+export function     CompanyOrdersTable({
   companyId = "",
   data,
   totalCount,
@@ -725,6 +736,7 @@ export function CompanyOrdersTable({
   enableRowSelection = true,
   searchQuery = "",
   onSearchChange,
+  onPrint,
 }: OrdersTableProps) {
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
@@ -758,9 +770,10 @@ export function CompanyOrdersTable({
       onRowClick, 
       companyId, 
       onStatusChange,
-      isMobile 
+      isMobile,
+      onPrint
     }),
-    [onAssignDriver, onRowClick, companyId, onStatusChange, isMobile]
+    [onAssignDriver, onRowClick, companyId, onStatusChange, isMobile, onPrint]
   );
 
   const table = useReactTable({
