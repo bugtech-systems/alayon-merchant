@@ -3,7 +3,7 @@
 import { passDelivery, proceedDelivery } from "@/lib/actions";
 import { DeliveryDTO, DeliveryStatus, DriverDTO } from "@/lib/types";
 import { Button } from "@medusajs/ui";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function DriverDeliveryButtons({
   delivery,
@@ -27,6 +27,7 @@ export default function DriverDeliveryButtons({
 
   return (
     <>
+    
       {delivery.delivery_status === DeliveryStatus.COMPANY_ACCEPTED && (
         <Button
           variant="transparent"

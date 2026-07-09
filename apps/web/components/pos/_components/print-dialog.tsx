@@ -31,6 +31,7 @@ interface PrintDialogProps {
   cart: any;
   receiptData?: any;
   region?: any;
+  type?: any;
 }
 
 function formatCartToPrintData(cart: any, receiptData?: any): PrintOrderData {
@@ -187,7 +188,7 @@ function formatCartToPrintData(cart: any, receiptData?: any): PrintOrderData {
   };
 }
 
-export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: PrintDialogProps) {
+export function PrintDialog({ open, onOpenChange, cart, receiptData, type = 'reciept' }: PrintDialogProps) {
   const [printerSettings, setPrinterSettings] = useState<PrinterSettings>({
     paperSize: "58mm",
     copies: 1,
@@ -195,7 +196,7 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
   });
   const [isPrinting, setIsPrinting] = useState(false);
   const [printData, setPrintData] = useState<PrintOrderData | null>(null);
-
+  
   const handlePrint = async () => {
     if (!printData) return;
     
@@ -203,7 +204,7 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
     try {
       // Print with copies setting
       for (let i = 0; i < printerSettings.copies; i++) {
-        await printOrder(printData, "receipt", printerSettings);
+        await printOrder(printData, type, printerSettings);
         // Small delay between copies
         if (i < printerSettings.copies - 1) {
           await new Promise(resolve => setTimeout(resolve, 500));
