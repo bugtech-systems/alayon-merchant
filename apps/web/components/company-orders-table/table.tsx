@@ -563,7 +563,7 @@ export function getOrderColumns({
                     }}
                     onError={onError}
                   />
-                <Button onClick={() => onPrint(order?.cart)}>
+                <Button onClick={() => onPrint(order)}>
                   <Printer/>
                 </Button>
                 </div>

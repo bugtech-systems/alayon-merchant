@@ -292,7 +292,7 @@ export function DriverAssignment({
   if (currentDriver) {
 
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-grow">
         <div className="flex items-center gap-2 min-w-0">
           <Truck className="size-3.5 text-muted-foreground flex-shrink-0" />
           <span className="text-sm font-medium truncate max-w-[120px]">
