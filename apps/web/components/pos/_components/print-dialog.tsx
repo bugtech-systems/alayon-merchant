@@ -66,12 +66,12 @@ function formatCartToPrintData(cart: any, receiptData?: any): PrintOrderData {
         is_custom_priced: item.is_custom_priced,
         original_price: item.original_unit_price,
       })),
-      subtotal: receiptData.totals?.subtotal,
+      subtotal: receiptData.totals?.subtotal || receiptData.summary.accounting_total,
       tax: receiptData.totals?.tax,
       taxRate: receiptData.totals?.tax ? (receiptData.totals.tax / receiptData.totals.subtotal) : 0,
       discount_total: receiptData.pricing_info?.total_discount || 0,
       shipping_total: 0,
-      total: receiptData.totals?.total,
+      total: receiptData.totals?.total || receiptData.summary.accounting_total,
       paymentMethod: receiptData.payment?.method || "Cash",
       paymentDetails: {
         amount: receiptData.payment?.amount,
@@ -236,6 +236,9 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
   }, [cart, receiptData, open]);
 
   if (!printData) return null;
+
+
+console.log(printData, "PRINTTTs")
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

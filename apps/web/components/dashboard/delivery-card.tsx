@@ -1,36 +1,36 @@
 'use client'
-
 import { DeliveryDTO, DriverDTO } from "@/lib/types";
 import { Container, Heading, Table } from "@medusajs/ui";
 import DriverDeliveryButtons from "./driver/delivery-buttons";
 import { DriverDeliveryStatusBadge } from "./driver/delivery-status-badge";
 import CompanyDeliveryButtons from "./company/delivery-buttons";
 import { CompanyDeliveryBadgeStatus } from "./company/delivery-status-badge";
-import { PrintDialog } from "../pos/_components/print-dialog";
-import { useState } from "react";
 import { Button } from "../Button";
 import { Printer } from "lucide-react";
+import { useState } from "react";
+import { PrintDialog } from "../pos/_components/print-dialog";
 
 export default  function DeliveryCard({
   delivery,
   driver,
-  type,
+  type
 }: {
   delivery: DeliveryDTO;
   driver?: DriverDTO;
   type: "company" | "driver" | any;
 }) {
-    const [printOpen, setPrintOpen] = useState(false);
-  
+  const [printOpen, setPrintOpen] = useState(false);
   if (!delivery || delivery === null) return null;
 
   const items = delivery.order?.items || delivery.cart?.items;
 
+  console.log(items, delivery, 'DELV')
+
 
   return (
     <>
+     <PrintDialog open={printOpen} onOpenChange={setPrintOpen} cart={delivery.order} />
 
-  <PrintDialog open={printOpen} onOpenChange={setPrintOpen} cart={delivery?.cart} />
     
     <Container className="flex flex-col gap-6 p-4 shadow-elevation-card-rest hover:shadow-elevation-card-hover w-full">
       <div className="flex justify-between gap-2 flex-wrap">

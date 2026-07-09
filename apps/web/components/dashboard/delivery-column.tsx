@@ -8,12 +8,14 @@ export default async function DeliveryColumn({
   statusFilters,
   driver,
   type,
+  onPrint
 }: {
   title: string;
   deliveries: DeliveryDTO[];
   statusFilters?: DeliveryStatus[];
   driver?: DriverDTO;
   type: "company" | "driver";
+  onPrint?: any;
 }) {
   const columnDeliveries = deliveries?.filter(
     (d) => d && statusFilters?.includes(d.delivery_status)
@@ -30,6 +32,7 @@ export default async function DeliveryColumn({
               type={type}
               driver={driver}
               key={delivery.id}
+              onPrint={onPrint}
             />
           ))
         ) : (
