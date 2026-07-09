@@ -2,7 +2,7 @@
 
 import sdk from "@/lib/config";
 import { getAuthHeaders } from "@/lib/data/cookies";
-import { capturePayment } from "../data/cart";
+import { capturePayment, setIsTakeOut } from "../data/cart";
 import { createDelivery } from "./checkout";
 import { fetchAvailableDrivers, retrieveUser } from "../data";
 import { acceptDelivery } from "./deliveries";
@@ -327,6 +327,7 @@ export async function processPOSPayment(params: {
   cashAmount?: number;
   change?: number;
   customerId?: string;
+  isTakeOut?: boolean;
 }): Promise<{
   success: boolean;
   order: any;
@@ -334,7 +335,7 @@ export async function processPOSPayment(params: {
   message: string;
 }> {
   
-  const { cart, paymentMethod, amount, cashAmount, change, customerId } = params;
+  const { cart, paymentMethod, amount, cashAmount, change, customerId, isTakeOut } = params;
   const user = await retrieveUser();
 
 
@@ -392,6 +393,19 @@ export async function processPOSPayment(params: {
         message: "Cart is already being processed or completed",
       };
     }
+
+
+
+
+
+    if(isTakeOut){
+        await setIsTakeOut(cart, isTakeOut)
+    }  
+
+
+
+
+
 
     // Step 3: Initiate payment session on cart
     let payment;

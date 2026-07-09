@@ -93,8 +93,7 @@ export default async function OrdersPage({ searchParams }: PageProps) {
   // Fetch initial data based on order type
   let initialOrders = await listPosOrders(limit, offset, filters);
   let initialData = sortOrders(initialOrders.orders, 'created_at', 'desc')
-  console.log(initialData, 'INITTIAL')
-
+console.log(initialData, initialOrders, 'inittsdss', filters)
   return (
     <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8">
       <div className="mb-6">

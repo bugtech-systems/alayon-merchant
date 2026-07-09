@@ -4,7 +4,7 @@
 
 import React, { useState, useTransition, useCallback, useEffect, useMemo } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns';
+import { format, formatDistanceToNow, isToday, isYesterday, startOfDay, endOfDay } from 'date-fns';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -107,7 +107,7 @@ import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { sortOrders } from '@/lib/utils/helpers';
-import { useMedusaOrders } from '@/hooks/useMedusaOrders';
+import { useMedusaOrders, usePosOrders } from '@/hooks/useMedusaOrders';
 
 // ============================================
 // STATUS CONFIGURATIONS
@@ -234,7 +234,7 @@ const PaymentStatusBadge = ({ status }: { status: string }) => {
 };
 
 // ============================================
-// STATUS DROPDOWN (Shows 1 status, shows all on hover)
+// STATUS DROPDOWN
 // ============================================
 
 const StatusDropdown = ({ 
@@ -365,28 +365,29 @@ const DateRangeFilter = ({
 
     switch (preset) {
       case 'today':
-        from = new Date(now.setHours(0, 0, 0, 0));
-        to = new Date();
+        from = startOfDay(now);
+        to = endOfDay(now);
         break;
       case 'yesterday':
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        from = new Date(yesterday.setHours(0, 0, 0, 0));
-        to = new Date(yesterday.setHours(23, 59, 59, 999));
+        from = startOfDay(yesterday);
+        to = endOfDay(yesterday);
         break;
       case 'thisWeek':
         const startOfWeek = new Date();
         startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-        from = new Date(startOfWeek.setHours(0, 0, 0, 0));
-        to = new Date();
+        from = startOfDay(startOfWeek);
+        to = endOfDay(now);
         break;
       case 'thisMonth':
-        from = new Date(now.getFullYear(), now.getMonth(), 1);
-        to = new Date();
+        from = startOfDay(new Date(now.getFullYear(), now.getMonth(), 1));
+        to = endOfDay(now);
         break;
       case 'lastMonth':
-        from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        to = new Date(now.getFullYear(), now.getMonth(), 0);
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        from = startOfDay(lastMonth);
+        to = endOfDay(new Date(now.getFullYear(), now.getMonth(), 0));
         break;
       default:
         break;
@@ -527,7 +528,7 @@ const DateRangeFilter = ({
 };
 
 // ============================================
-// STATS CARDS (Enhanced)
+// STATS CARDS
 // ============================================
 
 const StatsCards = ({ orders, orderType, isLoading }: { orders: any[]; orderType: string; isLoading?: boolean }) => {
@@ -570,13 +571,6 @@ const StatsCards = ({ orders, orderType, isLoading }: { orders: any[]; orderType
       color: 'text-emerald-500',
       bg: 'bg-emerald-500/10'
     },
-    {
-      label: 'Avg Order Value',
-      value: `₱${stats.avgOrderValue.toFixed(2)}`,
-      icon: Receipt,
-      color: 'text-blue-500',
-      bg: 'bg-blue-500/10'
-    },
   ];
 
   if (orderType === 'orders') {
@@ -599,7 +593,7 @@ const StatsCards = ({ orders, orderType, isLoading }: { orders: any[]; orderType
   }
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-6">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
       {statCards.map((card, index) => (
         <div 
           key={index} 
@@ -621,7 +615,7 @@ const StatsCards = ({ orders, orderType, isLoading }: { orders: any[]; orderType
 };
 
 // ============================================
-// PAGINATION (Enhanced)
+// PAGINATION
 // ============================================
 
 const Pagination = ({ 
@@ -782,7 +776,7 @@ const OrderActionsMenu = ({
 };
 
 // ============================================
-// MOBILE ORDER CARD (Enhanced)
+// MOBILE ORDER CARD
 // ============================================
 
 const MobileOrderCard = ({ 
@@ -795,12 +789,6 @@ const MobileOrderCard = ({
   onCapturePayment
 }: any) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const statusConfig = ORDER_STATUS_CONFIG[order.status?.toLowerCase()] || { 
-    label: order.status, 
-    icon: null,
-    variant: 'secondary' as const,
-    priority: 0
-  };
 
   return (
     <div className="bg-card rounded-lg border p-4 space-y-3 hover:shadow-md transition-shadow">
@@ -973,14 +961,6 @@ export function OrdersClient({
     pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
   }), [user]);
 
-    // Fetch orders with pagination and filters
-    const { data, refetch } = useMedusaOrders({
-      filters: { 
-        company_id: pricingContext.companyId,
-      }
-    }) as any;
-  
-console.log(data, 'DATAA')
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -997,7 +977,7 @@ console.log(data, 'DATAA')
   const [isLoading, setIsLoading] = useState(false);
   const [captureLoading, setCaptureLoading] = useState(false);
   
-  // Date filter state
+  // Date filter state - using Date objects
   const [dateFrom, setDateFrom] = useState<Date | null>(
     initialDateFrom ? new Date(initialDateFrom) : null
   );
@@ -1005,10 +985,76 @@ console.log(data, 'DATAA')
     initialDateTo ? new Date(initialDateTo) : null
   );
   
-  const [orders, setOrders] = useState(
-    data?.orders || []
-  );
-  const [searchTerm, setSearchTerm] = useState(initialSearch);
+  // Build filters object for the hook - using created_at field
+  const filters = useMemo(() => {
+    const filterObj: Record<string, any> = {
+      company_id: pricingContext.companyId,
+    };
+    
+    // Date filters using created_at field
+    // Convert dates to ISO strings for Medusa v2 API
+    if (dateFrom) {
+      // Set to start of day for inclusive filtering
+      const fromDate = startOfDay(dateFrom);
+      filterObj.created_at_from = fromDate.toISOString();
+    }
+    
+    if (dateTo) {
+      // Set to end of day for inclusive filtering
+      const toDate = endOfDay(dateTo);
+      filterObj.created_at_to = toDate.toISOString();
+    }
+    
+    // Add search filter
+    const search = searchParams.get('search');
+    if (search) {
+      filterObj.search = search;
+    }
+    
+    // Add status filter
+    const status = searchParams.get('status');
+    if (status && status !== 'all') {
+      filterObj.status = status;
+    }
+    
+    // Add payment status filter
+    const paymentStatus = searchParams.get('payment_status');
+    if (paymentStatus && paymentStatus !== 'all') {
+      filterObj.payment_status = paymentStatus;
+    }
+    
+    // Add customer filter
+    const customerId = searchParams.get('customer_id');
+    if (customerId) {
+      filterObj.customer_id = customerId;
+    }
+    
+    // Add order type filter for drafts
+    if (orderType === 'drafts') {
+      filterObj.is_draft = true;
+    }
+    
+    return filterObj;
+  }, [pricingContext.companyId, dateFrom, dateTo, searchParams, orderType]);
+
+  // Get pagination params from URL
+  const page = parseInt(searchParams.get('page') || String(initialPage));
+  const limit = parseInt(searchParams.get('limit') || String(initialLimit));
+  
+  // Use the hook with filters
+  const { data, refetch, isLoading: isFetching } = usePosOrders({
+    filters,
+    page,
+    limit,
+  }) as any;
+
+  // Handle loading state
+  useEffect(() => {
+    setIsLoading(isFetching);
+  }, [isFetching]);
+
+  // Update orders when data changes
+  const [orders, setOrders] = useState<any[]>([]);
   const [pagination, setPagination] = useState({
     count: initialData.count,
     page: initialData.page,
@@ -1016,6 +1062,43 @@ console.log(data, 'DATAA')
     has_next: initialData.has_next,
     has_previous: initialData.has_previous
   });
+
+  useEffect(() => {
+    if (data) {
+      // Filter orders by date range using created_at field (client-side fallback)
+      let filteredOrders = data.orders || [];
+      
+      // Client-side filtering as fallback for Medusa v2
+      if (dateFrom || dateTo) {
+        filteredOrders = filteredOrders.filter((order: any) => {
+          const orderDate = new Date(order.created_at);
+          
+          if (dateFrom && dateTo) {
+            return orderDate >= startOfDay(dateFrom) && orderDate <= endOfDay(dateTo);
+          } else if (dateFrom) {
+            return orderDate >= startOfDay(dateFrom);
+          } else if (dateTo) {
+            return orderDate <= endOfDay(dateTo);
+          }
+          return true;
+        });
+      }
+      
+      // Sort orders
+      const sortedOrders = sortOrders(filteredOrders, initialSortField, initialSortOrder);
+      setOrders(sortedOrders);
+      
+      setPagination({
+        count: data.count || filteredOrders.length,
+        page: data.page || 1,
+        total_pages: data.total_pages || Math.ceil((data.count || filteredOrders.length) / limit),
+        has_next: data.has_next || false,
+        has_previous: data.has_previous || false
+      });
+    }
+  }, [data, initialSortField, initialSortOrder, dateFrom, dateTo, limit]);
+  
+  const [searchTerm, setSearchTerm] = useState(initialSearch);
   
   // Check mobile
   const [isMobile, setIsMobile] = useState(false);
@@ -1029,12 +1112,7 @@ console.log(data, 'DATAA')
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  useEffect(() => {
-    setOrders(data?.orders || [])
-
-  }, [data])
-
-  // Update URL params
+  // Update URL params and refetch
   const updateUrlParams = useCallback((updates: Record<string, string | number | null | undefined>) => {
     const params = new URLSearchParams(searchParams.toString());
     
@@ -1053,69 +1131,21 @@ console.log(data, 'DATAA')
     });
   }, [router, pathname, searchParams, orderType]);
 
-  // Fetch data
-  // const fetchData = useCallback(async (page?: number) => {
-  //   const currentPage = page || parseInt(searchParams.get('page') || String(initialPage));
-  //   const limit = parseInt(searchParams.get('limit') || String(initialLimit));
-  //   const offset = (currentPage - 1) * limit;
-    
-  //   const filters: Record<string, any> = {};
-  //   const search = searchParams.get('search');
-  //   if (search) filters.search = search;
-  //   if (user?.id) filters.seller_id = user.id;
-    
-  //   // Date filters
-  //   const dateFromParam = searchParams.get('date_from');
-  //   const dateToParam = searchParams.get('date_to');
-  //   if (dateFromParam) filters.date_from = dateFromParam;
-  //   if (dateToParam) filters.date_to = dateToParam;
-    
-  //   setIsLoading(true);
-  //   try {
-  //     let response;
-  //     if (orderType === 'drafts') {
-  //       response = await listDraftOrders(limit, offset, filters);
-  //       setOrders(response.draft_orders || []);
-  //     } else {
-  //       response = await listPosOrders(limit, offset, filters);
-  //       console.log(response, "RESSSPSP")
-  //       let orders = sortOrders(response.orders, initialSortField, 'desc')
-  //       console.log(orders, 'ORDERSS')
-  //       setOrders(orders || []);
-  //     }
-      
-  //     setPagination({
-  //       count: response.count,
-  //       page: response.page,
-  //       total_pages: response.total_pages,
-  //       has_next: response.has_next,
-  //       has_previous: response.has_previous
-  //     });
-  //   } catch (error) {
-  //     console.error('Error fetching data:', error);
-  //     toast.error(`Failed to fetch ${orderType}`);
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // }, [user, searchParams, initialPage, initialLimit, orderType]);
-
   // Handle page change
   const handlePageChange = useCallback((page: number) => {
     updateUrlParams({ page });
-    refetch();
-  }, [updateUrlParams, refetch]);
+  }, [updateUrlParams]);
 
   // Handle search
   const handleSearchChange = useCallback((term: string) => {
     setSearchTerm(term);
     const timeoutId = setTimeout(() => {
       updateUrlParams({ search: term || null, page: 1 });
-      refetch();
     }, 500);
     return () => clearTimeout(timeoutId);
-  }, [updateUrlParams, refetch]);
+  }, [updateUrlParams]);
 
-  // Handle date change
+  // Handle date change - uses created_at field
   const handleDateChange = useCallback((from: Date | null, to: Date | null) => {
     setDateFrom(from);
     setDateTo(to);
@@ -1124,8 +1154,7 @@ console.log(data, 'DATAA')
       date_to: to ? format(to, 'yyyy-MM-dd') : null,
       page: 1
     });
-    refetch();
-  }, [updateUrlParams, refetch]);
+  }, [updateUrlParams]);
 
   // Handle status update
   const handleStatusUpdate = async (orderId: string, status: string) => {
@@ -1149,22 +1178,18 @@ console.log(data, 'DATAA')
   const handleCapturePayment = async (order: any) => {
     setCaptureLoading(true);
     try {
-      console.log(order, 'ORDD')
       const result = await captureOrderPayment({
-            order_id: order?.id,
-            payment_method: 'cash',
-            payment_data: {
-                amount: order?.total
-            }
+        order_id: order?.id,
+        payment_method: 'cash',
+        payment_data: {
+          amount: order?.total
+        }
       });
 
-      console.log(result, 'RESLL')
-        if(result?.id){
+      if (result?.id) {
         toast.success('Payment captured successfully');
         await refetch();
-
-        }
-             
+      }
     } catch (error) {
       toast.error('Failed to capture payment');
     } finally {
@@ -1241,8 +1266,8 @@ console.log(data, 'DATAA')
     setConvertDialogOpen(true);
   };
 
-  const { page, total_pages, has_next, has_previous, count } = pagination;
-console.log(orders, 'oRDDS', data?.orders)
+  const { total_pages, has_next, has_previous, count } = pagination;
+  
   return (
     <TooltipProvider>
       <div className="space-y-6">
@@ -1453,8 +1478,6 @@ console.log(orders, 'oRDDS', data?.orders)
           onPageChange={handlePageChange}
           isLoading={isLoading}
         />
-
-
 
         {/* View Order Dialog */}
         <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>

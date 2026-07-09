@@ -30,6 +30,7 @@ import type {
   DraftOrder 
 } from "@/types";
 import { createQuickCustomer } from "@/lib/actions";
+import { TableSelector } from "./table-selector";
 
 
 interface CartSidebarProps {
@@ -190,7 +191,7 @@ const handleTablesChange = (ids: string[]) => {
           </div>
 
           <div className="space-y-3">
-            {/* <TableSelector
+             <TableSelector
               selectedIds={selectedTableIds}
               onSelect={handleTablesChange}
               currentOrderTableIds={currentOrderTables}
@@ -209,7 +210,7 @@ const handleTablesChange = (ids: string[]) => {
               onReserve={async (tableId) => {
                 // Reserve table
               }}
-            /> */}
+            />
 
             <CustomerSelector
               selected={selectedCustomer}

@@ -256,7 +256,6 @@ function DragHandle({ id }: { id: string }) {
 
 // Customer View Component
 function CustomerView({ customer }: { customer: Order["customer"] }) {
-  console.log(customer, 'CUSTOMM')
   return (
     <>
     {!customer ? 'Guest' : 
@@ -492,6 +491,7 @@ export function getOrderColumns({
     completed: "Completed",
   };
 
+
   // For mobile, we combine everything into a single cell
   if (isMobile) {
     return [
@@ -544,13 +544,14 @@ export function getOrderColumns({
                 </div>
 
                 <TimeFromNow date={row.original.delivery?.eta} />
+                <div className="text-primary">{row.original.metadata.isTakeOut && 'Takeout' }</div>
 
                 <div>
                   <span className="text-muted-foreground">Total:</span>
                   <p className="font-medium">₱{order.total.toLocaleString()}</p>
                 </div>
                 <div className="col-span-2 w-full space-between d-flex">
-                  <DriverAssignment
+                  {/* <DriverAssignment
                   
                     order={row.original}
                     currentDriver={row.original.assignedDriverId}
@@ -562,7 +563,7 @@ export function getOrderColumns({
                       row.original.assignedDriverId = driverId;
                     }}
                     onError={onError}
-                  />
+                  /> */}
                 <Button onClick={() => onPrint(order)}>
                   <Printer/>
                 </Button>
@@ -634,7 +635,10 @@ export function getOrderColumns({
       accessorKey: "eta",
       header: "ETA",
       cell: ({ row }) => (
+        <div>
 <TimeFromNow date={row.original.delivery?.eta} />
+<div className="text-primary">{row.original.metadata.isTakeOut && 'Takeout' }</div>
+        </div>
       ),
     },
     {
@@ -649,24 +653,25 @@ export function getOrderColumns({
         />
       ),
     },
-    {
-      accessorKey: "assignedDriver",
-      header: "Driver",
-      cell: ({ row }) => (
-        <DriverAssignment
-          order={row.original}
-          currentDriver={row.original.assignedDriverId}
-          currentDriverId={row.original.assignedDriverId}
-          companyId={companyId}
-          onAssign={(driverId, driverName) => {
-            onAssignDriver?.(row.original.id, driverId, driverName);
-            row.original.assignedDriver = driverName;
-            row.original.assignedDriverId = driverId;
-          }}
-          onError={onError}
-        />
-      ),
-    },
+    // {
+    //   accessorKey: "assignedDriver",
+    //   header: "Driver",
+    //   cell: ({ row }) => (
+    //     <DriverAssignment
+    //       order={row.original}
+    //       currentDriver={row.original.assignedDriverId}
+    //       currentDriverId={row.original.assignedDriverId}
+    //       companyId={companyId}
+    //       onAssign={(driverId, driverName) => {
+    //         onAssignDriver?.(row.original.id, driverId, driverName);
+    //         row.original.assignedDriver = driverName;
+    //         row.original.assignedDriverId = driverId;
+    //       }}
+    //       onError={onError}
+    //     />
+    //   ),
+    // },
+   
     {
       id: "actions",
       cell: ({ row }) => (
@@ -721,7 +726,7 @@ interface OrdersTableProps {
   onPrint?: (query: string) => void;
 }
 
-export function     CompanyOrdersTable({
+export function CompanyOrdersTable({
   companyId = "",
   data,
   totalCount,
@@ -764,6 +769,8 @@ export function     CompanyOrdersTable({
     useSensor(KeyboardSensor, {})
   );
 
+
+  console.log(data, "DATA")
   const columns = React.useMemo(
     () => getOrderColumns({ 
       onAssignDriver, 

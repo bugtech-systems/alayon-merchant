@@ -80,7 +80,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     });
   
   const { drafts, saveAsDraft, deleteDraft } = usePosDrafts();
-  const { occupiedTableIds, updateTableOccupancy } = usePosTables();
+  const { occupiedTableIds } = usePosTables();
   
   // Initialize cart
   useEffect(() => {

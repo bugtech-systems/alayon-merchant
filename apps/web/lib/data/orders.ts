@@ -156,7 +156,6 @@ const transformOrderForDashboard = (order: any): DashboardOrder => {
 
   const totalQuantity = formattedItems.reduce((sum: any, item: any) => sum + item.quantity, 0);
 
-
   return {
     ...order,
     id: order.id,
@@ -282,7 +281,7 @@ const buildQueryString = (
   params.set("expand_customer", "true");
   params.set("expand_addresses", "true");
   params.set("expand_shipping_methods", "true");
-  params.set("expand_payments", "false");
+  params.set("expand_payments", "true");
   params.set("expand_delivery_info", "true");
 
   return params.toString();
@@ -665,11 +664,13 @@ export async function listPosOrders(limit: number = 1000, offset: number = 0, fi
     queryParams.append('metadata.seller_id', filters.seller_id);
   }
 
+    if (filters?.company_id) {
+    queryParams.append('metadata.company_id', filters.company_id);
+  }
 
-    console.log(queryParams, 'PARS', filters)
+    
     const response = await adminFetch(`/admin/orders?${queryParams.toString()}`);
-    const filteredOrders = response.orders.filter((order: any) => order.metadata?.seller_id === filters?.seller_id).sort();
-        // console.log(response, filteredOrders,'Filtered', filters)
+    const filteredOrders = response.orders.filter((order: any) => (order.metadata?.seller_id === filters?.seller_id || order.metadata?.company_id === filters?.company_id)).sort();
     const count = filteredOrders.length;
     return {
       orders: filteredOrders || [],

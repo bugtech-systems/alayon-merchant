@@ -1,8 +1,8 @@
 // lib/actions/orders.ts
-
-import { HttpTypes } from "@medusajs/types";
+import { startOfDay, endOfDay, format } from 'date-fns';
 import { sdk } from "../config";
 import { getAuthHeaders, getCacheHeaders } from "../data/cookies";
+import { listPosOrders } from "./orders";
 
 export interface OrderFilters {
   date_from?: Date;
@@ -170,50 +170,6 @@ const buildQueryParams = (filters: OrderFilters) => {
 // STORE ORDERS ACTIONS
 // ============================================
 
-/**
- * List orders for the authenticated customer
- */
-export async function listOrders(
-  filters: OrderFilters = {},
-  options?: { cache?: RequestCache }
-): Promise<OrdersResponse> {
-  try {
-    const queryParams = buildQueryParams(filters);
-    
-    const response = await sdk.client.fetch(`/dashboard/orders`, {
-      method: 'GET',
-      query: queryParams,
-      ...(await getAuthHeaders()),
-      ...(await getCacheHeaders('orders')),
-      next: {
-        ...(options?.cache ? { cache: options.cache } : {}),
-        tags: ['orders'],
-      },
-    });
-
-    return {
-      orders: response.orders || [],
-      count: response.count || 0,
-      limit: response.limit || filters.limit || 20,
-      offset: response.offset || filters.offset || 0,
-      total_pages: response.total_pages || Math.ceil((response.count || 0) / (filters.limit || 20)),
-      date_range: {
-        from: filters.date_from?.toISOString() || '',
-        to: filters.date_to?.toISOString() || '',
-      },
-      filters,
-    };
-  } catch (error) {
-    console.error('Error listing orders:', error);
-    return {
-      orders: [],
-      count: 0,
-      limit: filters.limit || 20,
-      offset: filters.offset || 0,
-      total_pages: 0,
-    };
-  }
-}
 
 /**
  * List orders for admin with company filtering
@@ -224,7 +180,7 @@ export async function listAdminOrders(
 ): Promise<OrdersResponse> {
   try {
     const queryParams = buildQueryParams(filters);
-    
+        console.log(queryParams, 'QUEEERY')
     const response = await sdk.client.fetch(`/dashboard/orders`, {
       method: 'GET',
       query: queryParams,
@@ -504,7 +460,7 @@ export async function createOrder(
 /**
  * Get today's order summary
  */
-export async function getTodayOrdersSummary(company_id?: string): Promise<{
+export async function getTodayOrdersSummary(user?: any): Promise<{
   total_sales: number;
   order_count: number;
   customer_count: number;
@@ -513,27 +469,73 @@ export async function getTodayOrdersSummary(company_id?: string): Promise<{
   pending_orders: number;
 }> {
   try {
-    const { from, to } = getDefaultDateRange('today');
-    
-    const response = await listAdminOrders({
-      date_from: from,
-      date_to: to,
-      company_id,
-      limit: 100,
+    const sellerId = user?.metadata?.role === 'company' 
+      ? user.employee?.company_id 
+      : user?.id;
+
+    // Get today's date range with proper start/end of day
+    const now = new Date();
+    const from = startOfDay(now);
+    const to = endOfDay(now);
+
+    // Build filters for Medusa v2 using created_at field
+    const filters: Record<string, any> = {
+      // Use ISO strings for Medusa v2 API
+      date_from: format(from, 'yyyy-MM-dd'),
+      date_to: format(to, 'yyyy-MM-dd'),
+    };
+
+    // Add company or seller filter based on user role
+
+      filters.seller_id = user?.id;
+
+    // Add any additional filters
+    if (user?.employee?.company?.stock_location_id) {
+      filters.stock_location_id = user.employee.company.stock_location_id;
+    }
+
+    // Fetch orders with filters
+    const limit = 1000;
+    console.log(filters, 'ffflss')
+    const response = await listPosOrders(limit, 0, filters);
+      // let initialOrders = await listPosOrders(limit, offset, filters);
+    console.log('Today orders summary:', { 
+      from: from.toISOString(), 
+      to: to.toISOString(), 
+      filters,
+      orderCount: response.orders?.length || 0
     });
 
     const orders = response.orders || [];
-    const completedOrders = orders.filter(o => o.status === 'completed' || o.status === 'paid');
-    const pendingOrders = orders.filter(o => o.status === 'pending' || o.status === 'processing');
     
+    // Calculate metrics
+    const completedOrders = orders.filter(o => 
+      o.status === 'completed' || 
+      o.status === 'paid' || 
+      o.status === 'fulfilled'
+    );
+    
+    const pendingOrders = orders.filter(o => 
+      o.status === 'pending' || 
+      o.status === 'processing' || 
+      o.status === 'requires_action'
+    );
+    
+    // Calculate total sales from completed orders only
     const totalSales = completedOrders.reduce((sum, o) => sum + (o.total || 0), 0);
     const orderCount = orders.length;
     const completedCount = completedOrders.length;
     const pendingCount = pendingOrders.length;
     
-    const uniqueCustomers = new Set(orders.map(o => o.customer_id).filter(Boolean));
+    // Count unique customers
+    const uniqueCustomers = new Set(
+      orders
+        .map(o => o.customer_id)
+        .filter(Boolean)
+    );
     const customerCount = uniqueCustomers.size;
     
+    // Calculate average order value from completed orders
     const averageOrderValue = completedCount > 0 ? totalSales / completedCount : 0;
 
     return {
@@ -556,3 +558,4 @@ export async function getTodayOrdersSummary(company_id?: string): Promise<{
     };
   }
 }
+

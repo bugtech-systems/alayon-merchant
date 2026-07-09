@@ -130,7 +130,7 @@ function TableManagementDialog({
             </Badge>
           </DialogTitle>
           <DialogDescription>
-            Table #{table.number} • Capacity: {table.capacity}
+            Beeper #{table.number} • Capacity: {table.capacity}
           </DialogDescription>
         </DialogHeader>
 
@@ -178,7 +178,7 @@ function TableManagementDialog({
               </div>
               <Button variant="destructive" onClick={handleClear} disabled={isLoading} className="w-full">
                 <UserX className="h-3 w-3 mr-1" />
-                Vacate Table
+                Vacate Beeper
               </Button>
             </div>
           )}
@@ -186,7 +186,7 @@ function TableManagementDialog({
           {table.status === 'reserved' && (
             <div className="space-y-3">
               <div className="p-2 bg-yellow-500/5 rounded border border-yellow-500/20 text-sm text-yellow-600">
-                Reserved table
+                Reserved beeper
               </div>
               <div className="flex gap-2">
                 <Button onClick={handleOccupy} disabled={isLoading} className="flex-1">
@@ -237,9 +237,9 @@ export function TableSelector({
         if (stored) {
           setTables(JSON.parse(stored));
         } else {
-          const defaultTables = Array.from({ length: 10 }, (_, i) => ({
+          const defaultTables = Array.from({ length: 16 }, (_, i) => ({
             id: `table-${i + 1}`,
-            name: `Table ${i + 1}`,
+            name: `Beeper ${i + 1}`,
             number: (i + 1).toString(),
             capacity: i >= 8 ? 8 : i >= 6 ? 6 : 4,
             status: "available" as const,
@@ -380,7 +380,7 @@ export function TableSelector({
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-2">
           <label className="text-xs font-medium">
-            Tables {selectedIds.length > 0 && `(${selectedIds.length})`}
+            Beepers {selectedIds.length > 0 && `(${selectedIds.length})`}
           </label>
         </div>
         <div className="flex gap-1">
@@ -439,9 +439,9 @@ export function TableSelector({
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] p-0">
           <DialogHeader className="p-4 pb-0">
-            <DialogTitle>Tables</DialogTitle>
+            <DialogTitle>Beepers</DialogTitle>
             <DialogDescription>
-              Select tables for your order or manage table status
+              Select beepers for your order or manage table status
             </DialogDescription>
           </DialogHeader>
 
@@ -514,7 +514,7 @@ export function TableSelector({
               ) : filteredTables.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <MapPin className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No tables found</p>
+                  <p className="text-sm">No beepers found</p>
                 </div>
               ) : viewMode === 'grid' ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">

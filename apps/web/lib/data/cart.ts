@@ -351,6 +351,14 @@ export async function updateCart(data: any, id?: any) {
     ...(await getAuthHeaders()),
   }
 
+
+
+
+
+
+
+
+
   return sdk.store.cart
     .update(cartId, data, {}, headers)
     .then(async ({ cart }) => {
@@ -756,6 +764,28 @@ export async function setContactDetails(
     return e.message
   }
 }
+
+
+export async function setIsTakeOut(cart: any, isTakeOut: any) {
+  try {
+    const cartId = await getOrSetCart(cart?.id)
+    if (!cartId) {
+      throw new Error("No existing cart found when setting contact details")
+    }
+    const data = {
+      metadata: {
+        ...cart?.metadata,
+        isTakeOut
+      },
+    }
+
+    console.log()
+    await updateCart(data, cart?.id)
+  } catch (e: any) {
+    return e.message
+  }
+}
+
 
 export async function placeOrder(
   cartId?: string, company_id?: string

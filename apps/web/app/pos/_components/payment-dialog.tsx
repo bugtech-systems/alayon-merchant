@@ -5,6 +5,8 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label";
+
 import {
   Dialog,
   DialogContent,
@@ -18,9 +20,11 @@ import {
   CheckCircle,
   Receipt,
   AlertCircle,
+  Home,
 } from "lucide-react";
 import { sdk } from "@/lib/config";
 import { processPOSPayment } from "@/lib/actions/capture-payments";
+import { Switch } from "@/components/ui/switch";
 
 interface PaymentDialogProps {
   open: boolean;
@@ -57,6 +61,7 @@ export function PaymentDialog({
   companyId
 }: PaymentDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isTakeOut, setIsTakeOut] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -109,7 +114,7 @@ export function PaymentDialog({
       }
       
       // Complete the cart to create the order
-      const completeResult = await processPOSPayment({cart, paymentMethod: 'other', amount: cartTotal, });
+      const completeResult = await processPOSPayment({cart, paymentMethod: 'other', amount: cartTotal, isTakeOut});
       
       if (!completeResult.order) {
         throw new Error("Failed to create order");
@@ -235,7 +240,19 @@ export function PaymentDialog({
                 </>
               )}
             </div>
-
+            <div className="flex p-4 bg-muted rounded-lg space-y-2 w-full">
+              <div className="flex flex-grow items-center gap-2">
+                <Home className="h-4 w-4" />
+                <Label htmlFor="print-type">Take Out?</Label>
+              </div>
+              <Switch
+                id="print-type"
+                checked={isTakeOut}
+                onCheckedChange={(checked) => 
+                  setIsTakeOut(checked)
+                }
+              />
+            </div>
             <DialogFooter className="gap-2 mt-4">
               <Button 
                 variant="outline" 
