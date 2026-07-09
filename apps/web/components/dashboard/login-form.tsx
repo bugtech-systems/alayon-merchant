@@ -348,7 +348,7 @@ export function LoginForm({onSuccess }: LoginFormProps) {
         </form>
 
         {/* Demo Credentials Section - Only in development */}
-        {process.env.NODE_ENV === "development" && (
+        {/* {process.env.NODE_ENV === "development" && ( */}
           <div className="mt-6 pt-4 border-t">
             <p className="text-xs font-medium text-center text-muted-foreground mb-3">
               Demo Credentials (Click to auto-fill)
@@ -377,7 +377,7 @@ export function LoginForm({onSuccess }: LoginFormProps) {
               ))}
             </div>
           </div>
-        )}
+        {/* )} */}
       </CardContent>
       
       <CardFooter className="flex justify-center border-t pt-6">
