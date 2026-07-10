@@ -56,7 +56,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   useEffect(() => {
     // Create audio element for notification sound
     audioRef.current = new Audio('/notification.mp3'); // Make sure to add this file to your public folder
-    audioRef.current.volume = 0.5;
+  audioRef.current.volume = 1.0; // Maximum volume (0.0 to 1.0)
     
     // Fallback if file doesn't exist
     audioRef.current.onerror = () => {
