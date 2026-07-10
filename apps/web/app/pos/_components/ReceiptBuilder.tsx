@@ -20,7 +20,7 @@ export class ReceiptBuilder {
   PAPER_WIDTH = 32;
 
   formatCurrency(amount) {
-    return `Php: ${Number(amount).toFixed(2)}`;
+    return `${Number(amount).toFixed(2)}`;
   }
 
   formatDate(dateString) {
