@@ -1,4 +1,6 @@
-// Enhanced Print Dialog Component
+// components/PrintDialog.jsx
+'use client';
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Dialog, 
@@ -29,12 +31,17 @@ import {
   RefreshCw,
   Package,
   Truck,
-  Users
+  Users,
+  Bluetooth,
+  BluetoothConnected,
+  AlertTriangle
 } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
-import {  formatCartToPrintData, generateKitchenText, generateReceiptText, printOrder } from '@/lib/print-utils';
-import { PrinterSettings, PrintOrderData } from '@/lib/types';
+import { ReceiptBuilder, generateReceiptPreview } from './ReceiptBuilder';
+import { PrinterManager, ChunkedTransmission } from './PrintManager';
 
+// ============================================
+// TYPES
+// ============================================
 interface PrintDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -43,7 +50,77 @@ interface PrintDialogProps {
   region: any;
 }
 
+interface PrinterSettings {
+  paperSize: "58mm" | "80mm";
+  copies: number;
+  autoCut: boolean;
+  printReceipt: boolean;
+  printKitchen: boolean;
+  printCustomerCopy: boolean;
+}
+
+interface PrintStatus {
+  type: 'idle' | 'success' | 'error' | 'printing' | 'connecting';
+  message: string;
+}
+
+// ============================================
+// ORDER DATA TRANSFORMER
+// ============================================
+const transformOrderData = (cart: any, region: any) => {
+  const items = cart?.items?.map((item: any) => ({
+    title: item.title || item.name || 'Item',
+    quantity: item.quantity || 1,
+    unit_price: item.unit_price || item.price || 0,
+    sku: item.sku || item.variant_sku || '',
+  })) || [];
+
+  const customer = cart?.customer || null;
+  const shipping = cart?.shipping || null;
+  const payment = cart?.payment || null;
+  
+  // Calculate totals
+  const subtotal = items.reduce((sum: number, item: any) => sum + (item.unit_price * item.quantity), 0);
+  const tax = subtotal * 0.12; // 12% VAT
+  const shippingCost = cart?.shipping_cost || 0;
+  const discount = cart?.discount || 0;
+  const total = subtotal + tax + shippingCost - discount;
+
+  return {
+    ...cart,
+    display_id: cart?.display_id || cart?.id || '1001',
+    created_at: cart?.created_at || new Date().toISOString(),
+    status: cart?.status || 'completed',
+    currency_code: region?.currency_code || 'php',
+    customer,
+    items,
+    shipping: shipping ? {
+      method: shipping.method || 'Standard',
+      cost: shipping.cost || 0,
+      tracking: shipping.tracking || '',
+      address: shipping.address || null
+    } : null,
+    payment: payment ? {
+      method: payment.method || 'Cash',
+      status: payment.status || 'PAID',
+      card_last4: payment.card_last4 || '',
+      amount: payment.amount || total
+    } : null,
+    totals: {
+      subtotal,
+      tax,
+      shipping: shippingCost,
+      discount,
+      total
+    }
+  };
+};
+
+// ============================================
+// MAIN COMPONENT
+// ============================================
 export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: PrintDialogProps) {
+  // State
   const [printerSettings, setPrinterSettings] = useState<PrinterSettings>({
     paperSize: "58mm",
     copies: 1,
@@ -52,142 +129,182 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
     printKitchen: false,
     printCustomerCopy: false,
   });
+  
   const [isPrinting, setIsPrinting] = useState(false);
-  const [printData, setPrintData] = useState<any | null>(null);
-  const [printStatus, setPrintStatus] = useState<{ type: 'idle' | 'success' | 'error'; message: string }>({
+  const [orderData, setOrderData] = useState<any>(null);
+  const [printStatus, setPrintStatus] = useState<PrintStatus>({
     type: 'idle',
     message: ''
   });
-  const [activeTab, setActiveTab] = useState<'receipt' | 'kitchen' | 'preview'>('preview');
+  const [activeTab, setActiveTab] = useState<'preview' | 'settings'>('preview');
+  const [receiptPreview, setReceiptPreview] = useState<string>('');
+  
+  // Printer connection state
+  const [printerManager, setPrinterManager] = useState<any>(null);
+  const [transmitter, setTransmitter] = useState<any>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [deviceName, setDeviceName] = useState<string>('');
 
-  // Handle print with proper error handling and feedback
-  const handlePrint = async () => {
-    if (!printData) {
+  const PRINTER_CONFIG = {
+    serviceUUID: '000018f0-0000-1000-8000-00805f9b34fb',
+    characteristicUUID: '00002af1-0000-1000-8000-00805f9b34fb',
+  };
+
+  // Initialize printer manager
+  const initPrinter = useCallback(() => {
+    const manager = new PrinterManager(
+      PRINTER_CONFIG.serviceUUID,
+      PRINTER_CONFIG.characteristicUUID
+    );
+    setPrinterManager(manager);
+    return manager;
+  }, []);
+
+  // Connect to printer
+  const connectPrinter = async () => {
+    setPrintStatus({ type: 'connecting', message: 'Connecting to printer...' });
+    
+    try {
+      let manager = printerManager;
+      if (!manager) {
+        manager = initPrinter();
+      }
+      
+      const device = await manager.connect();
+      setDeviceName(device.name || 'Unknown Printer');
+      setIsConnected(true);
+      
+      const transmitter = new ChunkedTransmission(manager, 80);
+      setTransmitter(transmitter);
+      
+      setPrintStatus({ type: 'idle', message: 'Printer connected successfully!' });
+      setTimeout(() => {
+        setPrintStatus({ type: 'idle', message: '' });
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Connection error:', error);
       setPrintStatus({
         type: 'error',
-        message: 'No print data available'
+        message: error instanceof Error ? error.message : 'Failed to connect to printer'
+      });
+    }
+  };
+
+  // Disconnect printer
+  const disconnectPrinter = async () => {
+    if (printerManager) {
+      await printerManager.disconnect();
+    }
+    setIsConnected(false);
+    setDeviceName('');
+    setPrintStatus({ type: 'idle', message: '' });
+  };
+
+  // Transform order data
+  useEffect(() => {
+    if (open && (cart || receiptData)) {
+      const transformed = transformOrderData(cart, region);
+      setOrderData(transformed);
+      
+      // Generate preview
+      try {
+        const preview = generateReceiptPreview(transformed, {
+          storeName: 'Belly Bytes',
+          paperSize: printerSettings.paperSize === '58mm' ? 30 : 42
+        });
+        setReceiptPreview(preview);
+      } catch (error) {
+        console.error('Preview error:', error);
+      }
+      
+      // Reset status
+      setPrintStatus({ type: 'idle', message: '' });
+    }
+  }, [cart, receiptData, region, open]);
+
+  // Generate preview when settings change
+  useEffect(() => {
+    if (orderData) {
+      try {
+        const preview = generateReceiptPreview(orderData, {
+          storeName: 'Belly Bytes',
+          paperSize: printerSettings.paperSize === '58mm' ? 30 : 42
+        });
+        setReceiptPreview(preview);
+      } catch (error) {
+        console.error('Preview error:', error);
+      }
+    }
+  }, [orderData, printerSettings.paperSize]);
+
+  // Print receipt
+  const handlePrint = async () => {
+    if (!orderData) {
+      setPrintStatus({
+        type: 'error',
+        message: 'No order data available'
+      });
+      return;
+    }
+
+    // Check connection
+    if (!isConnected || !transmitter) {
+      setPrintStatus({
+        type: 'error',
+        message: 'Printer not connected. Please connect first.'
       });
       return;
     }
 
     setIsPrinting(true);
-    setPrintStatus({ type: 'idle', message: 'Preparing print job...' });
+    setPrintStatus({ type: 'printing', message: 'Printing receipt...' });
 
     try {
-      // Determine what to print
-      const printJobs: Array<{ type: 'receipt' | 'kitchen'; copies: number }> = [];
+      const builder = new ReceiptBuilder({
+        storeName: 'Belly Bytes',
+        paperSize: printerSettings.paperSize === '58mm' ? 30 : 42
+      });
       
-      if (printerSettings.printReceipt) {
-        printJobs.push({ type: 'receipt', copies: printerSettings.copies });
-      }
+      const receiptData = builder.build(orderData);
       
-      if (printerSettings.printKitchen) {
-        printJobs.push({ type: 'kitchen', copies: 1 });
-      }
+      // Set chunk size
+      transmitter.chunkSize = 80;
       
-      // If customer copy is enabled, print an extra receipt
-      if (printerSettings.printCustomerCopy && printerSettings.printReceipt) {
-        // Add customer copy as a separate job with different header
-        printJobs.push({ type: 'receipt', copies: 1 });
-      }
-
-      if (printJobs.length === 0) {
-        setPrintStatus({
-          type: 'error',
-          message: 'Please select at least one print option'
-        });
-        setIsPrinting(false);
-        return;
-      }
-
-      // Execute print jobs
-      let successCount = 0;
-      let totalJobs = printJobs.reduce((sum, job) => sum + job.copies, 0);
-
-      for (const job of printJobs) {
-        for (let i = 0; i < job.copies; i++) {
-          const result = await printOrder(printData, job.type, {
-            ...printerSettings,
-            isCustomerCopy: job.type === 'receipt' && printJobs.length > 1 && i === job.copies - 1
-          });
-          
-          if (result.success) {
-            successCount++;
-          }
-          
-          // Small delay between copies
-          if (i < job.copies - 1) {
-            await new Promise(resolve => setTimeout(resolve, 300));
-          }
-        }
-      }
-
-      if (successCount === totalJobs) {
-        setPrintStatus({
-          type: 'success',
-          message: `Successfully printed ${successCount} copy(ies)!`
-        });
-        // Close dialog after successful print
+      // Send to printer
+      await transmitter.send(receiptData);
+      
+      setPrintStatus({
+        type: 'success',
+        message: 'Receipt printed successfully!'
+      });
+      
+      // Close dialog after success
+      setTimeout(() => {
+        onOpenChange(false);
         setTimeout(() => {
-          onOpenChange(false);
-          // Reset status after dialog closes
-          setTimeout(() => {
-            setPrintStatus({ type: 'idle', message: '' });
-          }, 500);
-        }, 1500);
-      } else {
-        setPrintStatus({
-          type: 'error',
-          message: `Printed ${successCount} of ${totalJobs} copies. Please check printer connection.`
-        });
-      }
+          setPrintStatus({ type: 'idle', message: '' });
+        }, 500);
+      }, 2000);
+
     } catch (error) {
-      console.error("Print error:", error);
+      console.error('Print error:', error);
       setPrintStatus({
         type: 'error',
-        message: error instanceof Error ? error.message : 'Print failed. Please try again.'
+        message: error instanceof Error ? error.message : 'Print failed'
       });
     } finally {
       setIsPrinting(false);
     }
   };
 
+  // Get total items
   const getTotalItems = () => {
-    if (!printData) return 0;
-    return printData.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+    if (!orderData) return 0;
+    return orderData.items?.reduce((sum: number, item: any) => sum + item.quantity, 0) || 0;
   };
 
-  const getCustomPricedCount = () => {
-    if (!printData) return 0;
-    return printData.items?.filter(item => item.is_custom_priced).length || 0;
-  };
-
-  // Format print data when dialog opens
-  useEffect(() => {
-    if (open && (cart || receiptData)) {
-      const formattedData = formatCartToPrintData(cart, receiptData) as any;
-      setPrintData(formattedData);
-      // Reset status when dialog opens
-      setPrintStatus({ type: 'idle', message: '' });
-      
-      // Auto-set print options based on order type
-      if (formattedData?.placement?.type === 'table') {
-        setPrinterSettings(prev => ({
-          ...prev,
-          printReceipt: true,
-          printKitchen: true,
-        }));
-      } else {
-        setPrinterSettings(prev => ({
-          ...prev,
-          printReceipt: true,
-          printKitchen: false,
-        }));
-      }
-    }
-  }, [cart, receiptData, open]);
-
-  if (!printData) return null;
+  if (!orderData) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -216,17 +333,15 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
               </DialogTitle>
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
-                  Order #{printData.orderNumber}
+                  Order #{orderData.display_id}
                 </p>
                 <div className="flex items-center gap-2 text-xs">
                   <span className="px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
-                    {printData.placement.name}
+                    {orderData.status.toUpperCase()}
                   </span>
-                  {printData.placement.tables.length > 0 && (
-                    <span className="px-2 py-1 rounded-full bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300">
-                      Table {printData.placement.tables.join(', ')}
-                    </span>
-                  )}
+                  <span className="px-2 py-1 rounded-full bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300">
+                    {orderData.items?.length || 0} items
+                  </span>
                 </div>
               </div>
             </DialogHeader>
@@ -234,16 +349,88 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
 
           {/* Scrollable Content */}
           <div className="overflow-y-auto px-6 py-4 space-y-4">
-            {/* Mobile Print Status */}
-            <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 p-3">
-              <div className="flex items-center gap-2">
-                <Smartphone className="h-4 w-4 text-blue-600" />
-                <span className="font-medium text-blue-800 dark:text-blue-300">Bluetooth Printing</span>
+            {/* Bluetooth Connection Status */}
+            <div className={`rounded-lg border p-3 ${
+              isConnected 
+                ? 'border-green-200 bg-green-50 dark:bg-green-950/20' 
+                : 'border-blue-200 bg-blue-50 dark:bg-blue-950/20'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {isConnected ? (
+                    <BluetoothConnected className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <Bluetooth className="h-4 w-4 text-blue-600" />
+                  )}
+                  <span className={`font-medium ${
+                    isConnected 
+                      ? 'text-green-700 dark:text-green-300' 
+                      : 'text-blue-700 dark:text-blue-300'
+                  }`}>
+                    {isConnected ? `Connected: ${deviceName}` : 'Bluetooth Printer'}
+                  </span>
+                </div>
+                {!isConnected ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={connectPrinter}
+                    className="gap-1"
+                  >
+                    <Bluetooth className="h-3 w-3" />
+                    Connect
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={disconnectPrinter}
+                    className="gap-1 text-red-600 hover:text-red-700"
+                  >
+                    Disconnect
+                  </Button>
+                )}
               </div>
-              <p className="text-xs text-blue-700 dark:text-blue-400 mt-1">
-                Make sure your Bluetooth printer is paired and ready
-              </p>
+              {!isConnected && (
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                  Connect your Bluetooth printer before printing
+                </p>
+              )}
             </div>
+
+            {/* Print Status */}
+            {printStatus.type !== 'idle' && (
+              <div className={`rounded-lg p-3 flex items-start gap-2 ${
+                printStatus.type === 'success' 
+                  ? 'bg-green-50 border border-green-200 dark:bg-green-950/20 dark:border-green-900' 
+                  : printStatus.type === 'error'
+                  ? 'bg-red-50 border border-red-200 dark:bg-red-950/20 dark:border-red-900'
+                  : printStatus.type === 'connecting' || printStatus.type === 'printing'
+                  ? 'bg-yellow-50 border border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-900'
+                  : 'bg-gray-50 border border-gray-200'
+              }`}>
+                {printStatus.type === 'success' ? (
+                  <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                ) : printStatus.type === 'error' ? (
+                  <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+                ) : printStatus.type === 'connecting' || printStatus.type === 'printing' ? (
+                  <Loader2 className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0 animate-spin" />
+                ) : (
+                  <AlertTriangle className="h-4 w-4 text-gray-600 mt-0.5 flex-shrink-0" />
+                )}
+                <p className={`text-sm ${
+                  printStatus.type === 'success' 
+                    ? 'text-green-700 dark:text-green-300' 
+                    : printStatus.type === 'error'
+                    ? 'text-red-700 dark:text-red-300'
+                    : printStatus.type === 'connecting' || printStatus.type === 'printing'
+                    ? 'text-yellow-700 dark:text-yellow-300'
+                    : 'text-gray-700'
+                }`}>
+                  {printStatus.message}
+                </p>
+              </div>
+            )}
 
             {/* Print Options Tabs */}
             <div className="flex gap-2 border-b pb-2">
@@ -259,11 +446,11 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
               </button>
               <button
                 className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                  activeTab === 'receipt' 
+                  activeTab === 'settings' 
                     ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' 
                     : 'hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
-                onClick={() => setActiveTab('receipt')}
+                onClick={() => setActiveTab('settings')}
               >
                 Settings
               </button>
@@ -282,89 +469,35 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
                     <span className="text-muted-foreground">Total Items:</span>
                     <span className="font-medium">{getTotalItems()} pcs</span>
                     
-                    <span className="text-muted-foreground">Order Type:</span>
-                    <span className="font-medium capitalize">{printData.placement.type}</span>
-                    
-                    {printData.customer && (
+                    {orderData.customer && (
                       <>
                         <span className="text-muted-foreground">Customer:</span>
-                        <span className="font-medium">{printData.customer.name}</span>
+                        <span className="font-medium">{orderData.customer.first_name} {orderData.customer.last_name}</span>
                       </>
                     )}
                     
                     <span className="text-muted-foreground">Payment:</span>
-                    <span className="font-medium">{printData.paymentMethod}</span>
+                    <span className="font-medium">{orderData.payment?.method || 'N/A'}</span>
+                    
+                    <span className="text-muted-foreground">Total:</span>
+                    <span className="font-medium text-blue-600">₱{orderData.totals.total.toFixed(2)}</span>
                   </div>
                 </div>
 
-                {/* Items Preview */}
-                <div className="rounded-lg border p-3 space-y-2 max-h-40 overflow-y-auto">
-                  <p className="font-medium text-sm">Items Preview</p>
-                  <div className="space-y-1">
-                    {printData.items?.slice(0, 5).map((item, index) => (
-                      <div key={index} className="flex justify-between text-xs border-b border-dashed pb-1">
-                        <span>{item.quantity}x {item.name}</span>
-                        <span>₱{(item.price * item.quantity).toFixed(2)}</span>
-                      </div>
-                    ))}
-                    {printData.items?.length > 5 && (
-                      <p className="text-xs text-muted-foreground text-center">
-                        +{printData.items.length - 5} more items
-                      </p>
-                    )}
+                {/* Receipt Preview */}
+                <div className="rounded-lg border p-3 bg-white dark:bg-gray-900">
+                  <p className="font-medium text-sm mb-2">Receipt Preview</p>
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded p-2 max-h-[300px] overflow-auto">
+                    <pre className="font-mono text-xs whitespace-pre-wrap leading-relaxed">
+                      {receiptPreview || 'Generating preview...'}
+                    </pre>
                   </div>
                 </div>
-
-                {/* Totals Preview */}
-                <div className="rounded-lg border p-3 space-y-1 bg-green-50 dark:bg-green-950/20">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Subtotal:</span>
-                    <span>₱{printData.subtotal.toFixed(2)}</span>
-                  </div>
-                  {printData.discount_total > 0 && (
-                    <div className="flex justify-between text-sm text-red-600">
-                      <span>Discount:</span>
-                      <span>-₱{printData.discount_total.toFixed(2)}</span>
-                    </div>
-                  )}
-                  {printData.tax > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span>Tax ({Math.round(printData.taxRate * 100)}%):</span>
-                      <span>₱{printData.tax.toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-bold text-base pt-2 border-t">
-                    <span>Total:</span>
-                    <span className="text-blue-600">₱{printData.total.toFixed(2)}</span>
-                  </div>
-                </div>
-
-                {/* Print Status Message */}
-                {printStatus.type !== 'idle' && (
-                  <div className={`rounded-lg p-3 flex items-start gap-2 ${
-                    printStatus.type === 'success' 
-                      ? 'bg-green-50 border border-green-200 dark:bg-green-950/20 dark:border-green-900' 
-                      : 'bg-red-50 border border-red-200 dark:bg-red-950/20 dark:border-red-900'
-                  }`}>
-                    {printStatus.type === 'success' ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                    ) : (
-                      <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
-                    )}
-                    <p className={`text-sm ${
-                      printStatus.type === 'success' 
-                        ? 'text-green-700 dark:text-green-300' 
-                        : 'text-red-700 dark:text-red-300'
-                    }`}>
-                      {printStatus.message}
-                    </p>
-                  </div>
-                )}
               </div>
             )}
 
             {/* Settings Tab */}
-            {activeTab === 'receipt' && (
+            {activeTab === 'settings' && (
               <div className="space-y-4">
                 {/* Paper Size */}
                 <div className="space-y-2">
@@ -382,7 +515,7 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="58mm">58mm (Thermal) - Recommended</SelectItem>
+                      <SelectItem value="58mm">58mm (Thermal)</SelectItem>
                       <SelectItem value="80mm">80mm (Standard)</SelectItem>
                     </SelectContent>
                   </Select>
@@ -482,9 +615,9 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
                         Print Information
                       </p>
                       <ul className="text-xs text-yellow-600 dark:text-yellow-400 mt-1 space-y-1 list-disc list-inside">
-                        <li>Receipt will include: order details, items, prices, and payment info</li>
-                        <li>Kitchen ticket will show items to prepare with special instructions</li>
-                        <li>Customer copy is a duplicate receipt for customer records</li>
+                        <li>Receipt includes: order details, items, prices, payment info</li>
+                        <li>Kitchen ticket shows items to prepare</li>
+                        <li>Customer copy is a duplicate receipt</li>
                       </ul>
                     </div>
                   </div>
@@ -510,7 +643,7 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
               <Button 
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={handlePrint} 
-                disabled={isPrinting || (!printerSettings.printReceipt && !printerSettings.printKitchen)}
+                disabled={isPrinting || !isConnected || (!printerSettings.printReceipt && !printerSettings.printKitchen)}
               >
                 {isPrinting ? (
                   <>
@@ -520,7 +653,7 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
                 ) : (
                   <>
                     <Printer className="mr-2 h-4 w-4" />
-                    Print {printerSettings.printReceipt && printerSettings.printKitchen ? 'All' : ''}
+                    Print
                   </>
                 )}
               </Button>
@@ -531,4 +664,3 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
     </Dialog>
   );
 }
-

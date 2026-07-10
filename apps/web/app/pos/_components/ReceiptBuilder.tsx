@@ -5,7 +5,7 @@ import EscPosEncoder from 'esc-pos-encoder';
 
 export class ReceiptBuilder {
   constructor(config = {}) {
-   this.config = {
+    this.config = {
       storeName: 'Belly Bytes',
       address: '016 Dadison St. Pericohon',
       city: 'Tacloban City, Leyte',
@@ -16,8 +16,8 @@ export class ReceiptBuilder {
     };
   }
 
-  // 58mm paper = 30 characters max
-  PAPER_WIDTH = 30;
+  // 58mm paper = 32 characters max
+  PAPER_WIDTH = 32;
 
   formatCurrency(amount) {
     return `₱${Number(amount).toFixed(2)}`;
@@ -37,13 +37,13 @@ export class ReceiptBuilder {
   }
 
   // Center text for headers only
-  centerText(text, width = 30) {
+  centerText(text, width = 32) {
     const padding = Math.max(0, width - text.length);
     const leftPad = Math.floor(padding / 2);
     return ' '.repeat(leftPad) + text;
   }
 
-  separator(char = '─', width = 30) {
+  separator(char = '─', width = 32) {
     return char.repeat(width);
   }
 
@@ -54,43 +54,51 @@ export class ReceiptBuilder {
   }
 
   // Ensure text fits within width
-  fitText(text, width = 30) {
+  fitText(text, width = 32) {
     if (text.length > width) {
       return text.substring(0, width - 2) + '..';
     }
     return text.padEnd(width);
   }
 
-  // Format item line - ALL LEFT ALIGNED - 30 chars
-  formatItemLine(name, qty, price) {
-    const maxNameLen = 15; // 15 + 4 + 11 = 30
-    let displayName = this.truncateText(name, maxNameLen);
-    displayName = displayName.padEnd(maxNameLen);
+  // Format item line - Shows: Item Title + Qty only
+  formatItemLine(title, qty) {
+    const maxTitleLen = 24; // Leave room for qty
+    let displayTitle = this.truncateText(title, maxTitleLen);
+    displayTitle = displayTitle.padEnd(maxTitleLen);
     
-    const qtyStr = `x${qty}`.padEnd(4);
-    const priceStr = this.formatCurrency(price);
+    const qtyStr = `x${qty}`.padStart(6);
     
-    // Combine: 15 + 4 + 11 = 30 chars
-    let line = `${displayName}${qtyStr}${priceStr}`;
-    return this.fitText(line);
+    // Combine: 24 + 6 = 30 chars
+    let line = `${displayTitle}${qtyStr}`;
+    return line.padEnd(32);
   }
 
-  // Format total line - LEFT ALIGNED - 30 chars
+  // Format item total line - Shows: Total amount for item
+  formatItemTotalLine(price, qty) {
+    const total = price * qty;
+    const label = 'Total:';
+    const amountStr = this.formatCurrency(total).padStart(11);
+    
+    let line = `${amountStr}`;
+    return line.padEnd(32);
+  }
+
+  // Format total line - LEFT ALIGNED - 32 chars
   formatTotalLine(label, amount) {
-    const maxLabelLen = 19; // 19 + 11 = 30
+    const maxLabelLen = 19;
     let displayLabel = this.truncateText(label, maxLabelLen);
     displayLabel = displayLabel.padEnd(maxLabelLen);
     
-    const amountStr = this.formatCurrency(amount);
+    const amountStr = this.formatCurrency(amount).padStart(13);
     
-    // Combine: 19 + 11 = 30 chars
     let line = `${displayLabel}${amountStr}`;
-    return this.fitText(line);
+    return line.padEnd(32);
   }
 
   // Format header line - CENTERED
   formatHeaderLine(text) {
-    const width = 30;
+    const width = 32;
     const padding = Math.max(0, width - text.length);
     const leftPad = Math.floor(padding / 2);
     const rightPad = padding - leftPad;
@@ -120,7 +128,7 @@ export class ReceiptBuilder {
       .text(this.formatHeaderLine(`Tel: ${store.phone}`))
       .text(this.formatHeaderLine(store.vat))
       .newline(2);
-
+console.log(order.metadata, order, 'HOOORD')
     // ============================================
     // ORDER INFORMATION - LEFT ALIGNED
     // ============================================
@@ -129,9 +137,9 @@ export class ReceiptBuilder {
       .bold(true)
       .text(this.fitText('ORDER DETAILS'))
       .bold(false)
-      .text(this.fitText(`Order #: ${order.display_id}`))
+      .text(this.fitText(`Order #: ${order.display_id || order.id || 'N/A'} || ${order?.metadata?.table_ids?.[0]}`))
       .text(this.fitText(`Date: ${this.formatDate(order.created_at)}`))
-      .text(this.fitText(`Status: ${order.status.toUpperCase()}`))
+      .text(this.fitText(`Status: ${order.status?.toUpperCase() || 'COMPLETED'}`))
       .newline(2);
 
     // ============================================
@@ -142,7 +150,7 @@ export class ReceiptBuilder {
         .bold(true)
         .text(this.fitText('CUSTOMER'))
         .bold(false)
-        .text(this.fitText(`${order.customer.first_name} ${order.customer.last_name}`));
+        .text(this.fitText(`${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim() || 'Guest'));
       
       if (order.customer.email) {
         encoder.text(this.fitText(`Email: ${order.customer.email}`));
@@ -158,53 +166,65 @@ export class ReceiptBuilder {
     // ============================================
     encoder
       .bold(true)
-      .text(this.fitText('ITEM           QTY PRICE'))
+      .text(this.fitText('ITEM                   QTY'))
       .bold(false)
-      .text(this.fitText('─'.repeat(30)))
+      .text(this.fitText('─'.repeat(32)))
       .newline();
 
-    // Print each item
+    // Print each item with title, qty, and total
     order.items.forEach((item, index) => {
-      const line = this.formatItemLine(item.title, item.quantity, item.unit_price);
-      encoder.text(line);
+      // Line 1: Item Title + Qty
+      const line1 = this.formatItemLine(
+        item.title || item.product_title || 'Item',
+        item.quantity || 1
+      );
+      encoder.text(line1);
       
+      // Line 2: Item Total (price x qty)
+      const line2 = this.formatItemTotalLine(
+        item.unit_price || 0,
+        item.quantity || 1
+      );
+      encoder.text(line2);
+      
+      // Add spacing between items
       if (index < order.items.length - 1) {
         encoder.newline();
       }
     });
 
     encoder.newline(2);
-    encoder.text(this.fitText('─'.repeat(30)));
+    encoder.text(this.fitText('─'.repeat(32)));
     encoder.newline(2);
 
     // ============================================
     // TOTALS SECTION - LEFT ALIGNED
     // ============================================
     encoder
-      .text(this.formatTotalLine('Subtotal', totals.subtotal))
+      .text(this.formatTotalLine('Subtotal', totals.subtotal || 0))
       .newline();
 
-    if (totals.discount > 0) {
+    if (totals.discount && totals.discount > 0) {
       encoder.text(this.formatTotalLine('Discount', -totals.discount))
         .newline();
     }
 
     encoder
-      .text(this.formatTotalLine('Tax(12%)', totals.tax))
+      .text(this.formatTotalLine('Tax(12%)', totals.tax || 0))
       .newline();
 
-    if (totals.shipping > 0) {
+    if (totals.shipping && totals.shipping > 0) {
       encoder.text(this.formatTotalLine('Shipping', totals.shipping))
         .newline();
     }
 
     encoder
       .newline()
-      .text(this.fitText('─'.repeat(30)))
+      .text(this.fitText('─'.repeat(32)))
       .newline()
       .bold(true)
       .size(1, 2)
-      .text(this.formatTotalLine('TOTAL', totals.total))
+      .text(this.formatTotalLine('TOTAL', totals.total || 0))
       .bold(false)
       .size(1, 1)
       .newline(2);
@@ -217,9 +237,9 @@ export class ReceiptBuilder {
         .bold(true)
         .text(this.fitText('PAYMENT'))
         .bold(false)
-        .text(this.fitText(`Method: ${order.payment.method}`))
-        .text(this.fitText(`Amount: ${this.formatCurrency(order.payment.amount)}`))
-        .text(this.fitText(`Status: ${order.payment.status}`));
+        .text(this.fitText(`Method: ${order.payment.method || 'N/A'}`))
+        .text(this.fitText(`Amount: ${this.formatCurrency(order.payment.amount || 0)}`))
+        .text(this.fitText(`Status: ${order.payment.status || 'PAID'}`));
       
       if (order.payment.card_last4) {
         encoder.text(this.fitText(`Card: ****${order.payment.card_last4}`));
@@ -237,8 +257,8 @@ export class ReceiptBuilder {
         .bold(true)
         .text(this.fitText('SHIPPING'))
         .bold(false)
-        .text(this.fitText(`Method: ${shipping.method}`))
-        .text(this.fitText(`Cost: ${this.formatCurrency(shipping.cost)}`));
+        .text(this.fitText(`Method: ${shipping.method || 'N/A'}`))
+        .text(this.fitText(`Cost: ${this.formatCurrency(shipping.cost || 0)}`));
       
       if (shipping.tracking) {
         encoder.text(this.fitText(`Tracking: ${shipping.tracking}`));
@@ -251,15 +271,15 @@ export class ReceiptBuilder {
           .bold(true)
           .text(this.fitText('SHIP TO'))
           .bold(false)
-          .text(this.fitText(`${addr.first_name} ${addr.last_name}`))
-          .text(this.fitText(addr.address_1));
+          .text(this.fitText(`${addr.first_name || ''} ${addr.last_name || ''}`.trim() || 'N/A'))
+          .text(this.fitText(addr.address_1 || ''));
         
         if (addr.address_2) {
           encoder.text(this.fitText(addr.address_2));
         }
         
-        encoder.text(this.fitText(`${addr.city}, ${addr.province}`));
-        encoder.text(this.fitText(`${addr.postal_code}, ${addr.country}`));
+        encoder.text(this.fitText(`${addr.city || ''}, ${addr.province || ''}`));
+        encoder.text(this.fitText(`${addr.postal_code || ''}, ${addr.country || ''}`));
       }
       encoder.newline(2);
     }
@@ -267,9 +287,11 @@ export class ReceiptBuilder {
     // ============================================
     // FOOTER SECTION - CENTERED
     // ============================================
+     encoder
+      .text(this.formatHeaderLine('═'.repeat(30)))
+
     encoder
       .align('center')
-      .text(this.formatHeaderLine('═'.repeat(30)))
       .newline(2)
       .text(this.formatHeaderLine(store.footer))
       .newline()

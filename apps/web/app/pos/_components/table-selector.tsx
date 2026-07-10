@@ -238,7 +238,7 @@ export function TableSelector({
           setTables(JSON.parse(stored));
         } else {
           const defaultTables = Array.from({ length: 16 }, (_, i) => ({
-            id: `table-${i + 1}`,
+            id: `beeper-${i + 1}`,
             name: `Beeper ${i + 1}`,
             number: (i + 1).toString(),
             capacity: i >= 8 ? 8 : i >= 6 ? 6 : 4,

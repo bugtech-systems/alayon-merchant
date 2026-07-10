@@ -20,7 +20,6 @@ interface UseMedusaOrdersParams {
 
 export function useMedusaOrders(params: UseMedusaOrdersParams) {
 
-  console.log(params, 'PARRS')
 
   return useQuery({
     queryKey: ["medusa-orders", params],

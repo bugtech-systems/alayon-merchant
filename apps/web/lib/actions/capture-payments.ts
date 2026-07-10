@@ -440,7 +440,6 @@ export async function processPOSPayment(params: {
 
         let orderDelivery = await createDelivery({cart_id: cart?.id, order_id: orderResult.order.id, company_id: pricingContext.companyId})
         if(orderDelivery){
-          console.log(orderDelivery, 'ORDDDEL')
           await acceptDelivery(orderDelivery?.id)
         }
 

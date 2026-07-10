@@ -500,7 +500,6 @@ export function getOrderColumns({
         header: () => null,
         cell: ({ row }) => {
           const order = row.original;
-          console.log(order, 'ORDDD')
           return (
             <div className="flex flex-col gap-2 p-2 w-full">
               <div className="flex items-center justify-between">
@@ -770,7 +769,6 @@ export function CompanyOrdersTable({
   );
 
 
-  console.log(data, "DATA")
   const columns = React.useMemo(
     () => getOrderColumns({ 
       onAssignDriver, 
