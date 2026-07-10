@@ -78,12 +78,6 @@ export const companySidebarItems: NavGroup[] = [
         icon: Banknote,
         // comingSoon: true
       },
-       {
-        title: "Test",
-        url: "/test",
-        icon: Banknote,
-        // comingSoon: true
-      },
       // {
       //   title: "Analytics",
       //   url: "/dashboard/analytics",
