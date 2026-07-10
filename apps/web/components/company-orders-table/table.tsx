@@ -481,7 +481,7 @@ export function getOrderColumns({
   const statusLabels: Record<Order["status"], string> = {
     pending: "Pending",
     driver_accepted: "Driver Accepted",
-    company_accepted: "Company Accepted",
+    company_accepted: "Accepted",
     preparing: "Preparing",
     ready_for_pickup: "Ready",
     // ready_for_pickup: "Ready for Pickup",

@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 const statusConfig = {
   pending: { label: "Pending", variant: "secondary" },
   company_declined: { label: "Company Declined", variant: "destructive" },
-  company_accepted: { label: "Company Accepted", variant: "default" },
+  company_accepted: { label: "Accepted", variant: "default" },
   pickup_claimed: { label: "Pickup Claimed", variant: "outline" },
   company_preparing: { label: "Company Preparing", variant: "outline" },
   ready_for_pickup: { label: "Ready for Pickup", variant: "default" },

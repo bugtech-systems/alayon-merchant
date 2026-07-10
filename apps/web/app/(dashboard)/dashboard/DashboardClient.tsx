@@ -2,15 +2,12 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { DeliveryActivityPipeline } from "@/components/pipeline-activity";
-import { DeliverySectionCards } from "@/components/company/section-cards";
 import DriverDashboard from "./rider/page";
-import type { DashboardOrder } from "@/lib/data/orders";
 import { CompanyOrdersTable } from "@/components/company-orders-table/table";
 import React, { useState } from "react";
 import { useMedusaOrders } from "@/hooks/useMedusaOrders";
 import { assignDriverToOrder, unassignDriverToOrder } from "@/lib/data";
-import { PrintDialog } from "@/components/pos/_components/print-dialog";
+import { PrintDialog } from "@/app/pos/_components/print-dialog";
 
 interface DashboardClientProps {
   user: any;

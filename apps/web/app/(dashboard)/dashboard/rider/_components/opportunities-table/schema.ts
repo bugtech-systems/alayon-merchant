@@ -37,7 +37,7 @@ export const getStatusLabel = (status: OrderStatus): string => {
   const labels: Record<OrderStatus, string> = {
     pending: "Pending",
     company_declined: "Company Declined",
-    company_accepted: "Company Accepted",
+    company_accepted: "Accepted",
     pickup_claimed: "Pickup Claimed",
     company_preparing: "Company Preparing",
     ready_for_pickup: "Ready for Pickup",

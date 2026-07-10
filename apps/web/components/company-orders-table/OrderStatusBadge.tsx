@@ -38,7 +38,7 @@ export const ORDER_STATUS_CONFIG: Record<string, {
     borderColor: "border-blue-200",
   },
   company_accepted: {
-    label: "Company Accepted",
+    label: "Accepted",
     icon: <Building className="h-3.5 w-3.5" />,
     color: "bg-blue-50 text-blue-700 border-blue-200",
     bgColor: "bg-blue-100",
