@@ -4,7 +4,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import DriverDashboard from "./rider/page";
 import { CompanyOrdersTable } from "@/components/company-orders-table/table";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useMedusaOrders } from "@/hooks/useMedusaOrders";
 import { assignDriverToOrder, unassignDriverToOrder } from "@/lib/data";
 import { PrintDialog } from "@/app/pos/_components/print-dialog";
@@ -16,11 +16,14 @@ interface DashboardClientProps {
 
 export function DashboardClient({ user, userRole }: DashboardClientProps) {
   const [cartPrint, setCartPrint] = useState(null);
-  const [previousOrderIds, setPreviousOrderIds] = useState<Set<string>>(new Set());
+  const [previousOrderCount, setPreviousOrderCount] = useState<number>(0);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+  const [isSoundLoaded, setIsSoundLoaded] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const previousOrderCountRef = useRef<number>(0); // Use ref to track count without re-renders
   
   // Get pagination and filter params from URL
   const page = parseInt(searchParams?.get('page') || '1', 10);
@@ -54,109 +57,243 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
 
   // Initialize audio for notification sound
   useEffect(() => {
-    // Create audio element for notification sound
-    audioRef.current = new Audio('/notification.mp3'); // Make sure to add this file to your public folder
-  audioRef.current.volume = 1.0; // Maximum volume (0.0 to 1.0)
+    // Try multiple audio formats for better compatibility
+    const audioExtensions = ['mp3', 'wav', 'ogg'];
+    let currentAudio: HTMLAudioElement | null = null;
     
-    // Fallback if file doesn't exist
-    audioRef.current.onerror = () => {
-      console.warn('Notification sound file not found. Using fallback notification.');
+    // Try to load the audio file
+    const loadAudio = (extension: string) => {
+      try {
+        const audio = new Audio(`/notification.${extension}`);
+        audio.volume = 1.0;
+        audio.preload = 'auto';
+        
+        // Check if audio can be loaded
+        audio.addEventListener('canplaythrough', () => {
+          console.log(`Audio loaded successfully (${extension})`);
+          setIsSoundLoaded(true);
+          setAudioError(null);
+          audioRef.current = audio;
+        });
+        
+        audio.addEventListener('error', (e) => {
+          console.warn(`Failed to load audio (${extension}):`, e);
+          // Try next format
+          const currentIndex = audioExtensions.indexOf(extension);
+          if (currentIndex < audioExtensions.length - 1) {
+            loadAudio(audioExtensions[currentIndex + 1]);
+          } else {
+            setAudioError('No audio format could be loaded');
+            setIsSoundLoaded(false);
+          }
+        });
+        
+        return audio;
+      } catch (error) {
+        console.error(`Error creating audio for ${extension}:`, error);
+        return null;
+      }
     };
     
+    // Start loading with first format
+    currentAudio = loadAudio(audioExtensions[0]);
+    
     return () => {
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.src = '';
+        currentAudio = null;
+      }
       if (audioRef.current) {
         audioRef.current.pause();
+        audioRef.current.src = '';
         audioRef.current = null;
       }
     };
   }, []);
 
-  // Initialize previous order IDs on first data load
+  // Update previous order count when data changes
   useEffect(() => {
-    if (data?.orders && data.orders.length > 0) {
-      const orderIds = new Set(data.orders.map(order => order.id));
-      setPreviousOrderIds(orderIds);
+    if (data?.orders) {
+      const newCount = data.orders.length;
+      // Only update if count changed
+      if (previousOrderCountRef.current !== newCount) {
+        console.log(`Order count changed: ${previousOrderCountRef.current} -> ${newCount}`);
+        previousOrderCountRef.current = newCount;
+        setPreviousOrderCount(newCount);
+      }
     }
   }, [data?.orders]);
+
+  // Function to play notification sound with multiple fallbacks
+  const playNotificationSound = useCallback(async () => {
+    console.log('Attempting to play notification sound...');
+    console.log('Sound enabled:', isSoundEnabled);
+    console.log('Sound loaded:', isSoundLoaded);
+    console.log('Audio ref exists:', !!audioRef.current);
+    
+    if (!isSoundEnabled) {
+      console.log('Sound is disabled, skipping playback');
+      return;
+    }
+
+    // Try multiple methods to play sound
+    const playMethods = [
+      // Method 1: Use the audio element
+      () => {
+        if (audioRef.current && isSoundLoaded) {
+          console.log('Method 1: Playing via audio element');
+          audioRef.current.currentTime = 0;
+          return audioRef.current.play();
+        }
+        return Promise.reject('Audio element not available');
+      },
+      
+      // Method 2: Create a new audio element
+      () => {
+        console.log('Method 2: Creating new audio element');
+        const audio = new Audio('/notification.mp3');
+        audio.volume = 1.0;
+        return audio.play();
+      },
+      
+      // Method 3: Use Web Speech API
+      () => {
+        console.log('Method 3: Using Web Speech API');
+        if ('speechSynthesis' in window) {
+          return new Promise((resolve, reject) => {
+            const utterance = new SpeechSynthesisUtterance('New order received');
+            utterance.volume = 1;
+            utterance.rate = 0.8;
+            utterance.pitch = 1;
+            utterance.onend = () => resolve('Speech completed');
+            utterance.onerror = (e) => reject(e);
+            window.speechSynthesis.speak(utterance);
+            resolve('Speech started');
+          });
+        }
+        return Promise.reject('Speech synthesis not available');
+      }
+    ];
+
+    // Try each method in sequence
+    for (let i = 0; i < playMethods.length; i++) {
+      try {
+        const result = await playMethods[i]();
+        console.log(`Sound played successfully using method ${i + 1}:`, result);
+        return true;
+      } catch (error) {
+        console.warn(`Method ${i + 1} failed:`, error);
+        // Continue to next method
+      }
+    }
+
+    // If all methods fail, use the simplest fallback
+    try {
+      console.log('Using final fallback: Web Audio API');
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = 800;
+      oscillator.type = 'sine';
+      gainNode.gain.value = 0.3;
+      
+      oscillator.start();
+      setTimeout(() => {
+        oscillator.stop();
+        audioContext.close();
+      }, 500);
+      
+      console.log('Fallback beep played');
+      return true;
+    } catch (error) {
+      console.error('All sound playback methods failed:', error);
+      setAudioError('Sound playback failed');
+      return false;
+    }
+  }, [isSoundEnabled, isSoundLoaded]);
 
   // Auto-refetch every 10 seconds
   useEffect(() => {
     const intervalId = setInterval(async () => {
-      if (!isLoading) {
-        // Store current order IDs before refetch
-        const currentOrderIds = data?.orders 
-          ? new Set(data.orders.map(order => order.id))
-          : new Set();
+      if (!isLoading && data?.orders) {
+        // Get current count from the ref (most up-to-date)
+        const currentOrderCount = previousOrderCountRef.current;
         
-        await refetch();
+        console.log(`Auto-refresh: Checking for new orders... Current count: ${currentOrderCount}`);
         
-        // Check for new orders after refetch
-        if (data?.orders) {
-          const newOrderIds = new Set(data.orders.map(order => order.id));
-          const hasNewOrders = Array.from(newOrderIds).some(id => !currentOrderIds.has(id));
+        // Store the current data before refetch
+        const currentData = data;
+        
+        // Refetch data
+        const result = await refetch();
+        
+        // Get the new data from the result
+        if (result.data?.orders) {
+          const newOrderCount = result.data.orders.length;
+          console.log(`Auto-refresh: New count: ${newOrderCount}, Previous count: ${currentOrderCount}`);
           
-          if (hasNewOrders && isSoundEnabled) {
-            playNotificationSound();
+          // Check if there are new orders (count increased)
+          if (newOrderCount > currentOrderCount) {
+            console.log(`New order detected! Playing notification... (${currentOrderCount} -> ${newOrderCount})`);
+            if (isSoundEnabled) {
+              await playNotificationSound();
+            }
           }
           
-          // Update previous order IDs
-          setPreviousOrderIds(newOrderIds);
+          // Update the ref with the new count
+          previousOrderCountRef.current = newOrderCount;
+          setPreviousOrderCount(newOrderCount);
         }
       }
-    }, 10000); // 10 seconds
+    }, 10000);
 
     return () => clearInterval(intervalId);
-  }, [refetch, data?.orders, isLoading, isSoundEnabled]);
-
-  // Function to play notification sound
-  const playNotificationSound = () => {
-    try {
-      if (audioRef.current) {
-        // Reset and play
-        audioRef.current.currentTime = 0;
-        audioRef.current.play().catch(error => {
-          console.warn('Could not play notification sound:', error);
-          // Fallback: Use Web Speech API as a backup notification
-          if ('speechSynthesis' in window) {
-            const utterance = new SpeechSynthesisUtterance('New order received');
-            utterance.volume = 0.5;
-            utterance.rate = 0.8;
-            window.speechSynthesis.speak(utterance);
-          }
-        });
-      } else {
-        // Fallback: Use Web Speech API
-        if ('speechSynthesis' in window) {
-          const utterance = new SpeechSynthesisUtterance('New order received');
-          utterance.volume = 0.5;
-          utterance.rate = 0.8;
-          window.speechSynthesis.speak(utterance);
-        }
-      }
-    } catch (error) {
-      console.error('Error playing notification sound:', error);
-    }
-  };
+  }, [refetch, data, isLoading, isSoundEnabled, playNotificationSound]);
 
   // Manual refresh handler with sound notification check
-  const handleManualRefresh = async () => {
-    const currentOrderIds = data?.orders 
-      ? new Set(data.orders.map(order => order.id))
-      : new Set();
+  const handleManualRefresh = useCallback(async () => {
+    const currentOrderCount = previousOrderCountRef.current;
     
-    await refetch();
+    console.log(`Manual refresh: Checking for new orders... Current count: ${currentOrderCount}`);
     
-    if (data?.orders) {
-      const newOrderIds = new Set(data.orders.map(order => order.id));
-      const hasNewOrders = Array.from(newOrderIds).some(id => !currentOrderIds.has(id));
+    const result = await refetch();
+    
+    if (result.data?.orders) {
+      const newOrderCount = result.data.orders.length;
+      console.log(`Manual refresh: New count: ${newOrderCount}, Previous count: ${currentOrderCount}`);
       
-      if (hasNewOrders && isSoundEnabled) {
-        playNotificationSound();
+      if (newOrderCount > currentOrderCount) {
+        console.log(`Manual refresh: New order detected! Playing notification... (${currentOrderCount} -> ${newOrderCount})`);
+        if (isSoundEnabled) {
+          await playNotificationSound();
+        }
       }
       
-      setPreviousOrderIds(newOrderIds);
+      previousOrderCountRef.current = newOrderCount;
+      setPreviousOrderCount(newOrderCount);
     }
-  };
+  }, [refetch, isSoundEnabled, playNotificationSound]);
+
+  // Test notification sound manually
+  const handleTestNotification = useCallback(async () => {
+    console.log('Testing notification sound...');
+    if (isSoundEnabled) {
+      await playNotificationSound();
+    } else {
+      // Temporarily enable sound to test
+      console.log('Sound was disabled, enabling temporarily for test');
+      setIsSoundEnabled(true);
+      setTimeout(async () => {
+        await playNotificationSound();
+        // Don't revert - let user decide if they want to keep it on
+      }, 100);
+    }
+  }, [isSoundEnabled, playNotificationSound]);
 
   const handleAssignRider = async (orderId: string, riderId: string | null) => {
     try {
@@ -216,8 +353,15 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
       <div className="@container/main flex flex-col gap-4 md:gap-6">
         <PrintDialog open={cartPrint} onOpenChange={setCartPrint} cart={cartPrint} />
         
-        {/* Optional: Add a sound toggle button */}
-        <div className="flex justify-end items-center gap-2 px-4">
+        {/* Sound control and test buttons */}
+        <div className="flex justify-end items-center gap-3 px-4">
+          <button
+            onClick={handleTestNotification}
+            className="text-sm px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md transition-colors"
+            aria-label="Test notification sound"
+          >
+            🔊 Test Sound
+          </button>
           <button
             onClick={toggleSound}
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -225,6 +369,14 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           >
             {isSoundEnabled ? '🔊 Sound On' : '🔇 Sound Off'}
           </button>
+          <span className="text-xs text-muted-foreground">
+            {isSoundLoaded ? '✅ Sound Ready' : '⏳ Loading Sound...'}
+          </span>
+          {audioError && (
+            <span className="text-xs text-red-500">
+              ⚠️ {audioError}
+            </span>
+          )}
           <span className="text-xs text-muted-foreground">
             Auto-refresh: 10s
           </span>
@@ -267,7 +419,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
       </div>
     );
   }
-  
+
   // Default fallback
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">

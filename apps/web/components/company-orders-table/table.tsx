@@ -129,7 +129,6 @@ const StatusDropdown = ({
 }: StatusDropdownProps) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isUpdating, setIsUpdating] = React.useState(false);
-  console.log(currentStatus, 'CURR')
   const statuses = ['pending', 'company_accepted', 'driver_accepted',  'preparing', 'ready_for_pickup', 'in_transit', 'delivered', 'completed', 'declined'];
   const currentConfig = ORDER_STATUS_CONFIG[currentStatus?.toLowerCase()];
 
