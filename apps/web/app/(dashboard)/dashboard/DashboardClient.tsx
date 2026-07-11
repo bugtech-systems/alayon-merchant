@@ -20,7 +20,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [isSoundLoaded, setIsSoundLoaded] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
-  const [isLoadingSound, setIsLoadingSound] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -56,54 +55,54 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     }
   });
 
-  // Function to load audio with retry
-  const loadAudio = useCallback((extension: string, retryCount = 0): HTMLAudioElement | null => {
-    try {
-      console.log(`Attempting to load audio (${extension})... Attempt ${retryCount + 1}`);
-      const audio = new Audio(`/notification.wav`);
-      audio.volume = 1.0;
-      audio.preload = 'auto';
-      
-      // Check if audio can be loaded
-      audio.addEventListener('canplaythrough', () => {
-        console.log(`Audio loaded successfully (${extension})`);
-        setIsSoundLoaded(true);
-        setAudioError(null);
-        setIsLoadingSound(false);
-        audioRef.current = audio;
-      });
-      
-      audio.addEventListener('error', (e) => {
-        console.warn(`Failed to load audio (${extension}):`, e);
-        // Try next format
-        const audioExtensions = ['mp3', 'wav', 'ogg'];
-        const currentIndex = audioExtensions.indexOf(extension);
-        if (currentIndex < audioExtensions.length - 1) {
-          loadAudio(audioExtensions[currentIndex + 1], retryCount);
-        } else {
-          setAudioError('No audio format could be loaded');
-          setIsSoundLoaded(false);
-          setIsLoadingSound(false);
-        }
-      });
-      
-      return audio;
-    } catch (error) {
-      console.error(`Error creating audio for ${extension}:`, error);
-      return null;
-    }
-  }, []);
-
   // Initialize audio for notification sound
   useEffect(() => {
-    setIsLoadingSound(true);
-    // Try to load mp3 first
-    const audio = loadAudio('mp3');
+    // Try multiple audio formats for better compatibility
+    const audioExtensions = ['mp3', 'wav', 'ogg'];
+    let currentAudio: HTMLAudioElement | null = null;
+    
+    // Try to load the audio file
+    const loadAudio = (extension: string) => {
+      try {
+        const audio = new Audio(`/notification.${extension}`);
+        audio.volume = 1.0;
+        audio.preload = 'auto';
+        
+        // Check if audio can be loaded
+        audio.addEventListener('canplaythrough', () => {
+          console.log(`Audio loaded successfully (${extension})`);
+          setIsSoundLoaded(true);
+          setAudioError(null);
+          audioRef.current = audio;
+        });
+        
+        audio.addEventListener('error', (e) => {
+          console.warn(`Failed to load audio (${extension}):`, e);
+          // Try next format
+          const currentIndex = audioExtensions.indexOf(extension);
+          if (currentIndex < audioExtensions.length - 1) {
+            loadAudio(audioExtensions[currentIndex + 1]);
+          } else {
+            setAudioError('No audio format could be loaded');
+            setIsSoundLoaded(false);
+          }
+        });
+        
+        return audio;
+      } catch (error) {
+        console.error(`Error creating audio for ${extension}:`, error);
+        return null;
+      }
+    };
+    
+    // Start loading with first format
+    currentAudio = loadAudio(audioExtensions[0]);
     
     return () => {
-      if (audio) {
-        audio.pause();
-        audio.src = '';
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.src = '';
+        currentAudio = null;
       }
       if (audioRef.current) {
         audioRef.current.pause();
@@ -111,65 +110,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
         audioRef.current = null;
       }
     };
-  }, [loadAudio]);
-
-  // Function to manually reload the audio file
-  const handleReloadSound = useCallback(() => {
-    console.log('Manually reloading sound file...');
-    setIsLoadingSound(true);
-    setAudioError(null);
-    setIsSoundLoaded(false);
-    
-    // Clear existing audio
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = '';
-      audioRef.current = null;
-    }
-    
-    // Try loading with a cache-busting parameter
-    const audioExtensions = ['mp3', 'wav', 'ogg'];
-    let currentIndex = 0;
-    
-    const tryLoadNext = () => {
-      if (currentIndex >= audioExtensions.length) {
-        setAudioError('Failed to load any audio format');
-        setIsSoundLoaded(false);
-        setIsLoadingSound(false);
-        return;
-      }
-      
-      const extension = audioExtensions[currentIndex];
-      try {
-        // Add cache-busting query parameter
-        const audio = new Audio(`/notification.wav`);
-        audio.volume = 1.0;
-        audio.preload = 'auto';
-        
-        audio.addEventListener('canplaythrough', () => {
-          console.log(`Audio reloaded successfully (${extension})`);
-          setIsSoundLoaded(true);
-          setAudioError(null);
-          setIsLoadingSound(false);
-          audioRef.current = audio;
-        });
-        
-        audio.addEventListener('error', (e) => {
-          console.warn(`Failed to reload audio (${extension}):`, e);
-          currentIndex++;
-          tryLoadNext();
-        });
-        
-        // Force load
-        audio.load();
-      } catch (error) {
-        console.error(`Error reloading audio for ${extension}:`, error);
-        currentIndex++;
-        tryLoadNext();
-      }
-    };
-    
-    tryLoadNext();
   }, []);
 
   // Update previous order count when data changes
@@ -355,6 +295,70 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     }
   }, [isSoundEnabled, playNotificationSound]);
 
+  // Function to stop any playing notification sound
+  const stopNotificationSound = useCallback(() => {
+    console.log('Stopping notification sound...');
+    
+    // Method 1: Stop the audio element
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        console.log('Audio element stopped and reset');
+      } catch (error) {
+        console.warn('Error stopping audio element:', error);
+      }
+    }
+    
+    // Method 2: Stop any other audio elements that might be playing
+    try {
+      const allAudio = document.querySelectorAll('audio');
+      allAudio.forEach(audio => {
+        if (!audio.paused) {
+          audio.pause();
+          audio.currentTime = 0;
+        }
+      });
+      console.log('All audio elements stopped');
+    } catch (error) {
+      console.warn('Error stopping other audio elements:', error);
+    }
+    
+    // Method 3: Stop Web Speech API
+    if ('speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        console.log('Speech synthesis canceled');
+      } catch (error) {
+        console.warn('Error canceling speech synthesis:', error);
+      }
+    }
+    
+    // Method 4: Stop Web Audio API contexts
+    try {
+      // @ts-ignore - webkitAudioContext may not be recognized
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
+        // Get all audio contexts and close them
+        // Note: This is a simplified approach - in a real app you might track active contexts
+        console.log('Attempting to close audio contexts...');
+      }
+    } catch (error) {
+      console.warn('Error closing audio contexts:', error);
+    }
+  }, []);
+
+  // *** NEW: Handler for print action that stops sound first ***
+  const handlePrint = useCallback((cartData: any) => {
+    console.log('Print action triggered - stopping notification sound...');
+    
+    // Stop any playing notification sound
+    stopNotificationSound();
+    
+    // Then open the print dialog
+    setCartPrint(cartData);
+  }, [stopNotificationSound]);
+
   const handleAssignRider = async (orderId: string, riderId: string | null) => {
     try {
       let response;
@@ -414,7 +418,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
         <PrintDialog open={cartPrint} onOpenChange={setCartPrint} cart={cartPrint} />
         
         {/* Sound control and test buttons */}
-        <div className="flex justify-end items-center gap-3 px-4 flex-wrap">
+        <div className="flex justify-end items-center gap-3 px-4">
           <button
             onClick={handleTestNotification}
             className="text-sm px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md transition-colors"
@@ -422,19 +426,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           >
             🔊 Test Sound
           </button>
-          
-          {/* Reload button - only show when sound fails to load */}
-          {audioError && (
-            <button
-              onClick={handleReloadSound}
-              disabled={isLoadingSound}
-              className="text-sm px-3 py-1 bg-yellow-100 hover:bg-yellow-200 text-yellow-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label="Reload sound file"
-            >
-              {isLoadingSound ? '⏳ Loading...' : '🔄 Reload Sound'}
-            </button>
-          )}
-          
           <button
             onClick={toggleSound}
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -442,18 +433,14 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           >
             {isSoundEnabled ? '🔊 Sound On' : '🔇 Sound Off'}
           </button>
-          
           <span className="text-xs text-muted-foreground">
-            {isLoadingSound ? '⏳ Loading Sound...' : 
-             isSoundLoaded ? '✅ Sound Ready' : '❌ Sound Failed'}
+            {isSoundLoaded ? '✅ Sound Ready' : '⏳ Loading Sound...'}
           </span>
-          
           {audioError && (
             <span className="text-xs text-red-500">
               ⚠️ {audioError}
             </span>
           )}
-          
           <span className="text-xs text-muted-foreground">
             Auto-refresh: 10s
           </span>
@@ -473,7 +460,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           enableDragDrop={true}
           enableColumnVisibility={true}
           enableRowSelection={true}
-          onPrint={setCartPrint}
+          onPrint={handlePrint}
         />
       </div>
     );

@@ -1,37 +1,19 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Package transpilation
   transpilePackages: ["@workspace/ui"],
   
+  // Image optimization
   images: {
     unoptimized: true,
     remotePatterns: [
-      {
-        protocol: "http",
-        hostname: "localhost",
-      },
       {
         protocol: "https",
         hostname: "medusa-public-images.s3.eu-west-1.amazonaws.com",
       },
       {
         protocol: "https",
-        hostname: "medusa-server-testing.s3.amazonaws.com",
-      },
-      {
-        protocol: "https",
-        hostname: "medusa-server-testing.s3.us-east-1.amazonaws.com",
-      },
-      {
-        protocol: "https",
-        hostname: "github.com",
-      },
-      {
-        protocol: "https",
         hostname: "*.s3.*.amazonaws.com",
-      },
-      {
-        protocol: "https",
-        hostname: "*.s3.amazonaws.com",
       },
       {
         protocol: "https",
@@ -44,72 +26,97 @@ const nextConfig = {
     ],
   },
   
-  // Development-only settings
+  // Local network development
   ...(process.env.NODE_ENV !== 'production' && {
-    allowedDevOrigins: ['192.168.1.140', '192.168.1.120', 'localhost', '127.0.0.1', 'sharewin.pro', 'alayon.store'],
+    allowedDevOrigins: [
+      'localhost',
+      '127.0.0.1',
+      '192.168.1.*',  // Allow all local network IPs
+      '*.local',      // Allow mDNS domains
+      'alayon.local',
+      'sharewin.pro',
+      'alayon.store',
+    ],
   }),
   
   // API proxy to backend
   async rewrites() {
+    const backendUrl = process.env.NEXT_PUBLIC_MEDUSA_URL || 'https://api.sharewin.pro';
     return [
       {
         source: '/api/:path*',
-        destination: 'https://api.sharewin.pro/:path*',
+        destination: `${backendUrl}/:path*`,
       },
     ];
   },
   
-  // Headers configuration
+  // CORS and Security Headers
   async headers() {
     const isProduction = process.env.NODE_ENV === 'production';
-    
-    const corsHeaders = isProduction 
-      ? [
-          { key: 'Access-Control-Allow-Credentials', value: 'true' },
-          { key: 'Access-Control-Allow-Origin', value: 'https://admin.alayon.store' },
-          { key: 'Access-Control-Allow-Methods', value: 'GET,DELETE,PATCH,POST,PUT,OPTIONS' },
-          { key: 'Access-Control-Allow-Headers', value: 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization' },
-        ]
-      : [
-          { key: 'Access-Control-Allow-Credentials', value: 'true' },
-          { key: 'Access-Control-Allow-Origin', value: '*' },
-          { key: 'Access-Control-Allow-Methods', value: 'GET,DELETE,PATCH,POST,PUT,OPTIONS' },
-          { key: 'Access-Control-Allow-Headers', value: '*' },
-        ];
-    
-    const securityHeaders = isProduction ? [
-      { key: 'X-Content-Type-Options', value: 'nosniff' },
-      { key: 'X-Frame-Options', value: 'DENY' },
-      { key: 'X-XSS-Protection', value: '1; mode=block' },
-      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-    ] : [];
+    const allowedOrigins = isProduction 
+      ? ['https://admin.alayon.store', 'https://alayon.store']
+      : ['*'];
     
     return [
       {
         source: '/:path*',
-        headers: [...corsHeaders, ...securityHeaders],
+        headers: [
+          // CORS
+          {
+            key: 'Access-Control-Allow-Credentials',
+            value: 'true',
+          },
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: allowedOrigins[0],
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET,DELETE,PATCH,POST,PUT,OPTIONS',
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization',
+          },
+          // Security headers (production only)
+          ...(isProduction ? [
+            {
+              key: 'X-Content-Type-Options',
+              value: 'nosniff',
+            },
+            {
+              key: 'X-Frame-Options',
+              value: 'DENY',
+            },
+            {
+              key: 'X-XSS-Protection',
+              value: '1; mode=block',
+            },
+            {
+              key: 'Referrer-Policy',
+              value: 'strict-origin-when-cross-origin',
+            },
+          ] : []),
+        ],
       },
     ];
   },
-  
-  // CRITICAL FIX: Add empty turbopack config
-  turbopack: {},
   
   // Build optimizations
   swcMinify: true,
   compress: true,
   poweredByHeader: false,
-  trailingSlash: false,
   
   typescript: {
     ignoreBuildErrors: true,
   },
   
+  // Experimental features
   experimental: {
     outputFileTracingExcludes: {
       '*': ['./**/api/**/*'],
     },
   },
-}
+};
 
-export default nextConfig
+export default nextConfig;
