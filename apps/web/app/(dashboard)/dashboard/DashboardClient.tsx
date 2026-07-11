@@ -60,7 +60,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   const loadAudio = useCallback((extension: string, retryCount = 0): HTMLAudioElement | null => {
     try {
       console.log(`Attempting to load audio (${extension})... Attempt ${retryCount + 1}`);
-      const audio = new Audio(`/notification.${extension}`);
+      const audio = new Audio(`/notification.wav`);
       audio.volume = 1.0;
       audio.preload = 'auto';
       
@@ -142,7 +142,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
       const extension = audioExtensions[currentIndex];
       try {
         // Add cache-busting query parameter
-        const audio = new Audio(`/notification.mp3`);
+        const audio = new Audio(`/notification.wav`);
         audio.volume = 1.0;
         audio.preload = 'auto';
         
