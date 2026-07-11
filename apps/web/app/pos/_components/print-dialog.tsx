@@ -1,5 +1,5 @@
-// components/PrintDialog.jsx
-'use client';
+// components/PrintDialog.tsx
+"use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
@@ -20,7 +20,6 @@ import {
 } from '@/components/ui/select';
 import { 
   Receipt, 
-  Smartphone, 
   Ruler, 
   Copy, 
   Scissors, 
@@ -28,13 +27,8 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
-  RefreshCw,
-  Package,
-  Truck,
-  Users,
   Bluetooth,
   BluetoothConnected,
-  AlertTriangle
 } from 'lucide-react';
 import { ReceiptBuilder, generateReceiptPreview } from './ReceiptBuilder';
 import { PrinterManager, ChunkedTransmission } from './PrintManager';
@@ -91,7 +85,7 @@ const transformOrderData = (cart: any, region: any) => {
     display_id: cart?.display_id || cart?.id || '1001',
     created_at: cart?.created_at || new Date().toISOString(),
     status: cart?.status || 'completed',
-    currency_code: region?.currency_code || 'php',
+    currency_code: region?.currency_code || 'PHP',
     customer,
     items,
     shipping: shipping ? {
@@ -140,10 +134,11 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
   const [receiptPreview, setReceiptPreview] = useState<string>('');
   
   // Printer connection state
-  const [printerManager, setPrinterManager] = useState<any>(null);
-  const [transmitter, setTransmitter] = useState<any>(null);
+  const [printerManager, setPrinterManager] = useState<PrinterManager | null>(null);
+  const [transmitter, setTransmitter] = useState<ChunkedTransmission | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [deviceName, setDeviceName] = useState<string>('');
+  const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
 
   const PRINTER_CONFIG = {
     serviceUUID: '000018f0-0000-1000-8000-00805f9b34fb',
@@ -177,6 +172,14 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
       const transmitter = new ChunkedTransmission(manager, 80);
       setTransmitter(transmitter);
       
+      // Get battery level if available
+      try {
+        const battery = await manager.getBatteryLevel();
+        setBatteryLevel(battery);
+      } catch {
+        // Battery reading not critical
+      }
+      
       setPrintStatus({ type: 'idle', message: 'Printer connected successfully!' });
       setTimeout(() => {
         setPrintStatus({ type: 'idle', message: '' });
@@ -198,6 +201,7 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
     }
     setIsConnected(false);
     setDeviceName('');
+    setBatteryLevel(null);
     setPrintStatus({ type: 'idle', message: '' });
   };
 
@@ -267,9 +271,6 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
       });
       
       const receiptData = builder.build(orderData);
-      
-      // Set chunk size
-      transmitter.chunkSize = 80;
       
       // Send to printer
       await transmitter.send(receiptData);
@@ -391,6 +392,21 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
                   </Button>
                 )}
               </div>
+              {batteryLevel !== null && isConnected && (
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="text-xs text-gray-500">Battery:</span>
+                  <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full ${
+                        batteryLevel > 50 ? 'bg-green-500' : 
+                        batteryLevel > 20 ? 'bg-yellow-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${batteryLevel}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-500">{batteryLevel}%</span>
+                </div>
+              )}
               {!isConnected && (
                 <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
                   Connect your Bluetooth printer before printing
@@ -415,9 +431,7 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
                   <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
                 ) : printStatus.type === 'connecting' || printStatus.type === 'printing' ? (
                   <Loader2 className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0 animate-spin" />
-                ) : (
-                  <AlertTriangle className="h-4 w-4 text-gray-600 mt-0.5 flex-shrink-0" />
-                )}
+                ) : null}
                 <p className={`text-sm ${
                   printStatus.type === 'success' 
                     ? 'text-green-700 dark:text-green-300' 
@@ -462,7 +476,6 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
                 {/* Order Summary */}
                 <div className="rounded-lg border p-3 space-y-2 bg-gray-50 dark:bg-gray-900/50">
                   <p className="font-medium text-sm flex items-center gap-2">
-                    <Package className="h-4 w-4" />
                     Order Summary
                   </p>
                   <div className="grid grid-cols-2 gap-1 text-sm">
@@ -480,7 +493,9 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
                     <span className="font-medium">{orderData.payment?.method || 'N/A'}</span>
                     
                     <span className="text-muted-foreground">Total:</span>
-                    <span className="font-medium text-blue-600">₱{orderData.totals.total.toFixed(2)}</span>
+                    <span className="font-medium text-blue-600">
+                      {orderData.currency_code} {orderData.totals.total.toFixed(2)}
+                    </span>
                   </div>
                 </div>
 
@@ -564,7 +579,7 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Package className="h-4 w-4 text-muted-foreground" />
+                      <Receipt className="h-4 w-4 text-muted-foreground" />
                       <Label htmlFor="print-kitchen" className="text-sm">Kitchen Ticket</Label>
                     </div>
                     <Switch
@@ -578,7 +593,7 @@ export function PrintDialog({ open, onOpenChange, cart, receiptData, region }: P
 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-muted-foreground" />
+                      <Receipt className="h-4 w-4 text-muted-foreground" />
                       <Label htmlFor="print-customer" className="text-sm">Customer Copy</Label>
                     </div>
                     <Switch

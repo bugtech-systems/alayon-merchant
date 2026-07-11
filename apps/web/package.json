@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "next dev -p 3005 --turbopack",
     "build": "next build",
+    "start": "next start -H 0.0.0.0 -p 3005",
+    "dev:https": "next dev -H 0.0.0.0 -p 3005 --experimental-https",
     "build:debug": "NODE_OPTIONS='--max-old-space-size=512' next build --debug",
-    "start": "next start -p 3005",
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit"
