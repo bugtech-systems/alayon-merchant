@@ -1,71 +1,41 @@
-// app/customers/page.tsx (Server Component)
-import { Suspense } from 'react';
-import { CustomersClient } from '@/components/customers/customers-client';
-import { listCustomerGroupCustomers } from '@/lib/data/customer';
-import { CustomerTableSkeleton } from '@/components/ui/table-skeleton';
-import { retrieveUser } from '@/lib/data';
-
-interface PageProps {
-  searchParams: Promise<{
-    page?: string;
-    limit?: string;
-    sort?: string;
-    order?: string;
-    search?: string;
-    [key: string]: string | undefined;
-  }>;
-}
-
-export default async function CustomersPage({ searchParams }: PageProps) {
-  const params = await searchParams;
-  const user = await retrieveUser()
-  const page = parseInt(params.page || '1');
-  const limit = parseInt(params.limit || '10');
-  const sortField = params.sort || 'created_at';
-  const sortOrder = (params.order || 'desc') as 'asc' | 'desc';
-  const searchTerm = params.search || '';
-  
-    console.log(user, 'USER')
-  const customerGroupId = user?.metadata?.role === 'company' 
-    ? user.employee?.company?.customer_group_id 
-    : user?.driver?.customer_group_id;
-    console.log(user, 'USER', customerGroupId)
-
-  // Extract filters from search params (excluding pagination/sort params)
-  const filters: Record<string, any> = {};
-  const excludeParams = ['page', 'limit', 'sort', 'order', 'search'];
-  Object.keys(params).forEach(key => {
-    if (!excludeParams.includes(key) && params[key]) {
-      filters[key] = params[key];
-    }
-  });
-
-  // Fetch initial data on the server
-  const initialData = await listCustomerGroupCustomers(customerGroupId);
+import { CustomerRow } from "@/components/customers-table/schema";
+import { retrieveUser } from "@/lib/data";
+import { retrieveCustomer } from "@/lib/actions";
+import { toast } from "sonner";
+import { CustomerCreateForm } from "@/components/forms/customer-create-form";
+import { OrderDeliveryTable } from "@/components/orders-table/table";
+import { CustomerTable } from "@/components/customers-table/table";
 
 
-  console.log(initialData, 'INITIAL')
+
+
+export default async function CustomersPage() {
+  const user = await retrieveUser();
+
+
 
   return (
-    <div className="container mx-auto py-10 px-4 sm:px-6 lg:px-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Customers</h1>
-        <p className="text-muted-foreground mt-2">
-          Manage and view all your customers
-        </p>
+    <div className="container mx-auto py-6 space-y-6">
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Customers</h1>
+          <p className="text-muted-foreground mt-1">
+            Manage your customer base, view order history, and track engagement
+          </p>
+        </div>
       </div>
+<CustomerTable user={user}/>
+      {/* Customer Table */}
+      {/* <OrderDeliveryTable
+          webhookBaseUrl={process.env.NEXT_PUBLIC_N8N_WEBHOOK_BASE + '/Webhook' || ""}
+          onAssignRider={handleAssignRider}
+          onUpdateStatus={handleUpdateStatus}
+          onAddOrder={handleAddOrder}
+          onContactRider={handleContactRider}
+          refreshInterval={30000}
+      /> */}
 
-      <Suspense fallback={<CustomerTableSkeleton />}>
-        <CustomersClient 
-          initialData={initialData}
-          initialPage={page}
-          initialLimit={limit}
-          initialSort={sortField}
-          initialOrder={sortOrder}
-          initialSearch={searchTerm}
-          initialFilters={filters}
-        />
-      </Suspense>
     </div>
   );
 }

@@ -57,8 +57,8 @@ export async function updatePosOrderStatus(orderId: string, status: string) {
 
 export async function deletePosOrder(orderId: string) {
   try {
-    await adminFetch(`/admin/orders/${orderId}`, {
-      method: 'DELETE',
+    await adminFetch(`/admin/orders/${orderId}/cancel`, {
+      method: 'POST',
     });
     
     revalidatePath('/orders');

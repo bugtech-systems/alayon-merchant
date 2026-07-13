@@ -5,6 +5,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { retrieveUser } from "@/lib/data";
 import { getTodayOrdersSummary } from "@/lib/data/pos";
+import { redirect } from "next/navigation";
 
 // This is a Server Component by default (no "use client" directive)
 export const metadata = {
@@ -19,9 +20,13 @@ interface PosLayoutProps {
 export default async function PosLayout({ children }: PosLayoutProps) {
     const user = await retrieveUser();
 
+    // Redirect to login if no user is found
+    if (!user) {
+        redirect("/login");
+    }
+
     const data = await getTodayOrdersSummary(user);
 
-    console.log(data, 'dadada')
   return (
       <Suspense fallback={<Spinner />}>
         <TooltipProvider>

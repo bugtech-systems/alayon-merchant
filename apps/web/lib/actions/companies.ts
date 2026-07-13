@@ -447,7 +447,6 @@ export async function getCompanyCustomers(
     let total = response.count || 0
 
 
-    console.log(response, 'RESPPonse')
 
 
     // Apply pagination after filtering

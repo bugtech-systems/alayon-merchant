@@ -1,5 +1,4 @@
 // components/transactions/transactions-client.tsx
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -49,6 +48,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 import {
   ChevronLeft,
   ChevronRight,
@@ -58,6 +59,7 @@ import {
   Edit2,
   Wallet,
   TrendingDown,
+  TrendingUp,
   Package,
   FolderOpen,
   Calendar as CalendarIcon,
@@ -65,12 +67,22 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronUp,
-  Eye,
-  EyeOff,
+  Users,
+  Building2,
+  Banknote,
+  Receipt,
+  FileText,
+  AlertCircle,
   RefreshCw,
+  Filter,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { createTransaction, listTransactions, updateTransaction, deleteTransaction } from '@/lib/actions/transactions';
+import { 
+  createTransaction, 
+  listTransactions, 
+  updateTransaction, 
+  deleteTransaction 
+} from '@/lib/actions/transactions';
 import type { Transaction, TransactionCategory } from '@/types/transactions';
 
 // ============================================
@@ -81,8 +93,31 @@ const ITEMS_PER_PAGE = 10;
 
 const TRANSACTION_TYPES = [
   { value: 'expense', label: 'Expense', icon: <TrendingDown className="h-4 w-4" />, color: 'text-red-500' },
-  { value: 'bad_order', label: 'Bad Order', icon: <Package className="h-4 w-4" />, color: 'text-yellow-500' },
-  { value: 'other', label: 'Other', icon: <Wallet className="h-4 w-4" />, color: 'text-blue-500' },
+  { value: 'income', label: 'Income', icon: <TrendingUp className="h-4 w-4" />, color: 'text-green-500' },
+  { value: 'transfer', label: 'Transfer', icon: <Banknote className="h-4 w-4" />, color: 'text-blue-500' },
+  { value: 'adjustment', label: 'Adjustment', icon: <AlertCircle className="h-4 w-4" />, color: 'text-yellow-500' },
+];
+
+const TRANSACTION_CATEGORIES = [
+  { value: 'operating', label: 'Operating', icon: <FileText className="h-4 w-4" /> },
+  { value: 'capital', label: 'Capital', icon: <Building2 className="h-4 w-4" /> },
+  { value: 'payroll', label: 'Payroll', icon: <Users className="h-4 w-4" /> },
+  { value: 'tax', label: 'Tax', icon: <Receipt className="h-4 w-4" /> },
+  { value: 'other', label: 'Other', icon: <Wallet className="h-4 w-4" /> },
+];
+
+const PAYMENT_METHODS = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'check', label: 'Check' },
+  { value: 'credit_card', label: 'Credit Card' },
+  { value: 'other', label: 'Other' },
+];
+
+const TRANSACTION_STATUS = [
+  { value: 'pending', label: 'Pending', variant: 'warning' as const },
+  { value: 'completed', label: 'Completed', variant: 'success' as const },
+  { value: 'cancelled', label: 'Cancelled', variant: 'destructive' as const },
 ];
 
 const CATEGORY_COLORS = [
@@ -94,10 +129,16 @@ const CATEGORY_COLORS = [
 const ICON_MAP: Record<string, React.ReactNode> = {
   wallet: <Wallet className="h-4 w-4" />,
   expense: <TrendingDown className="h-4 w-4" />,
+  income: <TrendingUp className="h-4 w-4" />,
   package: <Package className="h-4 w-4" />,
+  users: <Users className="h-4 w-4" />,
+  building: <Building2 className="h-4 w-4" />,
+  banknote: <Banknote className="h-4 w-4" />,
+  receipt: <Receipt className="h-4 w-4" />,
+  file: <FileText className="h-4 w-4" />,
 };
 
-const AVAILABLE_ICONS = ['wallet', 'expense', 'package'];
+const AVAILABLE_ICONS = ['wallet', 'expense', 'income', 'package', 'users', 'building', 'banknote', 'receipt', 'file'];
 
 // ============================================
 // LOCAL STORAGE HELPERS
@@ -165,14 +206,23 @@ const TransactionForm = ({
     amount: transaction?.amount?.toString() || '',
     description: transaction?.description || '',
     type: transaction?.type || 'expense',
+    category: transaction?.category || 'operating',
     category_id: transaction?.category_id || '',
     date: transaction?.date ? format(new Date(transaction.date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+    payment_method: transaction?.payment_method || 'cash',
+    status: transaction?.status || 'pending',
+    reference_number: transaction?.reference_number || '',
+    notes: transaction?.notes || '',
+    is_taxable: transaction?.is_taxable || false,
+    tax_amount: transaction?.tax_amount?.toString() || '',
+    is_reconciled: transaction?.is_reconciled || false,
   });
 
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryIcon, setNewCategoryIcon] = useState('wallet');
   const [newCategoryColor, setNewCategoryColor] = useState(CATEGORY_COLORS[0]);
+  const [newCategoryType, setNewCategoryType] = useState<'income' | 'expense' | 'transfer'>('expense');
 
   const handleAddNewCategory = () => {
     if (!newCategoryName.trim()) return;
@@ -181,6 +231,7 @@ const TransactionForm = ({
     const category: TransactionCategory = {
       id: newCategoryName.trim(),
       name: newCategoryName.trim(),
+      type: newCategoryType,
       icon: newCategoryIcon,
       color: newCategoryColor,
       created_at: new Date().toISOString(),
@@ -199,7 +250,7 @@ const TransactionForm = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto px-1">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Amount *</Label>
@@ -239,31 +290,55 @@ const TransactionForm = ({
         />
       </div>
 
-      <div className="space-y-2">
-        <Label>Type *</Label>
-        <Select
-          value={formData.type}
-          onValueChange={(value) => setFormData({ ...formData, type: value })}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select type" />
-          </SelectTrigger>
-          <SelectContent>
-            {TRANSACTION_TYPES.map((type, index) => (
-              <SelectItem key={type.value + index} value={type.value}>
-                <div className="flex items-center gap-2">
-                  {type.icon}
-                  {type.label}
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Type *</Label>
+          <Select
+            value={formData.type}
+            onValueChange={(value) => setFormData({ ...formData, type: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select type" />
+            </SelectTrigger>
+            <SelectContent>
+              {TRANSACTION_TYPES.map((type) => (
+                <SelectItem key={type.value} value={type.value}>
+                  <div className="flex items-center gap-2">
+                    {type.icon}
+                    {type.label}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Category *</Label>
+          <Select
+            value={formData.category}
+            onValueChange={(value) => setFormData({ ...formData, category: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select category" />
+            </SelectTrigger>
+            <SelectContent>
+              {TRANSACTION_CATEGORIES.map((cat) => (
+                <SelectItem key={cat.value} value={cat.value}>
+                  <div className="flex items-center gap-2">
+                    {cat.icon}
+                    {cat.label}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label>Category</Label>
+          <Label>Sub-Category</Label>
           <Button
             type="button"
             variant="ghost"
@@ -272,21 +347,36 @@ const TransactionForm = ({
             onClick={() => setShowNewCategory(!showNewCategory)}
           >
             <Plus className="h-3 w-3 mr-1" />
-            New Category
+            New Sub-Category
           </Button>
         </div>
 
         {showNewCategory && (
           <div className="space-y-2 p-3 border rounded-md bg-muted/30">
             <Input
-              placeholder="Category name"
+              placeholder="Sub-category name"
               value={newCategoryName}
               onChange={(e) => setNewCategoryName(e.target.value)}
               className="h-8"
             />
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2">
+              <Select value={newCategoryType} onValueChange={(value: any) => setNewCategoryType(value)}>
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TRANSACTION_TYPES.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      <div className="flex items-center gap-2">
+                        {type.icon}
+                        {type.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Select value={newCategoryIcon} onValueChange={setNewCategoryIcon}>
-                <SelectTrigger className="w-24 h-8">
+                <SelectTrigger className="h-8">
                   <SelectValue placeholder="Icon" />
                 </SelectTrigger>
                 <SelectContent>
@@ -300,8 +390,10 @@ const TransactionForm = ({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex gap-2">
               <Select value={newCategoryColor} onValueChange={setNewCategoryColor}>
-                <SelectTrigger className="w-24 h-8">
+                <SelectTrigger className="flex-1 h-8">
                   <SelectValue placeholder="Color" />
                 </SelectTrigger>
                 <SelectContent>
@@ -326,7 +418,7 @@ const TransactionForm = ({
           onValueChange={(value) => setFormData({ ...formData, category_id: value === 'none' ? '' : value })}
         >
           <SelectTrigger>
-            <SelectValue placeholder="Select category" />
+            <SelectValue placeholder="Select sub-category" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="none">None</SelectItem>
@@ -341,6 +433,103 @@ const TransactionForm = ({
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Payment Method</Label>
+          <Select
+            value={formData.payment_method}
+            onValueChange={(value) => setFormData({ ...formData, payment_method: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select method" />
+            </SelectTrigger>
+            <SelectContent>
+              {PAYMENT_METHODS.map((method) => (
+                <SelectItem key={method.value} value={method.value}>
+                  {method.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Status</Label>
+          <Select
+            value={formData.status}
+            onValueChange={(value) => setFormData({ ...formData, status: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent>
+              {TRANSACTION_STATUS.map((status) => (
+                <SelectItem key={status.value} value={status.value}>
+                  {status.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Reference Number</Label>
+        <Input
+          placeholder="Invoice/Reference number"
+          value={formData.reference_number}
+          onChange={(e) => setFormData({ ...formData, reference_number: e.target.value })}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="is_taxable"
+            checked={formData.is_taxable}
+            onCheckedChange={(checked) => setFormData({ ...formData, is_taxable: checked as boolean })}
+          />
+          <Label htmlFor="is_taxable" className="text-sm font-normal">Taxable</Label>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="is_reconciled"
+            checked={formData.is_reconciled}
+            onCheckedChange={(checked) => setFormData({ ...formData, is_reconciled: checked as boolean })}
+          />
+          <Label htmlFor="is_reconciled" className="text-sm font-normal">Reconciled</Label>
+        </div>
+      </div>
+
+      {formData.is_taxable && (
+        <div className="space-y-2">
+          <Label>Tax Amount</Label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">₱</span>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="0.00"
+              value={formData.tax_amount}
+              onChange={(e) => setFormData({ ...formData, tax_amount: e.target.value })}
+              className="pl-8"
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label>Notes</Label>
+        <Textarea
+          placeholder="Additional notes..."
+          value={formData.notes}
+          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+          rows={2}
+        />
       </div>
 
       <DialogFooter>
@@ -387,13 +576,41 @@ const TransactionsTable = ({
   const getCategory = (id: string) => categories.find((c) => c.id === id);
 
   const TransactionTypeBadge = ({ type }: { type: string }) => {
-    const config: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+    const config: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' }> = {
       expense: { label: 'Expense', variant: 'secondary' },
-      bad_order: { label: 'Bad Order', variant: 'destructive' },
-      other: { label: 'Other', variant: 'outline' },
+      income: { label: 'Income', variant: 'success' },
+      transfer: { label: 'Transfer', variant: 'outline' },
+      adjustment: { label: 'Adjustment', variant: 'warning' },
     };
-    const { label, variant } = config[type] || config.other;
-    return <Badge variant={variant} className="text-xs">{label}</Badge>;
+    const { label, variant } = config[type] || config.expense;
+    return <Badge variant={variant as any} className="text-xs">{label}</Badge>;
+  };
+
+  const StatusBadge = ({ status }: { status?: string }) => {
+    const config: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' }> = {
+      pending: { label: 'Pending', variant: 'warning' },
+      completed: { label: 'Completed', variant: 'success' },
+      cancelled: { label: 'Cancelled', variant: 'destructive' },
+    };
+    const { label, variant } = status ? config[status] : config.pending;
+    return <Badge variant={variant as any} className="text-xs">{label}</Badge>;
+  };
+
+  const CategoryBadge = ({ category }: { category?: string }) => {
+    const config: Record<string, { label: string; color: string }> = {
+      operating: { label: 'Operating', color: 'bg-blue-500' },
+      capital: { label: 'Capital', color: 'bg-purple-500' },
+      payroll: { label: 'Payroll', color: 'bg-green-500' },
+      tax: { label: 'Tax', color: 'bg-red-500' },
+      other: { label: 'Other', color: 'bg-gray-500' },
+    };
+    const { label, color } = category ? config[category] : config.other;
+    return (
+      <Badge variant="outline" className="gap-1 text-xs">
+        <span className={cn("w-1.5 h-1.5 rounded-full", color)} />
+        {label}
+      </Badge>
+    );
   };
 
   if (isMobile) {
@@ -407,6 +624,8 @@ const TransactionsTable = ({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <TransactionTypeBadge type={transaction.type} />
+                    <CategoryBadge category={transaction.category} />
+                    {transaction.status && <StatusBadge status={transaction.status} />}
                     {category && (
                       <Badge variant="outline" className="gap-1 text-xs">
                         <span className={cn("w-1.5 h-1.5 rounded-full", category.color)} />
@@ -416,10 +635,23 @@ const TransactionsTable = ({
                     )}
                   </div>
                   <p className="font-medium text-sm mt-1 truncate">{transaction.description}</p>
+                  {transaction.reference_number && (
+                    <p className="text-xs text-muted-foreground">Ref: {transaction.reference_number}</p>
+                  )}
                 </div>
-                <span className="text-lg font-bold ml-2 flex-shrink-0">
-                  ₱{Number(transaction.amount).toFixed(2)}
-                </span>
+                <div className="text-right flex-shrink-0 ml-2">
+                  <span className={cn(
+                    "text-lg font-bold",
+                    transaction.type === 'income' ? 'text-green-600' : 
+                    transaction.type === 'expense' ? 'text-red-600' : 
+                    'text-blue-600'
+                  )}>
+                    {transaction.type === 'income' ? '+' : '-'}₱{Number(transaction.amount).toFixed(2)}
+                  </span>
+                  {transaction.is_taxable && (
+                    <p className="text-xs text-muted-foreground">+ Tax: ₱{Number(transaction.tax_amount || 0).toFixed(2)}</p>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center justify-between text-sm text-muted-foreground">
@@ -427,23 +659,28 @@ const TransactionsTable = ({
                   <CalendarIcon className="h-3.5 w-3.5" />
                   {format(new Date(transaction.created_at), 'MMM dd, yyyy')}
                 </span>
-                <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => onEdit(transaction)}
-                  >
-                    <Edit2 className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-destructive hover:text-destructive"
-                    onClick={() => onDelete(transaction)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                <div className="flex items-center gap-2">
+                  {transaction.payment_method && (
+                    <span className="text-xs capitalize">{transaction.payment_method.replace('_', ' ')}</span>
+                  )}
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => onEdit(transaction)}
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={() => onDelete(transaction)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -463,6 +700,7 @@ const TransactionsTable = ({
               <TableHead className="text-xs font-medium">Description</TableHead>
               <TableHead className="text-xs font-medium">Type</TableHead>
               <TableHead className="text-xs font-medium">Category</TableHead>
+              <TableHead className="text-xs font-medium">Status</TableHead>
               <TableHead className="text-xs font-medium text-right">Amount</TableHead>
               <TableHead className="text-xs font-medium text-right">Actions</TableHead>
             </TableRow>
@@ -475,25 +713,48 @@ const TransactionsTable = ({
                   <TableCell className="text-sm">
                     {format(new Date(transaction.created_at), 'MMM dd, yyyy')}
                   </TableCell>
-                  <TableCell className="font-medium text-sm max-w-[200px] truncate">
-                    {transaction.description}
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span className="font-medium text-sm max-w-[200px] truncate">
+                        {transaction.description}
+                      </span>
+                      {transaction.reference_number && (
+                        <span className="text-xs text-muted-foreground">Ref: {transaction.reference_number}</span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <TransactionTypeBadge type={transaction.type} />
                   </TableCell>
                   <TableCell>
-                    {category ? (
-                      <Badge variant="outline" className="gap-1 text-xs">
-                        <span className={cn("w-1.5 h-1.5 rounded-full", category.color)} />
-                        {ICON_MAP[category.icon || 'wallet']}
-                        {category.name}
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
+                    <div className="flex flex-col gap-1">
+                      <CategoryBadge category={transaction.category} />
+                      {category && (
+                        <Badge variant="outline" className="gap-1 text-xs w-fit">
+                          <span className={cn("w-1.5 h-1.5 rounded-full", category.color)} />
+                          {ICON_MAP[category.icon || 'wallet']}
+                          {category.name}
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
-                  <TableCell className="text-right font-semibold text-sm">
-                    ₱{Number(transaction.amount).toFixed(2)}
+                  <TableCell>
+                    {transaction.status && <StatusBadge status={transaction.status} />}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex flex-col items-end">
+                      <span className={cn(
+                        "font-semibold text-sm",
+                        transaction.type === 'income' ? 'text-green-600' : 
+                        transaction.type === 'expense' ? 'text-red-600' : 
+                        'text-blue-600'
+                      )}>
+                        {transaction.type === 'income' ? '+' : '-'}₱{Number(transaction.amount).toFixed(2)}
+                      </span>
+                      {transaction.is_taxable && (
+                        <span className="text-xs text-muted-foreground">Tax: ₱{Number(transaction.tax_amount || 0).toFixed(2)}</span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -567,6 +828,11 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>(getInitialDateRange());
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(loadBreakdownVisibility());
+  const [filters, setFilters] = useState({
+    type: searchParams.get('type') || 'all',
+    category: searchParams.get('category') || 'all',
+    status: searchParams.get('status') || 'all',
+  });
 
   // Dialog states
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -592,23 +858,19 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
     saveBreakdownVisibility(showBreakdown);
   }, [showBreakdown]);
 
-  // Update URL with date range
-  const updateUrlParams = useCallback((from: Date | null, to: Date | null) => {
-    const params = new URLSearchParams(searchParams.toString());
+  // Update URL with filters
+  const updateUrlParams = useCallback((params: Record<string, any>) => {
+    const urlParams = new URLSearchParams(searchParams.toString());
 
-    if (from) {
-      params.set('date_from', from.toISOString().split('T')[0]);
-    } else {
-      params.delete('date_from');
-    }
+    Object.entries(params).forEach(([key, value]) => {
+      if (value && value !== 'all') {
+        urlParams.set(key, value);
+      } else {
+        urlParams.delete(key);
+      }
+    });
 
-    if (to) {
-      params.set('date_to', to.toISOString().split('T')[0]);
-    } else {
-      params.delete('date_to');
-    }
-
-    router.push(`${pathname}?${params.toString()}`);
+    router.push(`${pathname}?${urlParams.toString()}`);
   }, [router, pathname, searchParams]);
 
   // Fetch transactions
@@ -616,19 +878,17 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
     const pageNum = page || currentPage;
     const offset = (pageNum - 1) * ITEMS_PER_PAGE;
 
-    const filters: Record<string, any> = {};
-    if (dateRange.from) filters.date_from = dateRange.from.toISOString();
-    if (dateRange.to) filters.date_to = dateRange.to.toISOString();
-    if (user?.id) filters.customer_id = user.id;
+    const queryFilters: Record<string, any> = {};
+    if (dateRange.from) queryFilters.date_from = dateRange.from.toISOString();
+    if (dateRange.to) queryFilters.date_to = dateRange.to.toISOString();
+    if (filters.type && filters.type !== 'all') queryFilters.type = filters.type;
+    if (filters.category && filters.category !== 'all') queryFilters.category = filters.category;
+    if (filters.status && filters.status !== 'all') queryFilters.status = filters.status;
+    if (user?.id) queryFilters.customer_id = user.id;
 
     setIsLoading(true);
     try {
-      const response = await listTransactions(ITEMS_PER_PAGE, offset, filters);
-
-      console.log(response.transactions, 'TRANSS')
-
-
-
+      const response = await listTransactions(ITEMS_PER_PAGE, offset, queryFilters);
 
       setTransactions(response.transactions || []);
       setTotalCount(response.count || 0);
@@ -640,38 +900,38 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, dateRange, user]);
+  }, [currentPage, dateRange, filters, user]);
 
-  // Fetch when date range changes
+  // Fetch when filters change
   useEffect(() => {
-     fetchTransactions(1);
+    fetchTransactions(1);
+    setCurrentPage(1);
+  }, [dateRange, filters.type, filters.category, filters.status]);
 
-  }, [dateRange]);
-
-   useEffect(() => {
-    if(transactions.length && !categories.length){
+  useEffect(() => {
+    if (transactions.length && !categories.length) {
       const uniqueCategories = [...new Set(
         transactions
           .filter((a: any) => a.category_id)
           .map((a: any) => a.category_id.trim())
       )];
 
-          let transCat = uniqueCategories.map((categoryId: string) => {
-          let number = Math.floor(Math.random() * 12) + 1;
-          return {
-            id: categoryId,
-            name: categoryId,
-            icon: 'wallet',
-            color: CATEGORY_COLORS[number],
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          } as TransactionCategory;
-        });
+      let transCat = uniqueCategories.map((categoryId: string) => {
+        let number = Math.floor(Math.random() * 12) + 1;
+        return {
+          id: categoryId,
+          name: categoryId,
+          type: 'expense' as const,
+          icon: 'wallet',
+          color: CATEGORY_COLORS[number],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        } as TransactionCategory;
+      });
       
-      setCategories(transCat)
+      setCategories(transCat);
     }
-   
-  }, [transactions]); 
+  }, [transactions]);
 
   // Handle page change
   const handlePageChange = (page: number) => {
@@ -683,7 +943,16 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
   const handleDateRangeChange = (range: { from: Date | null; to: Date | null }) => {
     setDateRange(range);
     setCurrentPage(1);
-    updateUrlParams(range.from, range.to);
+    updateUrlParams({
+      date_from: range.from ? range.from.toISOString().split('T')[0] : null,
+      date_to: range.to ? range.to.toISOString().split('T')[0] : null,
+    });
+  };
+
+  // Handle filter change
+  const handleFilterChange = (key: string, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    updateUrlParams({ [key]: value });
   };
 
   // Handle create/update transaction
@@ -695,6 +964,7 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
         amount: parseFloat(data.amount),
         customer_id: user?.id,
         date: new Date(data.date).toISOString(),
+        tax_amount: data.is_taxable ? parseFloat(data.tax_amount || 0) : 0,
       };
 
       let result;
@@ -747,7 +1017,6 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
     setCategories([...categories, category]);
   };
 
-
   // Calculate totals by category
   const categoryTotals = useMemo(() => {
     const totals: Record<string, { category: TransactionCategory | undefined; total: number; count: number }> = {};
@@ -767,16 +1036,27 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
 
   // Calculate overall totals
   const totals = useMemo(() => {
+    const totalIncome = transactions
+      .filter(t => t.type === 'income')
+      .reduce((sum, t) => sum + Number(t.amount), 0);
     const totalExpenses = transactions
       .filter(t => t.type === 'expense')
       .reduce((sum, t) => sum + Number(t.amount), 0);
-    const totalBadOrders = transactions
-      .filter(t => t.type === 'bad_order')
+    const totalTransfers = transactions
+      .filter(t => t.type === 'transfer')
       .reduce((sum, t) => sum + Number(t.amount), 0);
-    const totalOthers = transactions
-      .filter(t => t.type === 'other')
+    const totalAdjustments = transactions
+      .filter(t => t.type === 'adjustment')
       .reduce((sum, t) => sum + Number(t.amount), 0);
-    return { totalExpenses, totalBadOrders, totalOthers, total: totalExpenses + totalBadOrders + totalOthers };
+    
+    return { 
+      totalIncome, 
+      totalExpenses, 
+      totalTransfers,
+      totalAdjustments,
+      netCashFlow: totalIncome - totalExpenses,
+      total: totalIncome + totalExpenses + totalTransfers + totalAdjustments 
+    };
   }, [transactions]);
 
   // Reset date range
@@ -824,7 +1104,7 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Transactions</h1>
-          <p className="text-sm text-muted-foreground">Track expenses, bad orders, and other transactions</p>
+          <p className="text-sm text-muted-foreground">Track all cash flow including income, expenses, payroll, and more</p>
         </div>
         <Button onClick={() => {
           setEditingTransaction(null);
@@ -838,16 +1118,21 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Total', value: totals.total, icon: Wallet, color: 'text-primary' },
+          { label: 'Net Cash Flow', value: totals.netCashFlow, icon: Wallet, color: 'text-primary' },
+          { label: 'Income', value: totals.totalIncome, icon: TrendingUp, color: 'text-green-500' },
           { label: 'Expenses', value: totals.totalExpenses, icon: TrendingDown, color: 'text-red-500' },
-          { label: 'Bad Orders', value: totals.totalBadOrders, icon: Package, color: 'text-yellow-500' },
-          { label: 'Others', value: totals.totalOthers, icon: Wallet, color: 'text-blue-500' },
+          { label: 'Transfers', value: totals.totalTransfers, icon: Banknote, color: 'text-blue-500' },
         ].map((stat, index) => (
           <div key={index} className="bg-card rounded-lg border p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground">{stat.label}</p>
-                <p className="text-lg font-bold mt-0.5">₱{stat.value.toFixed(2)}</p>
+                <p className={cn(
+                  "text-lg font-bold mt-0.5",
+                  stat.value > 0 ? 'text-green-600' : stat.value < 0 ? 'text-red-600' : ''
+                )}>
+                  ₱{stat.value.toFixed(2)}
+                </p>
               </div>
               <div className={cn("h-8 w-8 rounded-full bg-opacity-10 flex items-center justify-center", stat.color)}>
                 <stat.icon className={cn("h-4 w-4", stat.color)} />
@@ -907,9 +1192,9 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
         </div>
       )}
 
-      {/* Date Range Filter */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm text-muted-foreground">Date Range:</span>
           <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
             <PopoverTrigger asChild>
@@ -974,13 +1259,67 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
           )}
         </div>
 
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select
+            value={filters.type}
+            onValueChange={(value) => handleFilterChange('type', value)}
+          >
+            <SelectTrigger className="h-8 w-[130px] text-xs">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              {TRANSACTION_TYPES.map((type) => (
+                <SelectItem key={type.value} value={type.value}>
+                  <div className="flex items-center gap-2">
+                    {type.icon}
+                    {type.label}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={filters.category}
+            onValueChange={(value) => handleFilterChange('category', value)}
+          >
+            <SelectTrigger className="h-8 w-[130px] text-xs">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {TRANSACTION_CATEGORIES.map((cat) => (
+                <SelectItem key={cat.value} value={cat.value}>
+                  <div className="flex items-center gap-2">
+                    {cat.icon}
+                    {cat.label}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={filters.status}
+            onValueChange={(value) => handleFilterChange('status', value)}
+          >
+            <SelectTrigger className="h-8 w-[130px] text-xs">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              {TRANSACTION_STATUS.map((status) => (
+                <SelectItem key={status.value} value={status.value}>
+                  {status.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex-1 flex items-center justify-end gap-2 text-sm text-muted-foreground">
           <span>{transactions.length} of {totalCount} transactions</span>
-          {transactions.length > 0 && (
-            <span className="font-medium">
-              ₱{transactions.reduce((sum, t) => sum + Number(t.amount), 0).toFixed(2)}
-            </span>
-          )}
         </div>
       </div>
 
@@ -995,7 +1334,7 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
           <p className="text-sm text-muted-foreground">No transactions found</p>
           <p className="text-xs text-muted-foreground mt-1">
             {dateRange.from || dateRange.to
-              ? 'Try adjusting your date range'
+              ? 'Try adjusting your filters'
               : 'Add your first transaction to get started'}
           </p>
         </div>
@@ -1046,13 +1385,13 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
 
       {/* Transaction Form Dialog */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
               {editingTransaction ? 'Edit Transaction' : 'Add Transaction'}
             </DialogTitle>
             <DialogDescription>
-              {editingTransaction ? 'Update the transaction details' : 'Record a new transaction'}
+              {editingTransaction ? 'Update the transaction details' : 'Record a new transaction for your accounting records'}
             </DialogDescription>
           </DialogHeader>
           <TransactionForm

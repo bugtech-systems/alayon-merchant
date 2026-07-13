@@ -651,33 +651,135 @@ export const declineTransferRequest = async (id: string, token: string) => {
 };
 
 
+// lib/data/orders.ts
+
 export async function listPosOrders(limit: number = 1000, offset: number = 0, filters: Record<string, any> = {}) {
   try {
-      const queryParams = new URLSearchParams({
-          limit: limit.toString(),
-          offset: offset.toString(),
-        });
-    
- 
-        // ✅ CORRECT: Seller ID filter using dot notation
-  if (filters?.seller_id) {
-    queryParams.append('metadata.seller_id', filters.seller_id);
-  }
+    // Build fields parameter to include all related data
+    const fields = [
+      'id',
+      'status',
+      'created_at',
+      'updated_at',
+      'email',
+      'display_id',
+      'custom_display_id',
+      'payment_status',
+      'fulfillment_status',
+      'total',
+      'subtotal',
+      'tax_total',
+      'shipping_total',
+      'discount_total',
+      'currency_code',
+      'customer',
+      'sales_channel',
+      'payment_collections',
+      'payments',
+      'items',
+      'shipping_address',
+      'billing_address',
+      'shipping_methods',
+      'metadata',
+      'fulfillments',
+      'claims',
+      'swaps',
+      'returns',
+      'refunds',
+      'promotions',
+      'discounts',
+      'delivery'
+    ].join(',');
 
-    if (filters?.company_id) {
-    queryParams.append('metadata.company_id', filters.company_id);
-  }
+    const queryParams = new URLSearchParams({
+      limit: limit.toString(),
+      offset: offset.toString(),
+      fields: fields,
+      order: '-created_at' // Show newest first
+    });
 
-    
+    // Add status filter to exclude cancelled and refunded by default
+    const excludedStatuses = ['canceled', 'refunded'];
+    // if (!filters?.include_cancelled && !filters?.include_refunded) {
+    //   queryParams.append('status', excludedStatuses.map(s => `!${s}`).join(','));
+    // }
+
+    // Add date filters if provided
+    if (filters?.created_at_from) {
+      queryParams.append('created_at[gte]', filters.created_at_from);
+    }
+    if (filters?.created_at_to) {
+      queryParams.append('created_at[lte]', filters.created_at_to);
+    }
+
+    // Add search filter
+    if (filters?.search) {
+      queryParams.append('q', filters.search);
+    }
+
+    // Add specific status filter
+    if (filters?.status && filters.status !== 'all' && !filters.status.includes('!')) {
+      queryParams.append('status', filters.status);
+    }
+
+    // Add payment status filter
+    if (filters?.payment_status && filters.payment_status !== 'all') {
+      queryParams.append('payment_status', filters.payment_status);
+    }
+
+    // Add customer filter
+    if (filters?.customer_id) {
+      queryParams.append('customer_id', filters.customer_id);
+    }
+
+
+
     const response = await adminFetch(`/admin/orders?${queryParams.toString()}`);
-    const filteredOrders = response.orders.filter((order: any) => (order.metadata?.seller_id === filters?.seller_id || order.metadata?.company_id === filters?.company_id)).sort();
-    const count = filteredOrders.length;
+
+    // Get all orders from response
+    let orders = response.orders || [];
+    const totalCount = response.count || 0;
+
+    // Filter by seller_id or company_id from metadata
+    if (filters?.seller_id) {
+      orders = orders.filter((order: any) => order.metadata?.seller_id === filters.seller_id);
+    }
+    if (filters?.company_id) {
+      orders = orders.filter((order: any) => order.metadata?.company_id === filters.company_id);
+    }
+
+    // Filter out cancelled and refunded on client side as fallback
+    if (!filters?.include_cancelled && !filters?.include_refunded) {
+      orders = orders.filter((order: any) => 
+        order.status !== 'cancelled' && order.status !== 'refunded'
+      );
+    }
+
+    // Additional client-side filtering for date range if server filtering wasn't applied
+    if (filters?.created_at_from) {
+      const fromDate = new Date(filters.created_at_from);
+      orders = orders.filter((order: any) => new Date(order.created_at) >= fromDate);
+    }
+    if (filters?.created_at_to) {
+      const toDate = new Date(filters.created_at_to);
+      orders = orders.filter((order: any) => new Date(order.created_at) <= toDate);
+    }
+
+    // Sort orders by created_at descending (newest first)
+    orders.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    // Calculate pagination with filtered count
+    const filteredCount = orders.length;
+    const start = offset;
+    const end = Math.min(offset + limit, filteredCount);
+    const paginatedOrders = orders.slice(start, end);
+
     return {
-      orders: filteredOrders || [],
-      count: count || 0,
+      orders: paginatedOrders || [],
+      count: filteredCount || 0,
       page: Math.floor(offset / limit) + 1,
-      total_pages: Math.ceil((count || 0) / limit),
-      has_next: offset + limit < (count || 0),
+      total_pages: Math.ceil((filteredCount || 0) / limit),
+      has_next: offset + limit < filteredCount,
       has_previous: offset > 0,
     };
   } catch (error) {

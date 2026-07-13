@@ -14,42 +14,6 @@ export default async function CustomersPage() {
 
 
 
-
-
-// Move server actions to separate functions outside the component
-async function handleAssignRider(orderId: string, riderName: string | null, riderId: string | null) {
-  'use server';
-  // Server-side logic here
-  console.log('Assign rider:', { orderId, riderName, riderId });
-  // Add your database update logic here
-}
-
-async function handleUpdateStatus(orderId: string, status: string) {
-  'use server';
-  // Server-side logic here
-  console.log('Update status:', { orderId, status });
-  // Add your database update logic here
-}
-
-async function handleAddOrder() {
-  'use server';
-  // Server-side logic here
-  console.log('Add new order');
-  // Add your order creation logic here
-}
-
-async function handleContactRider(riderPhone: string) {
-  'use server';
-  // Server-side logic here
-  console.log('Contact rider:', riderPhone);
-  // Add your contact logic here (e.g., initiate call/SMS)
-}
-
-
-
-
-
-
   return (
     <div className="container mx-auto py-6 space-y-6">
       {/* Page Header */}

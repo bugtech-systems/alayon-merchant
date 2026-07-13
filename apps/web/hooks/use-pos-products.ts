@@ -77,6 +77,9 @@ export function usePosProducts({
       if (isMountedRef.current) {
         // Handle different response structures
         const categoriesData = response.categories || response || [];
+         categoriesData.sort((a, b) => a.rank - b.rank);
+
+        console.log(categoriesData, 'CATEGRO')
         setCategories(categoriesData);
         
         console.log(`Loaded ${categoriesData.length} categories`);

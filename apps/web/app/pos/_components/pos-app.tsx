@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Search, RefreshCw, History, ShoppingCart, Save, Tag, Users, Star } from "lucide-react";
+import { Search, RefreshCw, History, ShoppingCart, Save, Tag, Users, Star, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { CartSidebar } from "./cart-sidebar";
@@ -16,7 +16,7 @@ import { PrintDialog } from "./print-dialog";
 import { usePosCart } from "@/hooks/use-pos-cart";
 import { usePosProducts } from "@/hooks/use-pos-products";
 import { usePosDrafts } from "@/hooks/use-pos-drafts";
-import { usePosTables } from "@/hooks/use-pos-tables";
+import { usePosBeepers } from "@/hooks/use-pos-beepers"; // New hook for beepers
 import { Region, Customer } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -31,15 +31,14 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
   const [isMobile, setIsMobile] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedTableIds, setSelectedTableIds] = useLocalStorage<string[]>("current_order_table_ids", []);
+  const [selectedBeeperIds, setSelectedBeeperIds] = useLocalStorage<string[]>("current_order_beeper_ids", []);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [orderNotes, setOrderNotes] = useState("");
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [draftsDialogOpen, setDraftsDialogOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
-  const  {toast} = useToast();
- 
+  const { toast } = useToast();
 
   // Pricing strategy from user context
   const pricingContext = useMemo(() => ({
@@ -80,8 +79,20 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     });
   
   const { drafts, saveAsDraft, deleteDraft } = usePosDrafts();
-  const { occupiedTableIds } = usePosTables();
   
+  // New beeper hook
+  const { 
+    beepers, 
+    assignedBeeperIds, 
+    attachOrderToBeeper, 
+    detachOrderFromBeeper,
+    assignBeeper,
+    releaseBeeper,
+    reserveBeeper,
+    getBeeperStatus,
+    refreshBeepers
+  } = usePosBeepers();
+
   // Initialize cart
   useEffect(() => {
     const init = async () => {
@@ -103,18 +114,76 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
         customer_group_id: pricingContext.customerGroupId,
         pricing_strategy: pricingContext.pricingStrategy
       });
-      if(cart.customer_id){
-        setSelectedCustomer(cart.customer_id)
+      if (cart.customer_id) {
+        setSelectedCustomer(cart.customer_id);
       }
     }
   }, [pricingContext, cart?.id, updateMetadata]);
-  
+
+  // Handle beeper attachment/detachment for current order
+  const handleAttachOrderToBeeper = useCallback(async (beeperId: string, orderId: string) => {
+    try {
+      await attachOrderToBeeper(beeperId, orderId);
+      // Update cart metadata to track beeper assignments
+      await updateMetadata({
+        beeper_ids: [...selectedBeeperIds, beeperId],
+        beeper_assignments: {
+          ...cart?.metadata?.beeper_assignments,
+          [beeperId]: {
+            orderId,
+            attachedAt: new Date().toISOString(),
+            attachedBy: user?.id
+          }
+        }
+      });
+      
+      toast({
+        title: "Success",
+        description: "Order attached to beeper successfully"
+      });
+    } catch (error) {
+      console.error("Error attaching order to beeper:", error);
+      toast({
+        title: "Error",
+        description: "Failed to attach order to beeper",
+        variant: "destructive"
+      });
+    }
+  }, [attachOrderToBeeper, updateMetadata, selectedBeeperIds, cart, user, toast]);
+
+  const handleDetachOrderFromBeeper = useCallback(async (beeperId: string, orderId: string) => {
+    try {
+      await detachOrderFromBeeper(beeperId, orderId);
+      // Update cart metadata
+      const updatedBeeperIds = selectedBeeperIds.filter(id => id !== beeperId);
+      await updateMetadata({
+        beeper_ids: updatedBeeperIds,
+        beeper_assignments: {
+          ...cart?.metadata?.beeper_assignments,
+          [beeperId]: undefined
+        }
+      });
+      
+      toast({
+        title: "Success",
+        description: "Order detached from beeper successfully"
+      });
+    } catch (error) {
+      console.error("Error detaching order from beeper:", error);
+      toast({
+        title: "Error",
+        description: "Failed to detach order from beeper",
+        variant: "destructive"
+      });
+    }
+  }, [detachOrderFromBeeper, updateMetadata, selectedBeeperIds, cart, toast]);
+
   // Handle customer change
   const handleCustomerChange = useCallback(async (customer: Customer | null) => {
-    if(customer){
-    setSelectedCustomer(customer?.id);
+    if (customer) {
+      setSelectedCustomer(customer?.id);
     } else {
-    setSelectedCustomer(null)
+      setSelectedCustomer(null);
     }
     await attachCustomer(customer);
     
@@ -125,8 +194,8 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
         pricing_strategy: 'customer_group'
       });
     }
-    refreshCart(cart?.id)
-  }, [attachCustomer, updateMetadata]);
+    refreshCart(cart?.id);
+  }, [attachCustomer, updateMetadata, refreshCart, cart?.id]);
   
   // Handle notes change with debounce
   useEffect(() => {
@@ -138,33 +207,53 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     return () => clearTimeout(timeoutId);
   }, [orderNotes, updateMetadata]);
   
-  // Handle table change with debounce
+  // Handle beeper change with debounce
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (selectedTableIds.length > 0) {
-        updateMetadata({ table_ids: selectedTableIds });
+      if (selectedBeeperIds.length > 0) {
+        updateMetadata({ beeper_ids: selectedBeeperIds });
       }
     }, 500);
     return () => clearTimeout(timeoutId);
-  }, [selectedTableIds, updateMetadata]);
+  }, [selectedBeeperIds, updateMetadata]);
   
-
-const handleCheckout = useCallback(async () => {
-  if (!cart?.id) return;
-  
-  try {
-    // Prepare cart with pricing metadata before opening payment dialog
-    await prepareCartForCheckout();
-    setPaymentDialogOpen(true);
-  } catch (error) {
-    console.error("Error preparing cart:", error);
-    toast({ 
-      title: "Error", 
-      description: "Failed to prepare order. Please try again.", 
-      variant: "destructive" 
+  // Handle beeper selection change
+  const handleBeepersChange = useCallback((beeperIds: string[]) => {
+    setSelectedBeeperIds(beeperIds);
+    
+    // Auto-attach current order to newly selected beepers
+    const newBeepers = beeperIds.filter(id => !selectedBeeperIds.includes(id));
+    newBeepers.forEach(async (beeperId) => {
+      if (cart?.id) {
+        await handleAttachOrderToBeeper(beeperId, cart.id);
+      }
     });
-  }
-}, [cart, prepareCartForCheckout, toast]);
+    
+    // Auto-detach from removed beepers
+    const removedBeepers = selectedBeeperIds.filter(id => !beeperIds.includes(id));
+    removedBeepers.forEach(async (beeperId) => {
+      if (cart?.id) {
+        await handleDetachOrderFromBeeper(beeperId, cart.id);
+      }
+    });
+  }, [selectedBeeperIds, cart, handleAttachOrderToBeeper, handleDetachOrderFromBeeper]);
+
+  const handleCheckout = useCallback(async () => {
+    if (!cart?.id) return;
+    
+    try {
+      // Prepare cart with pricing metadata before opening payment dialog
+      await prepareCartForCheckout();
+      setPaymentDialogOpen(true);
+    } catch (error) {
+      console.error("Error preparing cart:", error);
+      toast({ 
+        title: "Error", 
+        description: "Failed to prepare order. Please try again.", 
+        variant: "destructive" 
+      });
+    }
+  }, [cart, prepareCartForCheckout, toast]);
 
   // Handle add to cart with pricing strategy tracking
   const handleAddToCart = useCallback(async (params: {
@@ -183,7 +272,7 @@ const handleCheckout = useCallback(async () => {
       variantId: params.variantId,
       quantity: params.quantity,
       metadata: {
-        compnay_id: params.companyId,
+        company_id: params.companyId,
         variant_title: params.variantTitle,
         original_price: params.originalPrice,
         pricing_strategy: params.pricingStrategy,
@@ -207,61 +296,12 @@ const handleCheckout = useCallback(async () => {
       applied_by: user?.id,
       applied_at: new Date().toISOString()
     });
-    console.log(lineId, variantId, price, {
-      ...pricingContext,
-      reason,
-      applied_by: user?.id,
-      applied_at: new Date().toISOString()
-    }, 'APPLI PRICES')
-
   }, [applyCustomPrice, user?.id]);
   
   // Handle remove custom price
   const handleRemoveCustomPrice = useCallback(async (lineId: string, variantId: string) => {
     await removeCustomPrice(lineId, variantId);
   }, [removeCustomPrice]);
-  
-  // Handle checkout
-// Fix the typo in handleCheckout function
-// const handleCheckout = useCallback(async (paymentData: any) => {
-//   const storedCartId = localStorage.getItem("pos_cart_id") || cart?.id;
-//   if (!storedCartId) return;
-  
-//   try {
-//     // Calculate final totals including custom prices
-
-//     // await updateMetadata({
-//     //   is_draft: false,
-//     //   completed_at: new Date().toISOString(),
-//     //   table_ids: selectedTableIds,
-//     //   notes: orderNotes,
-//     //   payment_method: paymentData.paymentMethod,
-//     //   final_subtotal: finalSubtotal,
-//     //   final_total: finalTotal,
-//     //   custom_prices_applied: cartItems.filter(i => i.metadata?.is_custom_priced).length
-//     // });
-    
-   
-//     // ✅ Fix: Correct function name - updateTableOccupancy (not updateTableOccupality)
-//     updateTableOccupancy(selectedTableIds, paymentData.id, selectedCustomer?.first_name);
-    
-//     // Reset POS state
-//     localStorage.removeItem("pos_cart_id");
-//     setSelectedTableIds([]);
-//     setSelectedCustomer(null);
-//     setOrderNotes("");
-//     setPaymentDialogOpen(false);
-//     setMobileCartOpen(false);
-    
-//     // Create new cart
-//     await createCart();
-    
-//     // Show success message
-//     console.log("Order completed successfully:", paymentData);
-//   } catch (error) {
-//     console.error("Error completing order:", error);
-//   }
-// }, [cart, cartItems, selectedTableIds, selectedCustomer, orderNotes, region, updateMetadata, updateTableOccupancy, createCart]);
   
   // Handle save draft with pricing context
   const handleSaveDraft = useCallback(async () => {
@@ -270,19 +310,20 @@ const handleCheckout = useCallback(async () => {
         is_draft: true, 
         draft_name: `Draft - ${new Date().toLocaleString()}`,
         saved_pricing_strategy: pricingContext.pricingStrategy,
-        saved_price_list_id: pricingContext.priceListId
+        saved_price_list_id: pricingContext.priceListId,
+        beeper_ids: selectedBeeperIds
       });
       await saveAsDraft(
         cart.id, 
         cartItems, 
         cartTotal, 
         selectedCustomer, 
-        selectedTableIds, 
+        selectedBeeperIds, 
         orderNotes, 
         cart?.metadata
       );
     }
-  }, [cart, cartItems, cartTotal, selectedCustomer, selectedTableIds, orderNotes, pricingContext, updateMetadata, saveAsDraft]);
+  }, [cart, cartItems, cartTotal, selectedCustomer, selectedBeeperIds, orderNotes, pricingContext, updateMetadata, saveAsDraft]);
   
   // Handle load draft with pricing restoration
   const handleLoadDraft = useCallback(async (draft: any) => {
@@ -290,7 +331,15 @@ const handleCheckout = useCallback(async () => {
     await refreshCart(draft.cart_id);
     
     // Restore draft state
-    if (draft.table_ids) setSelectedTableIds(draft.table_ids);
+    if (draft.beeper_ids) {
+      setSelectedBeeperIds(draft.beeper_ids);
+      // Re-attach orders to beepers
+      draft.beeper_ids.forEach(async (beeperId: string) => {
+        if (draft.cart_id) {
+          await attachOrderToBeeper(beeperId, draft.cart_id);
+        }
+      });
+    }
     if (draft.customer_id && draft.customer_name) {
       setSelectedCustomer({ id: draft.customer_id, first_name: draft.customer_name, email: "" });
     }
@@ -305,7 +354,7 @@ const handleCheckout = useCallback(async () => {
     }
     
     setDraftsDialogOpen(false);
-  }, [refreshCart, setSelectedTableIds, updateMetadata]);
+  }, [refreshCart, setSelectedBeeperIds, attachOrderToBeeper, updateMetadata]);
   
   // Filter products
   const filteredProducts = useMemo(() => {
@@ -323,14 +372,10 @@ const handleCheckout = useCallback(async () => {
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
-  
-
-
-
 
   // Pricing info component for header
   const PricingInfoBadge = () => (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 flex-wrap">
       {pricingContext.pricingStrategy === 'price_list' && pricingContext.priceListId && (
         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
           <Tag className="h-3 w-3 mr-1" />
@@ -349,6 +394,12 @@ const handleCheckout = useCallback(async () => {
           Customer: {selectedCustomer.first_name}
         </Badge>
       )}
+      {selectedBeeperIds.length > 0 && (
+        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
+          <Radio className="h-3 w-3 mr-1" />
+          {selectedBeeperIds.length} Beeper{selectedBeeperIds.length !== 1 ? 's' : ''} Assigned
+        </Badge>
+      )}
     </div>
   );
   
@@ -356,26 +407,35 @@ const handleCheckout = useCallback(async () => {
     ...pricingContext,
     cart,
     region,
-    selectedTableIds,
+    selectedBeeperIds,
     selectedCustomer,
     orderNotes,
     isLoading: isLoadingCart,
     onUpdateQuantity: updateQuantity,
     onRemoveFromCart: removeFromCart,
     onClearCart: clearCart,
-    onTablesChange: setSelectedTableIds,
+    onBeepersChange: handleBeepersChange,
     onCustomerChange: handleCustomerChange,
     onNotesChange: setOrderNotes,
-    onCheckout: () => handleCheckout(),
+    onCheckout: handleCheckout,
     onSaveDraft: handleSaveDraft,
     onApplyCustomPrice: handleApplyCustomPrice,
     onRemoveCustomPrice: handleRemoveCustomPrice,
     onLoadDraft: handleLoadDraft,
+    onAttachOrderToBeeper: handleAttachOrderToBeeper,
+    onDetachOrderFromBeeper: handleDetachOrderFromBeeper,
     user,
-    occupiedTableIds
+    assignedBeeperIds,
+    availableOrders: cart ? [{ 
+      id: cart.id, 
+      orderNumber: cart.metadata?.order_number || cart.id.slice(0, 8),
+      customerName: selectedCustomer?.first_name || 'Guest',
+      status: 'active',
+      items: cart.items?.length || 0,
+      total: cartTotal
+    }] : []
   };
 
-  
   // Mobile Layout
   if (isMobile) {
     return (
@@ -451,9 +511,6 @@ const handleCheckout = useCallback(async () => {
           {/* Bottom Bar */}
           <div className="fixed bottom-0 left-0 right-0 border-t bg-card p-2">
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="flex-1" onClick={handleSaveDraft}>
-                <Save className="h-3 w-3 mr-1" />Draft
-              </Button>
               <Button variant="default" className="flex-1" onClick={() => setMobileCartOpen(true)}>
                 <ShoppingCart className="h-3 w-3 mr-1" />
                 Cart • {cartTotal.toFixed(2)}
@@ -490,10 +547,16 @@ const handleCheckout = useCallback(async () => {
           region={region} 
           onComplete={async (order) => {
             console.log("Order completed:", order);
+            // Release all beepers associated with this order
+            if (selectedBeeperIds.length > 0) {
+              for (const beeperId of selectedBeeperIds) {
+                await releaseBeeper(beeperId);
+              }
+            }
             // Reset POS state
-            handleCustomerChange(null)
+            handleCustomerChange(null);
             await createCart();
-            setSelectedTableIds([]);
+            setSelectedBeeperIds([]);
             setSelectedCustomer(null);
             setOrderNotes("");
             setPaymentDialogOpen(false);
@@ -502,7 +565,7 @@ const handleCheckout = useCallback(async () => {
               title: "Success", 
               description: `Order #${order.display_id} completed successfully` 
             });
-  }} 
+          }} 
         />
         <PrintDialog 
           open={printOpen} 
@@ -513,6 +576,7 @@ const handleCheckout = useCallback(async () => {
       </>
     );
   }
+
   // Desktop Layout
   return (
     <div className="flex h-full overflow-hidden">
@@ -526,9 +590,7 @@ const handleCheckout = useCallback(async () => {
               <Button variant="outline" size="sm" onClick={refreshProducts}>
                 <RefreshCw className="h-3 w-3 mr-1" /> Refresh
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setDraftsDialogOpen(true)}>
-                <History className="h-3 w-3 mr-1" /> Drafts
-              </Button>
+
             </div>
           </div>
           
@@ -599,30 +661,36 @@ const handleCheckout = useCallback(async () => {
         onDeleteDraft={deleteDraft} 
         region={region} 
       />
-            <PaymentDialog
-          cart={cart}
-          cartItems={cart?.items ?? []}
-          open={paymentDialogOpen} 
-          onOpenChange={setPaymentDialogOpen} 
-          cartTotal={cartTotal} 
-          region={region} 
-          onComplete={async (order) => {
-            console.log("Order completed:", order);
-            // Reset POS state
-            handleCustomerChange(null)
-            await createCart();
-            setSelectedTableIds([]);
-            setSelectedCustomer(null);
-            setOrderNotes("");
-            setPaymentDialogOpen(false);
-            setMobileCartOpen(false);
-            
-            toast({ 
-              title: "Success", 
-              description: `Order #${order.display_id} completed successfully` 
-            });
-          }}
-        />
+      <PaymentDialog
+        cart={cart}
+        cartItems={cart?.items ?? []}
+        open={paymentDialogOpen} 
+        onOpenChange={setPaymentDialogOpen} 
+        cartTotal={cartTotal} 
+        region={region} 
+        onComplete={async (order) => {
+          console.log("Order completed:", order);
+          // Release all beepers associated with this order
+          if (selectedBeeperIds.length > 0) {
+            for (const beeperId of selectedBeeperIds) {
+              await releaseBeeper(beeperId);
+            }
+          }
+          // Reset POS state
+          handleCustomerChange(null);
+          await createCart();
+          setSelectedBeeperIds([]);
+          setSelectedCustomer(null);
+          setOrderNotes("");
+          setPaymentDialogOpen(false);
+          setMobileCartOpen(false);
+          
+          toast({ 
+            title: "Success", 
+            description: `Order #${order.display_id} completed successfully` 
+          });
+        }}
+      />
       <PrintDialog 
         open={printOpen} 
         onOpenChange={setPrintOpen} 

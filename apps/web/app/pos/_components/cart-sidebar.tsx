@@ -18,6 +18,7 @@ import {
   Tag,
   Users,
   AlertCircle,
+  Radio,
 } from "lucide-react";
 import { cn, getFinalPrice } from "@/lib/utils";
 import { PrintDialog } from "./print-dialog";
@@ -30,22 +31,21 @@ import type {
   DraftOrder 
 } from "@/types";
 import { createQuickCustomer } from "@/lib/actions";
-import { TableSelector } from "./table-selector";
-
+import { BeeperSelector } from "./beeper-selector";
 
 interface CartSidebarProps {
   user?: any;
   cart: MedusaCart | null;
   region?: Region;
-  selectedTableIds: string[];
+  selectedBeeperIds: string[];
   selectedCustomer: Customer | null;
   orderNotes: string;
   isLoading: boolean;
-  drafts?: DraftOrder[]; // Make drafts optional with default empty array
+  drafts?: DraftOrder[];
   onUpdateQuantity: (lineId: string, quantity: number) => Promise<void>;
   onRemoveFromCart: (lineId: string) => Promise<void>;
   onClearCart: () => Promise<void>;
-  onTablesChange: (tableIds: string[]) => void;
+  onBeepersChange: (beeperIds: string[]) => void;
   onCustomerChange: (customer: Customer | null) => Promise<void>;
   onNotesChange: (notes: string) => void;
   onCheckout: () => Promise<void>;
@@ -54,21 +54,23 @@ interface CartSidebarProps {
   onDeleteDraft: (draftId: string) => Promise<void>;
   onApplyCustomPrice: (lineId: string, variantId: string, price: number, reason?: string) => Promise<void>;
   onRemoveCustomPrice: (lineId: string, variantId: string) => Promise<void>;
+  onAttachOrderToBeeper?: (beeperId: string, orderId: string) => Promise<void>;
+  onDetachOrderFromBeeper?: (beeperId: string, orderId: string) => Promise<void>;
 }
 
 export function CartSidebar({
   customerGroupId,
   cart,
   region,
-  selectedTableIds,
+  selectedBeeperIds,
   selectedCustomer,
   orderNotes,
   isLoading,
-  drafts = [], // Default to empty array
+  drafts = [],
   onUpdateQuantity,
   onRemoveFromCart,
   onClearCart,
-  onTablesChange,
+  onBeepersChange,
   onCustomerChange,
   onNotesChange,
   onCheckout,
@@ -77,46 +79,71 @@ export function CartSidebar({
   onDeleteDraft,
   onApplyCustomPrice,
   onRemoveCustomPrice,
+  onAttachOrderToBeeper,
+  onDetachOrderFromBeeper,
 }: any) {
   const [printOpen, setPrintOpen] = useState(false);
-  const [occupiedTables, setOccupiedTables] = useState<string[]>([]);
-  const [currentOrderTables, setCurrentOrderTables] = useState<string[]>([]);
-   
+  const [assignedBeepers, setAssignedBeepers] = useState<string[]>([]);
+  const [currentOrderBeepers, setCurrentOrderBeepers] = useState<string[]>([]);
+  const [availableOrders, setAvailableOrders] = useState<any[]>([]);
 
-// Update current order tables when selection changes
-const handleTablesChange = (ids: string[]) => {
-  localStorage.setItem("current_order_table_ids", JSON.stringify(ids));
-  setCurrentOrderTables(ids)
-  onTablesChange(ids)
-  // Update table status in localStorage
-  const stored = localStorage.getItem("simple-tables");
-  if (stored) {
-    const tables = JSON.parse(stored);
-    const updated = tables.map((table: any) => ({
-      ...table,
-      status: ids.includes(table.id) ? 'occupied' : 
-              table.status === 'occupied' ? 'available' : table.status
-    }));
-    localStorage.setItem("simple-tables", JSON.stringify(updated));
-  }
-};
-
-
+  // Update current order beepers when selection changes
+  const handleBeepersChange = (ids: string[]) => {
+    localStorage.setItem("current_order_beeper_ids", JSON.stringify(ids));
+    setCurrentOrderBeepers(ids);
+    onBeepersChange(ids);
+    
+    // Update beeper status in localStorage
+    const stored = localStorage.getItem("simple-beepers");
+    if (stored) {
+      const beepers = JSON.parse(stored);
+      const updated = beepers.map((beeper: any) => ({
+        ...beeper,
+        status: ids.includes(beeper.id) ? 'assigned' : 
+                beeper.status === 'assigned' ? 'available' : beeper.status
+      }));
+      localStorage.setItem("simple-beepers", JSON.stringify(updated));
+    }
+  };
 
   useEffect(() => {
-    const loadOccupied = () => {
-      const stored = localStorage.getItem("simple-tables");
+    const loadAssigned = () => {
+      const stored = localStorage.getItem("simple-beepers");
       if (stored) {
-        const tables = JSON.parse(stored);
-        const occupied = tables
-          .filter((t: any) => t.status === "occupied")
-          .map((t: any) => t.id);
-        setOccupiedTables(occupied);
+        const beepers = JSON.parse(stored);
+        const assigned = beepers
+          .filter((b: any) => b.status === "assigned")
+          .map((b: any) => b.id);
+        setAssignedBeepers(assigned);
       }
     };
-    loadOccupied();
-    window.addEventListener("storage", loadOccupied);
-    return () => window.removeEventListener("storage", loadOccupied);
+    loadAssigned();
+    window.addEventListener("storage", loadAssigned);
+    return () => window.removeEventListener("storage", loadAssigned);
+  }, []);
+
+  // Load available orders (you'll need to fetch these from your API)
+  useEffect(() => {
+    const loadAvailableOrders = async () => {
+      try {
+        // Fetch orders that can be attached to beepers
+        // This is a placeholder - implement your actual order fetching logic
+        const response = await fetch('/api/orders/available');
+        if (response.ok) {
+          const orders = await response.json();
+          setAvailableOrders(orders);
+        }
+      } catch (error) {
+        console.error('Error loading available orders:', error);
+        // For demo purposes, create some mock orders
+        setAvailableOrders([
+          { id: 'order-1', orderNumber: 'ORD-001', customerName: 'John Doe', status: 'active', items: 3 },
+          { id: 'order-2', orderNumber: 'ORD-002', customerName: 'Jane Smith', status: 'active', items: 2 },
+          { id: 'order-3', orderNumber: 'ORD-003', customerName: 'Bob Johnson', status: 'active', items: 5 },
+        ]);
+      }
+    };
+    loadAvailableOrders();
   }, []);
 
   const subtotal = cart?.items?.reduce(
@@ -147,11 +174,23 @@ const handleTablesChange = (ids: string[]) => {
     groupedItems.priceList.length > 0 || 
     groupedItems.customerGroup.length > 0;
 
+  // Get current order for attachment
+  const currentOrder = cart ? {
+    id: cart.id,
+    orderNumber: cart.metadata?.order_number || cart.id.slice(0, 8),
+    customerName: selectedCustomer?.first_name 
+      ? `${selectedCustomer.first_name} ${selectedCustomer.last_name || ''}`.trim()
+      : 'Guest',
+    status: 'active' as const,
+    items: cart.items?.length || 0,
+    total: total,
+  } : undefined;
+
   return (
     <>
       <PrintDialog open={printOpen} onOpenChange={setPrintOpen} cart={cart} />
 
-      <div className="flex flex-col h-[85vh]">
+      <div className="flex flex-col h-full">
         {/* Header */}
         <div className="border-b p-3 md:p-4 flex-shrink-0 bg-background">
           <div className="flex justify-between items-center mb-3">
@@ -173,12 +212,6 @@ const handleTablesChange = (ids: string[]) => {
               >
                 <Printer className="h-3 w-3 md:h-4 md:w-4" />
               </Button>
-              {/* <DraftsManager
-                drafts={drafts}
-                onLoadDraft={onLoadDraft}
-                onDeleteDraft={onDeleteDraft}
-                onSaveCurrentCart={onSaveDraft}
-              /> */}
               <Button 
                 variant="ghost" 
                 size="sm" 
@@ -191,24 +224,68 @@ const handleTablesChange = (ids: string[]) => {
           </div>
 
           <div className="space-y-3">
-             <TableSelector
-              selectedIds={selectedTableIds}
-              onSelect={handleTablesChange}
-              currentOrderTableIds={currentOrderTables}
-              occupiedTableIds={occupiedTables}
+            {/* Beeper Selector - Replaces Table Selector */}
+            <BeeperSelector
+              selectedBeeperIds={selectedBeeperIds}
+              onSelect={handleBeepersChange}
+              assignedBeeperIds={assignedBeepers}
+              currentOrder={currentOrder}
+              availableOrders={availableOrders}
+              onAttachOrder={onAttachOrderToBeeper}
+              onDetachOrder={onDetachOrderFromBeeper}
               onClear={() => {
-                onTablesChange([]);
-                localStorage.removeItem("current_order_table_ids");
-                // Update all selected tables back to available
+                onBeepersChange([]);
+                localStorage.removeItem("current_order_beeper_ids");
+                // Update all selected beepers back to available
+                const stored = localStorage.getItem("simple-beepers");
+                if (stored) {
+                  const beepers = JSON.parse(stored);
+                  const updated = beepers.map((beeper: any) => ({
+                    ...beeper,
+                    status: beeper.status === 'assigned' ? 'available' : beeper.status
+                  }));
+                  localStorage.setItem("simple-beepers", JSON.stringify(updated));
+                }
               }}
-              onOccupy={async (tableId) => {
-                // Mark table as occupied
+              onAssignBeeper={async (beeperId, customerName) => {
+                // Mark beeper as assigned
+                const stored = localStorage.getItem("simple-beepers");
+                if (stored) {
+                  const beepers = JSON.parse(stored);
+                  const updated = beepers.map((b: any) => ({
+                    ...b,
+                    status: b.id === beeperId ? 'assigned' : b.status
+                  }));
+                  localStorage.setItem("simple-beepers", JSON.stringify(updated));
+                }
+                // If there's an order, automatically attach it
+                if (cart && onAttachOrderToBeeper) {
+                  await onAttachOrderToBeeper(beeperId, cart.id);
+                }
               }}
-              onClearTable={async (tableId) => {
-                // Clear table occupancy
+              onReleaseBeeper={async (beeperId) => {
+                // Release beeper back to available
+                const stored = localStorage.getItem("simple-beepers");
+                if (stored) {
+                  const beepers = JSON.parse(stored);
+                  const updated = beepers.map((b: any) => ({
+                    ...b,
+                    status: b.id === beeperId ? 'available' : b.status
+                  }));
+                  localStorage.setItem("simple-beepers", JSON.stringify(updated));
+                }
               }}
-              onReserve={async (tableId) => {
-                // Reserve table
+              onReserveBeeper={async (beeperId) => {
+                // Reserve beeper
+                const stored = localStorage.getItem("simple-beepers");
+                if (stored) {
+                  const beepers = JSON.parse(stored);
+                  const updated = beepers.map((b: any) => ({
+                    ...b,
+                    status: b.id === beeperId ? 'reserved' : b.status
+                  }));
+                  localStorage.setItem("simple-beepers", JSON.stringify(updated));
+                }
               }}
             />
 
@@ -261,7 +338,7 @@ const handleTablesChange = (ids: string[]) => {
         </div>
 
         {/* Scrollable cart items */}
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="flex-1 overflow-y-auto min-h-0 h-full">
           <div className="p-3 md:p-4">
             {isLoading ? (
               <div className="flex justify-center py-8">
@@ -393,6 +470,16 @@ const handleTablesChange = (ids: string[]) => {
               </div>
             </div>
 
+            {/* Beeper Info - Show attached beepers count */}
+            {selectedBeeperIds.length > 0 && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center bg-muted/30 p-1.5 rounded-md">
+                <Radio className="h-3 w-3" />
+                <span>
+                  {selectedBeeperIds.length} beeper{selectedBeeperIds.length !== 1 ? 's' : ''} assigned
+                </span>
+              </div>
+            )}
+
             <div className="flex gap-2">
               <Button
                 className="flex-1 h-10 md:h-11 text-sm md:text-base"
@@ -402,15 +489,6 @@ const handleTablesChange = (ids: string[]) => {
               >
                 <CreditCard className="mr-2 h-4 w-4" />
                 Checkout
-              </Button>
-              <Button
-                variant="outline"
-                size="lg"
-                className="h-10 md:h-11 px-4"
-                onClick={() => onSaveDraft("Draft - " + new Date().toLocaleString())}
-                disabled={!itemCount || isLoading}
-              >
-                <Save className="h-4 w-4" />
               </Button>
             </div>
 

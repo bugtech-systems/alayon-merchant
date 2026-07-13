@@ -180,7 +180,6 @@ export function CustomerSelector({
       });
       
 
-        console.log(response, 'RESPP')
       // Refresh customer list
       await fetchCustomers();
       

@@ -496,15 +496,9 @@ export async function getTodayOrdersSummary(user?: any): Promise<{
 
     // Fetch orders with filters
     const limit = 1000;
-    console.log(filters, 'ffflss')
     const response = await listPosOrders(limit, 0, filters);
       // let initialOrders = await listPosOrders(limit, offset, filters);
-    console.log('Today orders summary:', { 
-      from: from.toISOString(), 
-      to: to.toISOString(), 
-      filters,
-      orderCount: response.orders?.length || 0
-    });
+
 
     const orders = response.orders || [];
     
