@@ -751,7 +751,7 @@ export async function listPosOrders(limit: number = 1000, offset: number = 0, fi
     // Filter out cancelled and refunded on client side as fallback
     if (!filters?.include_cancelled && !filters?.include_refunded) {
       orders = orders.filter((order: any) => 
-        order.status !== 'cancelled' && order.status !== 'refunded'
+        order.status !== 'canceled' && order.status !== 'refunded'
       );
     }
 
