@@ -453,6 +453,40 @@ export async function createOrder(
   }
 }
 
+function filterOrdersByCapturedAt(
+  orders: any[],
+  dateFrom?: string,
+  dateTo?: string
+): any[] {
+  return orders.filter(order => {
+    // Check if order has pos_payment metadata
+    const posPayment = order.metadata?.pos_payment;
+    if (!posPayment) return false;
+
+    // Check if captured_at exists
+    const capturedAt = posPayment.captured_at;
+    if (!capturedAt) return false;
+
+    // If no date filters provided, return all orders with captured_at
+    if (!dateFrom && !dateTo) return true;
+
+    const capturedDate = new Date(capturedAt);
+
+    // Apply date range filters
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom);
+      if (capturedDate < fromDate) return false;
+    }
+
+    if (dateTo) {
+      const toDate = new Date(dateTo);
+      if (capturedDate > toDate) return false;
+    }
+
+    return true;
+  });
+}
+
 // ============================================
 // UTILITY FUNCTIONS
 // ============================================
@@ -498,18 +532,18 @@ export async function getTodayOrdersSummary(user?: any): Promise<{
     const limit = 1000;
     const response = await listPosOrders(limit, 0, filters);
       // let initialOrders = await listPosOrders(limit, offset, filters);
-
-
+    console.log(response, "RESPPOND")
     const orders = response.orders || [];
-    
+    const filtered = filterOrdersByCapturedAt(orders, from, to)
+    console.log(filtered, 'FILTT')
     // Calculate metrics
-    const completedOrders = orders.filter(o => 
+    const completedOrders = filtered.filter(o => 
       o.status === 'completed' || 
       o.status === 'paid' || 
       o.status === 'fulfilled'
     );
     
-    const pendingOrders = orders.filter(o => 
+    const pendingOrders = filtered.filter(o => 
       o.status === 'pending' || 
       o.status === 'processing' || 
       o.status === 'requires_action'
@@ -517,10 +551,10 @@ export async function getTodayOrdersSummary(user?: any): Promise<{
     
     // Calculate total sales from completed orders only
     const totalSales = completedOrders.reduce((sum, o) => sum + (o.total || 0), 0);
-    const orderCount = orders.length;
+    const orderCount = completedOrders.length;
     const completedCount = completedOrders.length;
     const pendingCount = pendingOrders.length;
-    
+    console.log(completedOrders, 'COMPLETEDD')
     // Count unique customers
     const uniqueCustomers = new Set(
       orders

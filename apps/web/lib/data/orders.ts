@@ -688,7 +688,7 @@ export async function listPosOrders(limit: number = 1000, offset: number = 0, fi
       'refunds',
       'promotions',
       'discounts',
-      'delivery'
+      // 'deliveries'
     ].join(',');
 
     const queryParams = new URLSearchParams({
@@ -794,6 +794,7 @@ export async function listPosOrders(limit: number = 1000, offset: number = 0, fi
     };
   }
 }
+
 
 export async function listDraftOrders(limit: number = 10, offset: number = 0, filters: Record<string, any> = {}) {
   try {

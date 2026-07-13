@@ -24,13 +24,12 @@ import {
   Search,
   LayoutGrid,
   List,
-  UserCheck,
-  UserX,
   Link,
   Unlink,
   Package,
   Circle,
   Bell,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -374,7 +373,7 @@ export function BeeperSelector({
     }
   }, [beepers]);
 
-  // Toggle beeper selection (auto-closes when selecting)
+  // Toggle beeper selection (only one beeper allowed)
   const toggleBeeper = useCallback(async (beeperId: string) => {
     const beeper = beepers.find(b => b.id === beeperId);
     if (!beeper) return;
@@ -383,53 +382,81 @@ export function BeeperSelector({
     if (disabledIds.includes(beeperId) && !selectedBeeperIds.includes(beeperId)) return;
     if (beeper.status === 'maintenance') return;
 
-    let newSelection: string[];
-    
+    // If the beeper is already selected, deselect it
     if (selectedBeeperIds.includes(beeperId)) {
-      // Deselect
-      newSelection = selectedBeeperIds.filter(id => id !== beeperId);
-      onSelect(newSelection);
-      
-      // If no more beepers selected and we have a clear callback
-      if (newSelection.length === 0 && onClear) {
-        onClear();
-      }
-    } else {
-      // Select - if it was available, mark as assigned
-      if (beeper.status === 'available') {
-        await updateBeeper(beeperId, { status: 'assigned' });
-      }
-      
-      newSelection = [...selectedBeeperIds, beeperId];
-      onSelect(newSelection);
-      
-      // Auto-close the dialog when a beeper is selected
-      setIsOpen(false);
+      onSelect([]);
+      if (onClear) onClear();
+      return;
     }
-  }, [beepers, selectedBeeperIds, disabledIds, onSelect, onClear, updateBeeper]);
 
-  // Quick attach/detach current order
+    // Only allow selecting one beeper
+    // First, detach current order from any beeper that has it attached
+    if (currentOrder && onDetachOrder) {
+      // Find any beeper that has this order attached
+      const beepersWithOrder = beepers.filter(b => 
+        b.orderIds.includes(currentOrder.id) && b.id !== beeperId
+      );
+      
+      // Detach from all other beepers
+      for (const b of beepersWithOrder) {
+        await onDetachOrder(b.id, currentOrder.id);
+        await updateBeeper(b.id, { 
+          orderIds: b.orderIds.filter(id => id !== currentOrder.id) 
+        });
+      }
+    }
+
+    // Select the new beeper
+    if (beeper.status === 'available') {
+      await updateBeeper(beeperId, { status: 'assigned' });
+    }
+    
+    onSelect([beeperId]);
+    
+    // Auto-close the dialog when a beeper is selected
+    setIsOpen(false);
+  }, [beepers, selectedBeeperIds, disabledIds, currentOrder, onSelect, onClear, updateBeeper, onDetachOrder]);
+
+  // Quick attach/detach current order to the selected beeper
   const handleQuickAttach = useCallback(async (beeperId: string) => {
-    if (!currentOrder || !onAttachOrder) return;
+    if (!currentOrder || !onAttachOrder || !onDetachOrder) return;
     
     const beeper = beepers.find(b => b.id === beeperId);
     if (!beeper) return;
 
-    // If current order is already attached, detach it
+    // If current order is already attached to this beeper, detach it
     if (beeper.orderIds.includes(currentOrder.id)) {
-      if (onDetachOrder) {
-        await onDetachOrder(beeperId, currentOrder.id);
-        await updateBeeper(beeperId, { 
-          orderIds: beeper.orderIds.filter(id => id !== currentOrder.id) 
-        });
-      }
-    } else {
-      // Attach current order
-      await onAttachOrder(beeperId, currentOrder.id);
+      await onDetachOrder(beeperId, currentOrder.id);
       await updateBeeper(beeperId, { 
-        orderIds: [...beeper.orderIds, currentOrder.id] 
+        orderIds: beeper.orderIds.filter(id => id !== currentOrder.id) 
+      });
+      // If no orders left, mark as available
+      if (beeper.orderIds.length === 1) {
+        await updateBeeper(beeperId, { status: 'available' });
+      }
+      return;
+    }
+
+    // Otherwise, detach from any other beeper first
+    const beepersWithOrder = beepers.filter(b => 
+      b.orderIds.includes(currentOrder.id) && b.id !== beeperId
+    );
+    
+    for (const b of beepersWithOrder) {
+      await onDetachOrder(b.id, currentOrder.id);
+      const updatedOrderIds = b.orderIds.filter(id => id !== currentOrder.id);
+      await updateBeeper(b.id, { 
+        orderIds: updatedOrderIds,
+        status: updatedOrderIds.length === 0 ? 'available' : 'assigned'
       });
     }
+
+    // Attach to the selected beeper
+    await onAttachOrder(beeperId, currentOrder.id);
+    await updateBeeper(beeperId, { 
+      orderIds: [...beeper.orderIds, currentOrder.id],
+      status: 'assigned'
+    });
   }, [beepers, currentOrder, onAttachOrder, onDetachOrder, updateBeeper]);
 
   // Filter beepers
@@ -462,7 +489,7 @@ export function BeeperSelector({
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-2">
           <label className="text-sm font-medium">
-            Beepers {selectedBeeperIds.length > 0 && `(${selectedBeeperIds.length})`}
+            Beeper {selectedBeeperIds.length > 0 && `(${selectedBeeperIds.length})`}
           </label>
           {currentOrder && (
             <Badge variant="outline" className="text-xs">
@@ -497,7 +524,7 @@ export function BeeperSelector({
         </div>
       </div>
 
-      {/* Selected beepers */}
+      {/* Selected beeper */}
       {selectedBeeperIds.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {selectedBeeperIds.map(id => {
@@ -537,10 +564,10 @@ export function BeeperSelector({
           <DialogHeader className="p-4 pb-0">
             <DialogTitle className="flex items-center gap-2">
               <Radio className="h-5 w-5" />
-              Select Beeper
+              Select a Beeper
             </DialogTitle>
             <DialogDescription>
-              Click a beeper to select it. Selected beepers will be assigned to this order.
+              Choose one beeper for this order. Only one beeper can be selected per order.
             </DialogDescription>
           </DialogHeader>
 
@@ -575,6 +602,14 @@ export function BeeperSelector({
                 >
                   <List className="h-3 w-3" />
                 </button>
+              </div>
+            </div>
+
+            {/* Info Banner */}
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-2 text-xs text-blue-600">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-3 w-3" />
+                <span>Only one beeper can be assigned to an order. Selecting a new beeper will replace the current one.</span>
               </div>
             </div>
 

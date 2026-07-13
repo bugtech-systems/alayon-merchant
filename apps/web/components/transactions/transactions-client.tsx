@@ -963,7 +963,7 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
         ...data,
         amount: parseFloat(data.amount),
         customer_id: user?.id,
-        date: new Date(data.date).toISOString(),
+        transaction_date: new Date(data.date).toISOString(),
         tax_amount: data.is_taxable ? parseFloat(data.tax_amount || 0) : 0,
       };
 

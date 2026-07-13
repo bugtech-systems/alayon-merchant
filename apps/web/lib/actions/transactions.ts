@@ -5,6 +5,7 @@
 import sdk from '@/lib/config';
 import { Transaction } from '@/types/transactions';
 import { getAuthHeaders } from '../data/cookies';
+import { adminFetch } from '../apiClient';
 
 export async function listTransactions(
   limit: number = 10,
@@ -20,7 +21,7 @@ export async function listTransactions(
       ),
     });
 
-    const response = await sdk.client.fetch(
+    const response = await adminFetch(
       `/dashboard/transactions?${queryParams.toString()}`,
       {
         method: 'GET',
@@ -44,11 +45,11 @@ export async function listTransactions(
   }
 }
 
-export async function createTransaction(data: Partial<Transaction>) {
+export async function createTransaction(data: any) {
   try {
-    const response = await sdk.client.fetch(`/dashboard/transactions`, {
+    const response = await adminFetch(`/admin/transactions`, {
       method: 'POST',
-      body: data,
+      body: JSON.stringify(data),
     });
 
 
@@ -60,9 +61,9 @@ export async function createTransaction(data: Partial<Transaction>) {
   }
 }
 
-export async function updateTransaction(id: string, data: Partial<Transaction>) {
+export async function updateTransaction(id: string, data: any) {
   try {
-    const response = await sdk.client.fetch(`/dashboard/transactions/${id}`, {
+    const response = await adminFetch(`/dashboard/transactions/${id}`, {
       method: 'PUT',
       body: data,
     });
