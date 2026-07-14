@@ -8,6 +8,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useMedusaOrders } from "@/hooks/useMedusaOrders";
 import { assignDriverToOrder, unassignDriverToOrder } from "@/lib/data";
 import { PrintDialog } from "@/app/pos/_components/print-dialog";
+import { startOfDay, endOfDay, format } from 'date-fns';
 
 interface DashboardClientProps {
   user: any;
@@ -31,6 +32,21 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   const search = searchParams?.get('search') || '';
   const statusFilter = searchParams?.get('status') || '';
 
+    // Get today's date range with proper start/end of day
+      const now = new Date();
+      const from = startOfDay(now);
+      const to = endOfDay(now);
+  
+      // Build filters for Medusa v2 using created_at field
+      const filters: Record<string, any> = {
+        // Use ISO strings for Medusa v2 API
+        date_from: format(from, 'yyyy-MM-dd'),
+        date_to: format(to, 'yyyy-MM-dd'),
+      };
+  
+
+
+
   const pricingContext = React.useMemo(() => ({
     priceListId: user?.metadata?.role === 'company' 
       ? user.employee?.company?.price_list_id 
@@ -47,6 +63,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   // Fetch orders with pagination and filters
   const { data, refetch, isLoading } = useMedusaOrders({
     filters: { 
+      ...filters,
       company_id: pricingContext.companyId,
       search: search || undefined,
       status: statusFilter || undefined,
@@ -54,6 +71,9 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
       limit
     }
   });
+
+
+  console.log(data, "DATAAA")
 
   // Initialize audio for notification sound
   useEffect(() => {

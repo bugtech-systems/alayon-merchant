@@ -3,7 +3,7 @@ import { Suspense } from 'react';
 import { OrdersClient } from '@/components/orders/orders-client';
 import { OrderTableSkeleton } from '@/components/ui/table-skeleton';
 import { retrieveUser } from '@/lib/data';
-import { listPosOrders, listDraftOrders, listOrders } from '@/lib/data/orders';
+import {  listOrders } from '@/lib/data/orders';
 import { sortOrders } from '@/lib/utils/helpers';
 
 interface PageProps {

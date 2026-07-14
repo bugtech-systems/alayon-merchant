@@ -4,7 +4,8 @@
 
 import React, { useState, useTransition, useCallback, useEffect, useMemo } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { format, formatDistanceToNow, isToday, isYesterday, startOfDay, endOfDay } from 'date-fns';
+import { format, formatDistanceToNow, isToday, startOfDay, endOfDay, isYesterday } from 'date-fns';
+
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -47,17 +48,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { OrderView } from './order-view';
-import { updateOrderStatus, deleteOrder, convertDraftToOrder, deleteDraftOrder, deletePosOrder } from '@/lib/actions/orders';
+import { updateOrderStatus, convertDraftToOrder, deleteDraftOrder, deletePosOrder } from '@/lib/actions/orders';
 import { captureOrderPayment } from '@/lib/actions/capture-payments';
-import { listDraftOrders, listPosOrders } from '@/lib/data/orders';
-
 import { 
   Eye, 
   Trash2, 
@@ -98,16 +90,23 @@ import {
   Store,
   CalendarDays,
   ArrowUpDown,
-  GripVertical
+  GripVertical,
+  Tag,
+  Percent,
+  Info,
+  Timer,
+  CalendarClock
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Badge } from '../ui/badge';
-import { Separator } from '../ui/separator';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { sortOrders } from '@/lib/utils/helpers';
-import { useMedusaOrders, usePosOrders } from '@/hooks/useMedusaOrders';
+import { usePosOrders } from '@/hooks/useMedusaOrders';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Calendar } from '../ui/calendar';
 
 // ============================================
 // STATUS CONFIGURATIONS
@@ -234,7 +233,210 @@ const PaymentStatusBadge = ({ status }: { status: string }) => {
 };
 
 // ============================================
-// STATUS DROPDOWN
+// CAPTURE PAYMENT DIALOG
+// ============================================
+
+interface CapturePaymentDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  order: any;
+  onCapture: (amount: number, discountCode?: string) => Promise<void>;
+  isCapturing?: boolean;
+}
+
+const CapturePaymentDialog = ({
+  open,
+  onOpenChange,
+  order,
+  onCapture,
+  isCapturing = false
+}: CapturePaymentDialogProps) => {
+  const [amountReceived, setAmountReceived] = useState<string>('');
+  const [discountCode, setDiscountCode] = useState<string>('');
+  const [change, setChange] = useState<number>(0);
+  const [discountError, setDiscountError] = useState<string>('');
+
+  const totalAmount = order?.total || 0;
+  const formattedTotal = `₱${totalAmount.toFixed(2)}`;
+
+  // Calculate change when amount received changes
+  useEffect(() => {
+    const received = parseFloat(amountReceived);
+    if (!isNaN(received) && received > 0) {
+      const changeAmount = Math.max(0, received - totalAmount);
+      setChange(changeAmount);
+    } else {
+      setChange(0);
+    }
+  }, [amountReceived, totalAmount]);
+
+  const handleCapture = async () => {
+    const received = parseFloat(amountReceived);
+    if (isNaN(received) || received <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    if (received < totalAmount) {
+      toast.error('Amount received must be at least the total amount');
+      return;
+    }
+
+    // Validate discount code if provided
+    if (discountCode && discountCode.trim()) {
+      // You can add discount validation logic here
+      // For now, we'll just pass it to the capture function
+    }
+
+    await onCapture(received, discountCode.trim() || undefined);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Banknote className="h-5 w-5 text-primary" />
+            Capture Payment
+          </DialogTitle>
+          <DialogDescription>
+            Complete the payment for order #{order?.display_id}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6 py-4">
+          {/* Order Summary */}
+          <div className="bg-muted/30 rounded-lg p-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Order Total</span>
+              <span className="font-bold text-lg">{formattedTotal}</span>
+            </div>
+            {discountCode && (
+              <div className="flex justify-between text-sm text-emerald-600">
+                <span className="flex items-center gap-1">
+                  <Tag className="h-3 w-3" />
+                  Discount Applied
+                </span>
+                <span>-₱{/* Add discount amount calculation */}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Discount Code Input */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium flex items-center gap-2">
+              <Tag className="h-4 w-4 text-muted-foreground" />
+              Discount Code (Optional)
+            </label>
+            <Input
+              placeholder="Enter discount code"
+              value={discountCode}
+              onChange={(e) => {
+                setDiscountCode(e.target.value);
+                setDiscountError('');
+              }}
+              className="h-10"
+            />
+            {discountError && (
+              <p className="text-xs text-red-500">{discountError}</p>
+            )}
+          </div>
+
+          {/* Amount Received Input */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              Amount Received
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
+                ₱
+              </span>
+              <Input
+                type="number"
+                placeholder="0.00"
+                value={amountReceived}
+                onChange={(e) => setAmountReceived(e.target.value)}
+                className="pl-8 h-10"
+                min={0}
+                step="0.01"
+              />
+            </div>
+            {amountReceived && parseFloat(amountReceived) < totalAmount && (
+              <p className="text-xs text-amber-500">
+                Amount is less than total ({formattedTotal})
+              </p>
+            )}
+          </div>
+
+          {/* Change Display */}
+          {change > 0 && (
+            <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-lg p-4 border border-emerald-200 dark:border-emerald-800">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                  Change
+                </span>
+                <span className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
+                  ₱{change.toFixed(2)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Payment Summary */}
+          <div className="bg-primary/5 rounded-lg p-3 text-sm space-y-1">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total Due</span>
+              <span className="font-medium">{formattedTotal}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Amount Received</span>
+              <span className="font-medium">
+                {amountReceived ? `₱${parseFloat(amountReceived).toFixed(2)}` : '—'}
+              </span>
+            </div>
+            {change > 0 && (
+              <div className="flex justify-between text-emerald-600 font-medium">
+                <span>Change</span>
+                <span>₱{change.toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isCapturing}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCapture}
+            disabled={isCapturing || !amountReceived || parseFloat(amountReceived) < totalAmount}
+            className="min-w-[120px]"
+          >
+            {isCapturing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <Check className="h-4 w-4 mr-2" />
+                Capture Payment
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// ============================================
+// STATUS DROPDOWN (Updated to use Capture Dialog)
 // ============================================
 
 const StatusDropdown = ({ 
@@ -254,7 +456,7 @@ const StatusDropdown = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   
-  const statuses = ['pending', 'processing', 'completed', 'cancelled', 'refunded'];
+  const statuses = ['pending', 'processing', 'completed'];
   const currentConfig = ORDER_STATUS_CONFIG[currentStatus?.toLowerCase()];
 
   return (
@@ -315,6 +517,96 @@ const StatusDropdown = ({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+};
+
+// ============================================
+// STATS CARDS
+// ============================================
+
+const StatsCards = ({ orders, orderType, isLoading }: { orders: any[]; orderType: string; isLoading?: boolean }) => {
+  const stats = useMemo(() => {
+    const activeOrders = orders.filter(o => 
+      o.status !== 'canceled' && o.status !== 'refunded'
+    );
+    
+    const total = activeOrders.length;
+    const totalValue = activeOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+    const completed = activeOrders.filter(o => o.status === 'completed').length;
+    const pending = activeOrders.filter(o => o.status === 'pending' || o.status === 'processing').length;
+    const avgOrderValue = total > 0 ? totalValue / total : 0;
+    
+    return { total, totalValue, completed, pending, avgOrderValue };
+  }, [orders]);
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} className="bg-card rounded-lg border p-4 animate-pulse">
+            <div className="h-4 bg-muted rounded w-1/2 mb-2"></div>
+            <div className="h-8 bg-muted rounded w-3/4"></div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const statCards = [
+    {
+      label: `Active ${orderType === 'drafts' ? 'Drafts' : 'Orders'}`,
+      value: stats.total,
+      icon: Package,
+      color: 'text-primary',
+      bg: 'bg-primary/10'
+    },
+    {
+      label: 'Total Value',
+      value: `₱${stats.totalValue.toFixed(2)}`,
+      icon: DollarSign,
+      color: 'text-emerald-500',
+      bg: 'bg-emerald-500/10'
+    },
+  ];
+
+  if (orderType === 'orders') {
+    statCards.push(
+      {
+        label: 'Completed',
+        value: stats.completed,
+        icon: CheckCircle,
+        color: 'text-green-500',
+        bg: 'bg-green-500/10'
+      },
+      {
+        label: 'Pending',
+        value: stats.pending,
+        icon: Clock,
+        color: 'text-yellow-500',
+        bg: 'bg-yellow-500/10'
+      }
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+      {statCards.map((card, index) => (
+        <div 
+          key={index} 
+          className="bg-card rounded-lg border p-4 hover:shadow-md transition-all hover:scale-[1.02] cursor-default"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">{card.label}</p>
+              <p className="text-2xl font-bold mt-1">{card.value}</p>
+            </div>
+            <div className={cn("h-10 w-10 rounded-full flex items-center justify-center", card.bg)}>
+              <card.icon className={cn("h-5 w-5", card.color)} />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 };
 
@@ -528,93 +820,6 @@ const DateRangeFilter = ({
 };
 
 // ============================================
-// STATS CARDS
-// ============================================
-
-const StatsCards = ({ orders, orderType, isLoading }: { orders: any[]; orderType: string; isLoading?: boolean }) => {
-  const stats = useMemo(() => {
-    const total = orders.length;
-    const totalValue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
-    const completed = orders.filter(o => o.status === 'completed').length;
-    const pending = orders.filter(o => o.status === 'pending' || o.status === 'processing').length;
-    const cancelled = orders.filter(o => o.status === 'cancelled').length;
-    const avgOrderValue = total > 0 ? totalValue / total : 0;
-    
-    return { total, totalValue, completed, pending, cancelled, avgOrderValue };
-  }, [orders]);
-
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-6">
-        {[1, 2, 3, 4, 5].map(i => (
-          <div key={i} className="bg-card rounded-lg border p-4 animate-pulse">
-            <div className="h-4 bg-muted rounded w-1/2 mb-2"></div>
-            <div className="h-8 bg-muted rounded w-3/4"></div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  const statCards = [
-    {
-      label: `Total ${orderType === 'drafts' ? 'Drafts' : 'Orders'}`,
-      value: stats.total,
-      icon: Package,
-      color: 'text-primary',
-      bg: 'bg-primary/10'
-    },
-    {
-      label: 'Total Value',
-      value: `₱${stats.totalValue.toFixed(2)}`,
-      icon: DollarSign,
-      color: 'text-emerald-500',
-      bg: 'bg-emerald-500/10'
-    },
-  ];
-
-  if (orderType === 'orders') {
-    statCards.push(
-      {
-        label: 'Completed',
-        value: stats.completed,
-        icon: CheckCircle,
-        color: 'text-green-500',
-        bg: 'bg-green-500/10'
-      },
-      {
-        label: 'Pending',
-        value: stats.pending,
-        icon: Clock,
-        color: 'text-yellow-500',
-        bg: 'bg-yellow-500/10'
-      }
-    );
-  }
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-      {statCards.map((card, index) => (
-        <div 
-          key={index} 
-          className="bg-card rounded-lg border p-4 hover:shadow-md transition-all hover:scale-[1.02] cursor-default"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">{card.label}</p>
-              <p className="text-2xl font-bold mt-1">{card.value}</p>
-            </div>
-            <div className={cn("h-10 w-10 rounded-full flex items-center justify-center", card.bg)}>
-              <card.icon className={cn("h-5 w-5", card.color)} />
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-// ============================================
 // PAGINATION
 // ============================================
 
@@ -660,7 +865,7 @@ const Pagination = ({
       <div className="text-sm text-muted-foreground order-2 sm:order-1">
         Showing <span className="font-medium">{((page - 1) * 10) + 1}</span> to{' '}
         <span className="font-medium">{Math.min(page * 10, total)}</span> of{' '}
-        <span className="font-medium">{total}</span> {orderType}
+        <span className="font-medium">{total}</span> active {orderType}
       </div>
       <div className="flex items-center gap-1 order-1 sm:order-2">
         <Button
@@ -704,74 +909,325 @@ const Pagination = ({
 };
 
 // ============================================
-// ACTION DROPDOWN MENU
+// DETAILED ORDER VIEW COMPONENT (Updated)
 // ============================================
 
-const OrderActionsMenu = ({ 
-  order, 
-  orderType,
-  onView,
-  onStatusUpdate,
-  onDelete,
-  onConvert,
-  onCapturePayment
-}: {
+interface DetailedOrderViewProps {
   order: any;
-  orderType: string;
-  onView: (order: any) => void;
-  onStatusUpdate: (order: any) => void;
-  onDelete: (order: any) => void;
-  onConvert: (order: any) => void;
-  onCapturePayment: (order: any) => void;
-}) => {
-  const canCapture = order.payment_status === 'authorized' && 
-                     order.status !== 'cancelled' && 
-                     order.status !== 'refunded';
+  isDraft?: boolean;
+  onStatusUpdate?: (status: string) => void;
+  onCapturePayment?: () => void;
+  isCapturing?: boolean;
+}
+
+const DetailedOrderView = ({ 
+  order, 
+  isDraft = false,
+  onStatusUpdate,
+  onCapturePayment,
+  isCapturing = false
+}: DetailedOrderViewProps) => {
+  const [newStatus, setNewStatus] = useState(order?.status || 'pending');
+
+  if (!order) return null;
+
+  const formatCurrency = (amount: number) => {
+    return `₱${(amount || 0).toFixed(2)}`;
+  };
+
+  const calculateItemTotal = (item: any) => {
+    const unitPrice = item.unit_price || item.price || 0;
+    const quantity = item.quantity || 1;
+    const discount = item.discount_amount || 0;
+    return (unitPrice * quantity) - discount;
+  };
+
+  const getPaymentBreakdown = () => {
+    const payments = order.payments || [];
+    const totalPaid = order?.metadata?.pos_payment?.amount || payments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+    
+    const paymentMethod = payments.length > 0 ? payments[0]?.payment_method : null;
+    return {
+      totalPaid,
+      paymentMethod,
+      changeAmount: order.total > 0 ? Math.max(0, totalPaid - order.total) : 0,
+      remainingBalance: order.total > 0 ? Math.max(0, order.total - totalPaid) : 0,
+      payments
+    };
+  };
+
+  const paymentBreakdown = getPaymentBreakdown();
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <MoreVertical className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuItem onClick={() => onView(order)} className="gap-2">
-          <Eye className="h-4 w-4" />
-          View Details
-        </DropdownMenuItem>
-        
-        {orderType === 'drafts' ? (
-          <DropdownMenuItem onClick={() => onConvert(order)} className="gap-2">
-            <CreditCard className="h-4 w-4" />
-            Convert to Order
-          </DropdownMenuItem>
-        ) : (
-          <>
-            <DropdownMenuItem onClick={() => onStatusUpdate(order)} className="gap-2">
-              <RefreshCw className="h-4 w-4" />
-              Update Status
-            </DropdownMenuItem>
-            {canCapture && (
-              <DropdownMenuItem onClick={() => onCapturePayment(order)} className="gap-2 text-blue-600">
-                <Banknote className="h-4 w-4" />
-                Capture Payment
-              </DropdownMenuItem>
+    <div className="space-y-6">
+      {/* Order Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b">
+        <div>
+          <h3 className="text-2xl font-bold flex items-center gap-2">
+            {isDraft ? 'Draft Order' : `Order #${order.display_id}`}
+            {isDraft && <Badge variant="outline" className="ml-2">Draft</Badge>}
+          </h3>
+          <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+            <div className="flex items-center gap-1.5">
+              <CalendarClock className="h-4 w-4" />
+              <span>Order Date: {format(new Date(order.created_at), 'MMM d, yyyy h:mm a')}</span>
+            </div>
+            {order.eta && (
+              <div className="flex items-center gap-1.5 text-emerald-600">
+                <Timer className="h-4 w-4" />
+                <span>ETA: {format(new Date(order.eta), 'MMM d, yyyy h:mm a')}</span>
+              </div>
             )}
-          </>
-        )}
-        
-        <DropdownMenuSeparator />
-        
-        <DropdownMenuItem 
-          onClick={() => onDelete(order)}
-          className="gap-2 text-destructive focus:text-destructive"
-        >
-          <Trash2 className="h-4 w-4" />
-          Delete {orderType === 'drafts' ? 'Draft' : 'Order'}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {!isDraft && onStatusUpdate && (
+            <Select value={newStatus} onValueChange={(value) => {
+              setNewStatus(value);
+              onStatusUpdate(value);
+            }}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Update status" />
+              </SelectTrigger>
+              <SelectContent>
+                {['pending', 'processing', 'completed'].map((status) => (
+                  <SelectItem key={status} value={status}>
+                    <div className="flex items-center gap-2">
+                      {ORDER_STATUS_CONFIG[status]?.icon}
+                      {ORDER_STATUS_CONFIG[status]?.label}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <OrderStatusBadge status={order.status} />
+          {!isDraft && <PaymentStatusBadge status={order.payment_status} />}
+        </div>
+      </div>
+
+      {/* Customer Information */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
+        <div>
+          <h4 className="text-sm font-semibold text-muted-foreground mb-2">Customer Details</h4>
+          <div className="space-y-1.5 text-sm">
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4 text-muted-foreground" />
+              <span className="font-medium">{order.customer?.first_name || order.customer_name || 'Guest'}</span>
+              {order.customer?.last_name && <span>{order.customer.last_name}</span>}
+            </div>
+            {order.email && (
+              <div className="flex items-center gap-2">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                <span>{order.email}</span>
+              </div>
+            )}
+            {order.phone && (
+              <div className="flex items-center gap-2">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                <span>{order.phone}</span>
+              </div>
+            )}
+          </div>
+        </div>
+        <div>
+          <h4 className="text-sm font-semibold text-muted-foreground mb-2">Shipping Address</h4>
+          {order.shipping_address ? (
+            <div className="space-y-1 text-sm">
+              <div className="flex items-start gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <div>
+                  <div>{order.shipping_address.address_1}</div>
+                  {order.shipping_address.address_2 && (
+                    <div>{order.shipping_address.address_2}</div>
+                  )}
+                  <div>
+                    {order.shipping_address.city}, {order.shipping_address.province || order.shipping_address.state}
+                  </div>
+                  <div>{order.shipping_address.country_code?.toUpperCase()}</div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">No shipping address provided</div>
+          )}
+        </div>
+      </div>
+
+      {/* Order Items */}
+      <div>
+        <h4 className="text-sm font-semibold text-muted-foreground mb-3">Order Items</h4>
+        <div className="border rounded-lg overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Item</TableHead>
+                <TableHead className="text-right">Price</TableHead>
+                <TableHead className="text-center">Qty</TableHead>
+                <TableHead className="text-right">Discount</TableHead>
+                <TableHead className="text-right">Subtotal</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(order.items || []).map((item: any, index: number) => {
+                const itemTotal = calculateItemTotal(item);
+                const unitPrice = item.unit_price || item.price || 0;
+                const discount = item.discount_amount || 0;
+                const quantity = item.quantity || 1;
+                
+                return (
+                  <TableRow key={index}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{item.title || item.name || item.product_name}</div>
+                        {item.variant_title && (
+                          <div className="text-xs text-muted-foreground">{item.variant_title}</div>
+                        )}
+                        {item.sku && (
+                          <div className="text-xs text-muted-foreground">SKU: {item.sku}</div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">{formatCurrency(unitPrice)}</TableCell>
+                    <TableCell className="text-center">{quantity}</TableCell>
+                    <TableCell className="text-right">
+                      {discount > 0 ? (
+                        <div className="flex items-center justify-end gap-1 text-emerald-600">
+                          <Percent className="h-3 w-3" />
+                          {formatCurrency(discount)}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">{formatCurrency(itemTotal)}</TableCell>
+                  </TableRow>
+                );
+              })}
+              {order.discount_total > 0 && (
+                <TableRow className="bg-emerald-50/50 dark:bg-emerald-950/10">
+                  <TableCell colSpan={4} className="text-right font-medium text-emerald-600">
+                    <div className="flex items-center justify-end gap-2">
+                      <Tag className="h-4 w-4" />
+                      Order Discount
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right font-medium text-emerald-600">
+                    -{formatCurrency(order.discount_total)}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      {/* Order Summary & Payment Details */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-3">
+          <h4 className="text-sm font-semibold text-muted-foreground">Order Summary</h4>
+          <div className="bg-muted/20 rounded-lg p-4 space-y-2 text-sm">
+            <div className="flex justify-between py-1">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span>{formatCurrency(order.subtotal || 0)}</span>
+            </div>
+            <div className="flex justify-between py-1">
+              <span className="text-muted-foreground">Discount</span>
+              <span className="text-emerald-600">-{formatCurrency(order.discount_total || 0)}</span>
+            </div>
+            <div className="flex justify-between py-1">
+              <span className="text-muted-foreground">Shipping</span>
+              <span>{formatCurrency(order.shipping_total || 0)}</span>
+            </div>
+            <div className="flex justify-between py-1">
+              <span className="text-muted-foreground">Tax</span>
+              <span>{formatCurrency(order.tax_total || 0)}</span>
+            </div>
+            <Separator />
+            <div className="flex justify-between py-1 font-bold text-base">
+              <span>Total</span>
+              <span className="text-lg">{formatCurrency(order.total || 0)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <h4 className="text-sm font-semibold text-muted-foreground">Payment Details</h4>
+          <div className="bg-muted/20 rounded-lg p-4 space-y-2 text-sm">
+            <div className="flex justify-between py-1">
+              <span className="text-muted-foreground">Payment Method</span>
+              <span className="font-medium capitalize">
+                {paymentBreakdown.paymentMethod || order.payment_method || 'Not specified'}
+              </span>
+            </div>
+            <div className="flex justify-between py-1">
+              <span className="text-muted-foreground">Total Amount</span>
+              <span>{formatCurrency(order.total || 0)}</span>
+            </div>
+            <div className="flex justify-between py-1">
+              <span className="text-muted-foreground">Amount Paid</span>
+              <span className="text-emerald-600">{formatCurrency(paymentBreakdown.totalPaid || 0)}</span>
+            </div>
+            <div className="flex justify-between py-1">
+              <span className="text-muted-foreground">Change</span>
+              <span className="text-emerald-600 font-medium">
+                {paymentBreakdown.changeAmount > 0 ? formatCurrency(paymentBreakdown.changeAmount) : '—'}
+              </span>
+            </div>
+            {paymentBreakdown.remainingBalance > 0 && (
+              <div className="flex justify-between py-1 text-amber-600">
+                <span className="text-muted-foreground">Remaining Balance</span>
+                <span className="font-medium">{formatCurrency(paymentBreakdown.remainingBalance)}</span>
+              </div>
+            )}
+            {order.payment_status === 'authorized' && onCapturePayment && (
+              <div className="mt-3">
+                <Button 
+                  onClick={onCapturePayment}
+                  disabled={isCapturing}
+                  className="w-full"
+                  size="sm"
+                >
+                  {isCapturing ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Banknote className="h-4 w-4 mr-2" />
+                  )}
+                  Capture Payment
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Notes and Additional Information */}
+      {(order.customer_note || order.internal_note || order.shipping_method) && (
+        <div className="space-y-3">
+          <h4 className="text-sm font-semibold text-muted-foreground">Additional Information</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {order.shipping_method && (
+              <div className="p-3 border rounded-lg">
+                <div className="text-xs text-muted-foreground mb-1">Shipping Method</div>
+                <div className="text-sm font-medium">{order.shipping_method}</div>
+              </div>
+            )}
+            {order.customer_note && (
+              <div className="p-3 border rounded-lg">
+                <div className="text-xs text-muted-foreground mb-1">Customer Note</div>
+                <div className="text-sm">{order.customer_note}</div>
+              </div>
+            )}
+            {order.internal_note && (
+              <div className="p-3 border rounded-lg col-span-2">
+                <div className="text-xs text-muted-foreground mb-1">Internal Note</div>
+                <div className="text-sm">{order.internal_note}</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -782,17 +1238,12 @@ const OrderActionsMenu = ({
 const MobileOrderCard = ({ 
   order, 
   orderType, 
-  onView, 
-  onStatusUpdate, 
-  onDelete, 
-  onConvert,
-  onCapturePayment
+  onView
 }: any) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
     <div className="bg-card rounded-lg border p-4 space-y-3 hover:shadow-md transition-shadow">
-      {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -826,7 +1277,6 @@ const MobileOrderCard = ({
         </div>
       </div>
 
-      {/* Customer Info */}
       <div className="flex flex-wrap items-center gap-3 text-sm bg-muted/30 rounded-lg p-3">
         <div className="flex items-center gap-2">
           <User className="h-3.5 w-3.5 text-muted-foreground" />
@@ -848,7 +1298,6 @@ const MobileOrderCard = ({
         )}
       </div>
 
-      {/* Expandable Details */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex items-center justify-center w-full text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -876,37 +1325,45 @@ const MobileOrderCard = ({
               <span className="text-muted-foreground">Tax:</span>
               <span className="font-medium ml-1">₱{(order.tax_total || 0).toFixed(2)}</span>
             </div>
+            {order.discount_total > 0 && (
+              <div className="col-span-2">
+                <span className="text-muted-foreground">Discount:</span>
+                <span className="font-medium ml-1 text-emerald-600">-₱{(order.discount_total || 0).toFixed(2)}</span>
+              </div>
+            )}
+            {order.customer_note && (
+              <div className="col-span-2">
+                <span className="text-muted-foreground">Note:</span>
+                <span className="ml-1 text-sm">{order.customer_note}</span>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Total and Actions */}
       <div className="flex items-center justify-between pt-2 border-t">
-        <div className="text-lg font-bold">
-          ₱{(order.total || 0).toFixed(2)}
+        <div>
+          <div className="text-lg font-bold">
+            ₱{(order.total || 0).toFixed(2)}
+          </div>
+          {order.eta && (
+            <div className="text-xs text-muted-foreground flex items-center gap-1">
+              <Timer className="h-3 w-3" />
+              ETA: {format(new Date(order.eta), 'h:mm a')}
+            </div>
+          )}
         </div>
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => onView(order)}>
-            <Eye className="h-3.5 w-3.5 mr-1" />
-            View
-          </Button>
-          <OrderActionsMenu
-            order={order}
-            orderType={orderType}
-            onView={onView}
-            onStatusUpdate={onStatusUpdate}
-            onDelete={onDelete}
-            onConvert={onConvert}
-            onCapturePayment={onCapturePayment}
-          />
-        </div>
+        <Button size="sm" variant="outline" onClick={() => onView(order)}>
+          <Eye className="h-3.5 w-3.5 mr-1" />
+          View
+        </Button>
       </div>
     </div>
   );
 };
 
 // ============================================
-// MAIN ORDERS CLIENT COMPONENT
+// MAIN ORDERS CLIENT COMPONENT (Updated)
 // ============================================
 
 interface OrdersClientProps {
@@ -972,70 +1429,45 @@ export function OrdersClient({
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
-  const [draftWizardOpen, setDraftWizardOpen] = useState(false);
+  const [captureDialogOpen, setCaptureDialogOpen] = useState(false);
   const [newStatus, setNewStatus] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [captureLoading, setCaptureLoading] = useState(false);
-  
-  // Date filter state - using Date objects
+    // Date filter state
   const [dateFrom, setDateFrom] = useState<Date | null>(
     initialDateFrom ? new Date(initialDateFrom) : null
   );
   const [dateTo, setDateTo] = useState<Date | null>(
     initialDateTo ? new Date(initialDateTo) : null
   );
+  // Search state
+  const [searchTerm, setSearchTerm] = useState(initialSearch);
   
-  // Build filters object for the hook - using created_at field
+  // Date filter state - fixed to today's date
+  const today = new Date();
+  const todayStart = startOfDay(today);
+  const todayEnd = endOfDay(today);
+  
+  // Build filters object for the hook
   const filters = useMemo(() => {
     const filterObj: Record<string, any> = {
       company_id: pricingContext.companyId,
     };
     
-    // Date filters using created_at field
-    // Convert dates to ISO strings for Medusa v2 API
-    if (dateFrom) {
-      // Set to start of day for inclusive filtering
-      const fromDate = startOfDay(dateFrom);
-      filterObj.created_at_from = fromDate.toISOString();
+    filterObj.created_at_from = todayStart.toISOString();
+    filterObj.created_at_to = todayEnd.toISOString();
+    filterObj.status_not_in = ['cancelled', 'refunded'];
+    
+    if (searchTerm) {
+      filterObj.search = searchTerm;
     }
     
-    if (dateTo) {
-      // Set to end of day for inclusive filtering
-      const toDate = endOfDay(dateTo);
-      filterObj.created_at_to = toDate.toISOString();
-    }
-    
-    // Add search filter
-    const search = searchParams.get('search');
-    if (search) {
-      filterObj.search = search;
-    }
-    
-    // Add status filter
-    const status = searchParams.get('status');
-    if (status && status !== 'all') {
-      filterObj.status = status;
-    }
-    
-    // Add payment status filter
-    const paymentStatus = searchParams.get('payment_status');
-    if (paymentStatus && paymentStatus !== 'all') {
-      filterObj.payment_status = paymentStatus;
-    }
-    
-    // Add customer filter
-    const customerId = searchParams.get('customer_id');
-    if (customerId) {
-      filterObj.customer_id = customerId;
-    }
-    
-    // Add order type filter for drafts
     if (orderType === 'drafts') {
       filterObj.is_draft = true;
     }
     
     return filterObj;
-  }, [pricingContext.companyId, dateFrom, dateTo, searchParams, orderType]);
+  }, [pricingContext.companyId, searchTerm, orderType]);
 
   // Get pagination params from URL
   const page = parseInt(searchParams.get('page') || String(initialPage));
@@ -1065,26 +1497,13 @@ export function OrdersClient({
 
   useEffect(() => {
     if (data) {
-      // Filter orders by date range using created_at field (client-side fallback)
-      let filteredOrders = data.orders || [];
+      let filteredOrders = (data.orders || []).filter((order: any) => {
+        const orderDate = new Date(order.created_at);
+        const isTodayDate = orderDate >= todayStart && orderDate <= todayEnd;
+        const isNotCancelledOrRefunded = order.status !== 'cancelled' && order.status !== 'refunded';
+        return isTodayDate && isNotCancelledOrRefunded;
+      });
       
-      // Client-side filtering as fallback for Medusa v2
-      if (dateFrom || dateTo) {
-        filteredOrders = filteredOrders.filter((order: any) => {
-          const orderDate = new Date(order.created_at);
-          
-          if (dateFrom && dateTo) {
-            return orderDate >= startOfDay(dateFrom) && orderDate <= endOfDay(dateTo);
-          } else if (dateFrom) {
-            return orderDate >= startOfDay(dateFrom);
-          } else if (dateTo) {
-            return orderDate <= endOfDay(dateTo);
-          }
-          return true;
-        });
-      }
-      
-      // Sort orders
       const sortedOrders = sortOrders(filteredOrders, initialSortField, initialSortOrder);
       setOrders(sortedOrders);
       
@@ -1096,10 +1515,15 @@ export function OrdersClient({
         has_previous: data.has_previous || false
       });
     }
-  }, [data, initialSortField, initialSortOrder, dateFrom, dateTo, limit]);
+  }, [data, initialSortField, initialSortOrder, limit]);
+
+
+
   
-  const [searchTerm, setSearchTerm] = useState(initialSearch);
-  
+
+
+
+
   // Check mobile
   const [isMobile, setIsMobile] = useState(false);
   
@@ -1131,6 +1555,19 @@ export function OrdersClient({
     });
   }, [router, pathname, searchParams, orderType]);
 
+
+  // Handle date change
+  const handleDateChange = useCallback((from: Date | null, to: Date | null) => {
+    setDateFrom(from);
+    setDateTo(to);
+    updateUrlParams({ 
+      date_from: from ? format(from, 'yyyy-MM-dd') : null,
+      date_to: to ? format(to, 'yyyy-MM-dd') : null,
+      page: 1
+    });
+    refetch();
+  }, [updateUrlParams, refetch]);
+
   // Handle page change
   const handlePageChange = useCallback((page: number) => {
     updateUrlParams({ page });
@@ -1145,17 +1582,6 @@ export function OrdersClient({
     return () => clearTimeout(timeoutId);
   }, [updateUrlParams]);
 
-  // Handle date change - uses created_at field
-  const handleDateChange = useCallback((from: Date | null, to: Date | null) => {
-    setDateFrom(from);
-    setDateTo(to);
-    updateUrlParams({ 
-      date_from: from ? format(from, 'yyyy-MM-dd') : null,
-      date_to: to ? format(to, 'yyyy-MM-dd') : null,
-      page: 1
-    });
-  }, [updateUrlParams]);
-
   // Handle status update
   const handleStatusUpdate = async (orderId: string, status: string) => {
     setIsLoading(true);
@@ -1164,6 +1590,7 @@ export function OrdersClient({
       if (result.success) {
         toast.success(`Order status updated to ${status}`);
         await refetch();
+        setViewDialogOpen(false);
       } else {
         throw new Error(result.error);
       }
@@ -1174,21 +1601,26 @@ export function OrdersClient({
     }
   };
 
-  // Handle capture payment
-  const handleCapturePayment = async (order: any) => {
+  // Handle capture payment with amount and discount
+  const handleCapturePayment = async (amount: number, discountCode?: string) => {
     setCaptureLoading(true);
     try {
       const result = await captureOrderPayment({
-        order_id: order?.id,
+        order_id: selectedOrder?.id,
         payment_method: 'cash',
         payment_data: {
-          amount: order?.total
+          amount: amount,
+          received: amount,
+          change: amount - (selectedOrder?.total || 0),
+          discount_code: discountCode
         }
       });
 
       if (result?.id) {
         toast.success('Payment captured successfully');
         await refetch();
+        setCaptureDialogOpen(false);
+        setViewDialogOpen(false);
       }
     } catch (error) {
       toast.error('Failed to capture payment');
@@ -1266,17 +1698,22 @@ export function OrdersClient({
     setConvertDialogOpen(true);
   };
 
+  const handleCaptureDialog = (order: any) => {
+    setSelectedOrder(order);
+    setCaptureDialogOpen(true);
+  };
+
   const { total_pages, has_next, has_previous, count } = pagination;
   
   return (
     <TooltipProvider>
       <div className="space-y-6">
-        {/* Header Actions */}
+        {/* Search Section */}
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder={`Search ${orderType === 'drafts' ? 'draft orders' : 'orders'} by ID, customer, email...`}
+              placeholder={`Search active ${orderType === 'drafts' ? 'draft orders' : 'orders'} by ID, customer, email...`}
               value={searchTerm}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-9 h-10"
@@ -1290,8 +1727,7 @@ export function OrdersClient({
               </button>
             )}
           </div>
-          
-          <div className="flex items-center gap-2">
+           <div className="flex items-center gap-2">
             {/* Date Range Filter */}
             <DateRangeFilter
               dateFrom={dateFrom}
@@ -1299,14 +1735,6 @@ export function OrdersClient({
               onDateChange={handleDateChange}
               onClear={() => handleDateChange(null, null)}
             />
-            
-            {orderType === 'drafts' && (
-              <Button onClick={() => setDraftWizardOpen(true)} className="gap-2 h-10">
-                <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">Create Draft</span>
-                <span className="sm:hidden">Draft</span>
-              </Button>
-            )}
           </div>
         </div>
 
@@ -1323,8 +1751,8 @@ export function OrdersClient({
             <div className="h-16 w-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
               <Package className="h-8 w-8 text-muted-foreground/50" />
             </div>
-            <p className="text-lg font-medium text-muted-foreground">No {orderType} found</p>
-            <p className="text-sm text-muted-foreground mt-1">Try adjusting your search or filters</p>
+            <p className="text-lg font-medium text-muted-foreground">No active {orderType} found for today</p>
+            <p className="text-sm text-muted-foreground mt-1">Try adjusting your search</p>
           </div>
         ) : !isMobile ? (
           /* Desktop Table View */
@@ -1394,7 +1822,7 @@ export function OrdersClient({
                               currentStatus={order.status}
                               paymentStatus={order.payment_status}
                               onStatusChange={(status) => handleStatusUpdate(order.id, status)}
-                              onCapturePayment={() => handleCapturePayment(order)}
+                              onCapturePayment={() => handleCaptureDialog(order)}
                               canCapturePayment={order.payment_status === 'authorized'}
                               disabled={isLoading || captureLoading}
                             />
@@ -1433,15 +1861,15 @@ export function OrdersClient({
                         </Tooltip>
                       </TableCell>
                       <TableCell className="text-right">
-                        <OrderActionsMenu
-                          order={order}
-                          orderType={orderType}
-                          onView={handleView}
-                          onStatusUpdate={handleStatusDialog}
-                          onDelete={handleDeleteDialog}
-                          onConvert={handleConvertDialog}
-                          onCapturePayment={handleCapturePayment}
-                        />
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => handleView(order)}
+                          className="h-8 gap-2"
+                        >
+                          <Eye className="h-4 w-4" />
+                          View
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1458,10 +1886,6 @@ export function OrdersClient({
                 order={order}
                 orderType={orderType}
                 onView={handleView}
-                onStatusUpdate={handleStatusDialog}
-                onDelete={handleDeleteDialog}
-                onConvert={handleConvertDialog}
-                onCapturePayment={handleCapturePayment}
               />
             ))}
           </div>
@@ -1479,46 +1903,54 @@ export function OrdersClient({
           isLoading={isLoading}
         />
 
-        {/* View Order Dialog */}
+        {/* View Order Dialog with Detailed View */}
         <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
-                {orderType === 'drafts' ? 'Draft Order' : 'Order'} Details
+                {orderType === 'drafts' ? 'Draft Order Details' : 'Order Details'}
               </DialogTitle>
               <DialogDescription>
-                Complete {orderType === 'drafts' ? 'draft order' : 'order'} information and items
+                Complete order information including items, payments, and notes
               </DialogDescription>
             </DialogHeader>
             {selectedOrder && (
-              <OrderView order={selectedOrder} isDraft={orderType === 'drafts'} />
+              <DetailedOrderView
+                order={selectedOrder}
+                isDraft={orderType === 'drafts'}
+                onStatusUpdate={(status) => handleStatusUpdate(selectedOrder.id, status)}
+                onCapturePayment={() => handleCaptureDialog(selectedOrder)}
+                isCapturing={captureLoading}
+              />
             )}
-            <DialogFooter>
-              {orderType === 'drafts' && selectedOrder && (
-                <Button onClick={() => {
-                  setViewDialogOpen(false);
-                  setConvertDialogOpen(true);
-                }}>
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Convert to Order
-                </Button>
-              )}
-              {orderType === 'orders' && selectedOrder?.payment_status === 'authorized' && (
-                <Button 
-                  onClick={() => {
-                    setViewDialogOpen(false);
-                    handleCapturePayment(selectedOrder);
-                  }}
-                  disabled={captureLoading}
-                >
-                  {captureLoading ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Banknote className="mr-2 h-4 w-4" />
-                  )}
-                  Capture Payment
-                </Button>
-              )}
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+              <div className="flex-1 flex gap-2">
+                {orderType === 'drafts' && selectedOrder && (
+                  <Button 
+                    onClick={() => {
+                      setViewDialogOpen(false);
+                      setConvertDialogOpen(true);
+                    }}
+                    variant="default"
+                  >
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Convert to Order
+                  </Button>
+                )}
+                {selectedOrder && (
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => {
+                      setViewDialogOpen(false);
+                      setDeleteDialogOpen(true);
+                    }}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </Button>
+                )}
+              </div>
               <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
                 Close
               </Button>
@@ -1579,6 +2011,15 @@ export function OrdersClient({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Capture Payment Dialog */}
+        <CapturePaymentDialog
+          open={captureDialogOpen}
+          onOpenChange={setCaptureDialogOpen}
+          order={selectedOrder}
+          onCapture={handleCapturePayment}
+          isCapturing={captureLoading}
+        />
 
         {/* Convert Dialog */}
         <AlertDialog open={convertDialogOpen} onOpenChange={setConvertDialogOpen}>

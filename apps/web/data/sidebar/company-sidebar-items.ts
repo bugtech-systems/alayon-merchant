@@ -66,31 +66,31 @@ export const companySidebarItems: NavGroup[] = [
         icon: Banknote,
         // comingSoon: true
       },
-       {
-        title: "Map",
-        url: "/map",
-        icon: Forklift,
-        comingSoon: false,
-      },
-      {
-        title: "POS",
-        url: "/pos",
-        icon: Banknote,
-        // comingSoon: true
-      },
+      //  {
+      //   title: "Map",
+      //   url: "/map",
+      //   icon: Forklift,
+      //   comingSoon: false,
+      // },
+      // {
+      //   title: "POS",
+      //   url: "/pos",
+      //   icon: Banknote,
+      //   // comingSoon: true
+      // },
       // {
       //   title: "Analytics",
       //   url: "/dashboard/analytics",
       //   icon: Gauge,
       //   // comingSoon: true
       // },
-      // {
-      //   title: "Productivity",
-      //   url: "/dashboard/productivity",
-      //   icon: ListTodo,
-      //   // comingSoon: true
+      {
+        title: "Transactions",
+        url: "/dashboard/transactions",
+        icon: ListTodo,
+        // comingSoon: true
 
-      // },
+      },
       // {
       //   title: "E-commerce",
       //   url: "/dashboard/coming-soon",

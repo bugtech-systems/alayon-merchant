@@ -246,7 +246,7 @@ const getFulfillmentStatusDisplay = (status: string | null): string => {
   return statusMap[status || "not_fulfilled"] || status || "Not Fulfilled";
 };
 
-// Build query string for custom API
+// Build query string for custom API - aligned with listPosOrders approach
 const buildQueryString = (
   limit: number,
   offset: number,
@@ -258,36 +258,110 @@ const buildQueryString = (
   params.set("limit", limit.toString());
   params.set("offset", offset.toString());
   
-  // Add filters
-  if (filters?.search) params.set("search", filters.search);
-  if (filters?.status) params.set("status", filters.status);
-  if (filters?.payment_status) params.set("payment_status", filters.payment_status);
-  if (filters?.fulfillment_status) params.set("fulfillment_status", filters.fulfillment_status);
-  if (filters?.customer_id) params.set("customer_id", filters.customer_id);
-  if (filters?.company_id) params.set("company_id", filters.company_id);
-  if (filters?.seller_id) params.set("seller_id", filters.seller_id);
-  if (filters?.email) params.set("email", filters.email);
-  if (filters?.created_from) params.set("created_from", filters.created_from.toISOString());
-  if (filters?.created_to) params.set("created_to", filters.created_to.toISOString());
-  if (filters?.min_total !== undefined) params.set("min_total", filters.min_total.toString());
-  if (filters?.max_total !== undefined) params.set("max_total", filters.max_total.toString());
+  // Add fields to include all related data (matching listPosOrders)
+  const fields = [
+    'id',
+    'status',
+    'created_at',
+    'updated_at',
+    'email',
+    'display_id',
+    'custom_display_id',
+    'payment_status',
+    'fulfillment_status',
+    'total',
+    'subtotal',
+    'tax_total',
+    'shipping_total',
+    'discount_total',
+    'currency_code',
+    'customer',
+    'sales_channel',
+    'payment_collections',
+    'payments',
+    'items',
+    'shipping_address',
+    'billing_address',
+    'shipping_methods',
+    'metadata',
+    'fulfillments',
+    'claims',
+    'swaps',
+    'returns',
+    'refunds',
+    'promotions',
+    'discounts'
+  ].join(',');
   
-  // Add sorting
-  if (sort?.field) params.set("sort_by", sort.field);
-  if (sort?.order) params.set("sort_order", sort.order);
+  params.set("fields", fields);
   
-  // Request expanded data
-  params.set("expand_items", "true");
-  params.set("expand_customer", "true");
-  params.set("expand_addresses", "true");
-  params.set("expand_shipping_methods", "true");
-  params.set("expand_payments", "true");
-  params.set("expand_delivery_info", "true");
-
+  // Set default sorting to show newest first (matching listPosOrders)
+  if (sort?.field) {
+    params.set("sort_by", sort.field);
+    if (sort?.order) params.set("sort_order", sort.order);
+  } else {
+    params.set("order", "-created_at");
+  }
+  
+  // Add search filter (Medusa's q parameter)
+  if (filters?.search) {
+    params.set("q", filters.search);
+  }
+  
+  // Handle status filter - only add if it's a specific status (not 'all' and not exclusion)
+  // The exclusion (!canceled,!refunded) will be handled client-side like listPosOrders
+  if (filters?.status && filters.status !== 'all' && !filters.status.includes('!')) {
+    params.set("status", filters.status);
+  }
+  // Note: We're NOT adding exclusion status to the query since it causes errors
+  
+  // Add payment status filter
+  if (filters?.payment_status && filters.payment_status !== 'all') {
+    params.set("payment_status", filters.payment_status);
+  }
+  
+  // Add fulfillment status filter
+  if (filters?.fulfillment_status && filters.fulfillment_status !== 'all') {
+    params.set("fulfillment_status", filters.fulfillment_status);
+  }
+  
+  // Add customer filter
+  if (filters?.customer_id) {
+    params.set("customer_id", filters.customer_id);
+  }
+  
+  // Handle date filters using Medusa's range syntax (matching listPosOrders)
+  const dateFrom = filters?.date_from || filters?.created_from;
+  const dateTo = filters?.date_to || filters?.created_to;
+  
+  if (dateFrom) {
+    const fromValue = typeof dateFrom === 'string' ? dateFrom : dateFrom.toISOString().split('T')[0];
+    params.set("created_at[gte]", fromValue);
+  }
+  
+  if (dateTo) {
+    const toValue = typeof dateTo === 'string' ? dateTo : dateTo.toISOString().split('T')[0];
+    params.set("created_at[lte]", toValue);
+  }
+  
+  // Add numeric filters
+  if (filters?.min_total !== undefined && filters?.min_total !== null) {
+    params.set("total[gte]", filters.min_total.toString());
+  }
+  
+  if (filters?.max_total !== undefined && filters?.max_total !== null) {
+    params.set("total[lte]", filters.max_total.toString());
+  }
+  
+  // Add email filter
+  if (filters?.email) {
+    params.set("email", filters.email);
+  }
+  
   return params.toString();
 };
 
-// Main list orders function using Medusa SDK client to fetch from custom endpoint
+// Main list orders function - now matches listPosOrders pattern
 export const listOrders = async (
   limit: number = 10000,
   offset: number = 0,
@@ -298,6 +372,7 @@ export const listOrders = async (
     const headers = await getAuthHeaders();
     const next = await getCacheOptions("orders");
     const queryString = buildQueryString(limit, offset, filters, sort);
+    
     // Use Medusa SDK client to fetch from custom endpoint
     const response = await sdk.client.fetch(
       `/dashboard/orders?${queryString}`,
@@ -307,22 +382,66 @@ export const listOrders = async (
         next,
       }
     );
-    // Transform orders for dashboard
-    const transformedOrders = response.orders?.map(transformOrderForDashboard) || [];
+    
 
-    const totalPages = Math.ceil((response.count || 0) / limit);
+    console.log(response, "RESSPPp", queryString)
+    // Get all orders from response
+    let orders = response.orders || [];
+    const totalCount = response.count || 0;
+    
+    // Filter out cancelled and refunded on client side (matching listPosOrders)
+    if (!filters?.include_cancelled && !filters?.include_refunded) {
+      orders = orders.filter((order: any) => 
+        order.status !== 'canceled' && order.status !== 'refunded'
+      );
+    }
+    
+    // Filter by seller_id or company_id from metadata (matching listPosOrders)
+    if (filters?.seller_id) {
+      orders = orders.filter((order: any) => order.metadata?.seller_id === filters.seller_id);
+    }
+    if (filters?.company_id) {
+      orders = orders.filter((order: any) => order.metadata?.company_id === filters.company_id);
+    }
+    
+    // Additional client-side filtering for date range if needed
+    const dateFrom = filters?.date_from || filters?.created_from;
+    const dateTo = filters?.date_to || filters?.created_to;
+    
+    // if (dateFrom) {
+    //   const fromDate = new Date(dateFrom);
+    //   orders = orders.filter((order: any) => new Date(order.created_at) >= fromDate);
+    // }
+    // if (dateTo) {
+    //   const toDate = new Date(dateTo);
+    //   orders = orders.filter((order: any) => new Date(order.created_at) <= toDate);
+    // }
+    
+    // Sort orders by created_at descending (newest first)
+    orders.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    
+    // Calculate pagination with filtered count
+    const filteredCount = orders.length;
+    const start = offset;
+    const end = Math.min(offset + limit, filteredCount);
+    const paginatedOrders = orders.slice(start, end);
+    
+    // Transform orders for dashboard
+    const transformedOrders = paginatedOrders.map(transformOrderForDashboard) || [];
+    
+    const totalPages = Math.ceil((filteredCount || 0) / limit);
     const currentPage = Math.floor(offset / limit) + 1;
+    
     return {
       orders: transformedOrders,
-      count: response.count || 0,
-      limit: response.limit || limit,
-      offset: response.offset || offset,
+      count: filteredCount || 0,
+      limit: limit,
+      offset: offset,
       page: currentPage,
       total_pages: totalPages,
-      has_next: currentPage < totalPages,
-      has_previous: currentPage > 1,
+      has_next: offset + limit < filteredCount,
+      has_previous: offset > 0,
     };
-
   } catch (error) {
     console.error("Error fetching orders:", error);
     medusaError(error);
