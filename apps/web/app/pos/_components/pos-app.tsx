@@ -449,9 +449,9 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
                 <Button size="sm" variant="outline" className="h-7 px-2" onClick={refreshProducts}>
                   <RefreshCw className="h-3 w-3" />
                 </Button>
-                <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setDraftsDialogOpen(true)}>
+                {/* <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setDraftsDialogOpen(true)}>
                   <History className="h-3 w-3" />
-                </Button>
+                </Button> */}
               </div>
             </div>
             
