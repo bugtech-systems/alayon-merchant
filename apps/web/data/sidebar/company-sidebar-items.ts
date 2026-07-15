@@ -136,18 +136,31 @@ export const riderSidebarItems: NavGroup[] = [
         icon: Users,
         // comingSoon: true
       },
- 
-       {
-        title: "Map",
-        url: "/map",
-        icon: Forklift,
-        comingSoon: false,
-      },
+      //  {
+      //   title: "Map",
+      //   url: "/map",
+      //   icon: Forklift,
+      //   comingSoon: false,
+      // },
       {
-        title: "POS",
-        url: "/pos",
+        title: "Inventory",
+        url: "/dashboard/inventory",
         icon: Banknote,
         // comingSoon: true
+        subItems: [
+        {
+          title: "History",
+          url: "#",
+        },
+        {
+          title: "Starred",
+          url: "#",
+        },
+        {
+          title: "Settings",
+          url: "#",
+        },
+      ],
       },
       // {
       //   title: "Finance",

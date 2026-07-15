@@ -65,7 +65,7 @@ export async function updateTransaction(id: string, data: any) {
   try {
     const response = await adminFetch(`/dashboard/transactions/${id}`, {
       method: 'PUT',
-      body: data,
+      body: JSON.stringify(data),
     });
 
     return { success: true, transaction: response.transaction };

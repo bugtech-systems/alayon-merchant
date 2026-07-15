@@ -7,8 +7,6 @@ import {
   useState,
 } from "react"
 import { useRouter } from "next/navigation"
-import { apiFetch } from "@/lib/apiClient"
-import { n8nFetcher } from "@/hooks/useN8nQuery"
 import { getAuthHeaders, removeAuthToken, setAuthToken } from "@/lib/medusa/data/cookies"
 import { loginUser, retrieveUser } from "@/lib/data"
 import { removeCartId, removeSession } from "@/lib/data/cookies"
