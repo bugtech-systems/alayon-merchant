@@ -48,7 +48,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { getCustomers, type CustomerFilters, type CustomerListResponse } from "@/lib/actions/customer";
+import { getCustomers } from "@/lib/actions/customer";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // Customer type based on API response

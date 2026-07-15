@@ -84,6 +84,7 @@ export const companySidebarItems: NavGroup[] = [
         {
           title: "Categories",
           url: "/dashboard/categories",
+          comingSoon: true
         },
 
       ]
@@ -95,10 +96,6 @@ export const companySidebarItems: NavGroup[] = [
         icon: Banknote,
         // comingSoon: true
         subItems: [
-          {
-          title: "Products",
-          url: "/dashboard/products",
-        },
         {
           title: "Inventory Items",
           url: "/dashboard/inventory",
@@ -106,6 +103,8 @@ export const companySidebarItems: NavGroup[] = [
         {
           title: "Purchases",
           url: "/dashboard/purchases",
+          comingSoon: true
+
         }
       ],
       },
@@ -173,10 +172,6 @@ export const riderSidebarItems: NavGroup[] = [
         icon: Banknote,
         // comingSoon: true
         subItems: [
-          {
-          title: "Products",
-          url: "/dashboard/products",
-        },
         {
           title: "Inventory Items",
           url: "/dashboard/inventory",
