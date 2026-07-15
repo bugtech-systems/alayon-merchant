@@ -1445,8 +1445,8 @@ export function OrdersClient({
   
   // Date filter state - fixed to today's date
   const today = new Date();
-  const todayStart = startOfDay(today);
-  const todayEnd = endOfDay(today);
+  const todayStart = startOfDay(initialDateFrom || today);
+  const todayEnd = endOfDay(initialDateTo || today);
   
   // Build filters object for the hook
   const filters = useMemo(() => {
@@ -1456,7 +1456,7 @@ export function OrdersClient({
     
     filterObj.created_at_from = todayStart.toISOString();
     filterObj.created_at_to = todayEnd.toISOString();
-    filterObj.status_not_in = ['cancelled', 'refunded'];
+    filterObj.status_not_in = ['canceled', 'refunded'];
     
     if (searchTerm) {
       filterObj.search = searchTerm;
@@ -1467,7 +1467,7 @@ export function OrdersClient({
     }
     
     return filterObj;
-  }, [pricingContext.companyId, searchTerm, orderType]);
+  }, [pricingContext.companyId, searchTerm, orderType, initialDateTo, initialDateFrom]);
 
   // Get pagination params from URL
   const page = parseInt(searchParams.get('page') || String(initialPage));

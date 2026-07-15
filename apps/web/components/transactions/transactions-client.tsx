@@ -81,9 +81,20 @@ import {
   createTransaction, 
   listTransactions, 
   updateTransaction, 
-  deleteTransaction 
+  deleteTransaction,
+  uploadTransactionAttachment,
+  deleteTransactionAttachment,
+  // Category actions
+  listCategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  getCategoryTree,
+  searchCategories,
+  getCategoriesByType,
 } from '@/lib/actions/transactions';
 import type { Transaction, TransactionCategory } from '@/types/transactions';
+import { TransactionForm } from './transaction-form';
 
 // ============================================
 // CONSTANTS
@@ -95,464 +106,25 @@ const TRANSACTION_TYPES = [
   { value: 'expense', label: 'Expense', icon: <TrendingDown className="h-4 w-4" />, color: 'text-red-500' },
   { value: 'income', label: 'Income', icon: <TrendingUp className="h-4 w-4" />, color: 'text-green-500' },
   { value: 'transfer', label: 'Transfer', icon: <Banknote className="h-4 w-4" />, color: 'text-blue-500' },
-  { value: 'adjustment', label: 'Adjustment', icon: <AlertCircle className="h-4 w-4" />, color: 'text-yellow-500' },
-];
-
-const TRANSACTION_CATEGORIES = [
-  { value: 'operating', label: 'Operating', icon: <FileText className="h-4 w-4" /> },
-  { value: 'capital', label: 'Capital', icon: <Building2 className="h-4 w-4" /> },
-  { value: 'payroll', label: 'Payroll', icon: <Users className="h-4 w-4" /> },
-  { value: 'tax', label: 'Tax', icon: <Receipt className="h-4 w-4" /> },
-  { value: 'other', label: 'Other', icon: <Wallet className="h-4 w-4" /> },
-];
-
-const PAYMENT_METHODS = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'bank_transfer', label: 'Bank Transfer' },
-  { value: 'check', label: 'Check' },
-  { value: 'credit_card', label: 'Credit Card' },
-  { value: 'other', label: 'Other' },
 ];
 
 const TRANSACTION_STATUS = [
   { value: 'pending', label: 'Pending', variant: 'warning' as const },
   { value: 'completed', label: 'Completed', variant: 'success' as const },
+  { value: 'failed', label: 'Failed', variant: 'destructive' as const },
   { value: 'cancelled', label: 'Cancelled', variant: 'destructive' as const },
+  { value: 'refunded', label: 'Refunded', variant: 'secondary' as const },
 ];
 
-const CATEGORY_COLORS = [
-  'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500',
-  'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500',
-  'bg-orange-500', 'bg-cyan-500', 'bg-rose-500', 'bg-amber-500',
+const PAYMENT_METHODS = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'credit_card', label: 'Credit Card' },
+  { value: 'debit_card', label: 'Debit Card' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'digital_wallet', label: 'Digital Wallet' },
+  { value: 'check', label: 'Check' },
+  { value: 'other', label: 'Other' },
 ];
-
-const ICON_MAP: Record<string, React.ReactNode> = {
-  wallet: <Wallet className="h-4 w-4" />,
-  expense: <TrendingDown className="h-4 w-4" />,
-  income: <TrendingUp className="h-4 w-4" />,
-  package: <Package className="h-4 w-4" />,
-  users: <Users className="h-4 w-4" />,
-  building: <Building2 className="h-4 w-4" />,
-  banknote: <Banknote className="h-4 w-4" />,
-  receipt: <Receipt className="h-4 w-4" />,
-  file: <FileText className="h-4 w-4" />,
-};
-
-const AVAILABLE_ICONS = ['wallet', 'expense', 'income', 'package', 'users', 'building', 'banknote', 'receipt', 'file'];
-
-// ============================================
-// LOCAL STORAGE HELPERS
-// ============================================
-
-const STORAGE_KEY = 'transaction_categories';
-const SHOW_BREAKDOWN_KEY = 'show_category_breakdown';
-
-const loadCategories = (): TransactionCategory[] => {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-};
-
-const saveCategories = (categories: TransactionCategory[]) => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(categories));
-  } catch (error) {
-    console.error('Error saving categories:', error);
-  }
-};
-
-const loadBreakdownVisibility = (): boolean => {
-  try {
-    const stored = localStorage.getItem(SHOW_BREAKDOWN_KEY);
-    return stored ? JSON.parse(stored) : true;
-  } catch {
-    return true;
-  }
-};
-
-const saveBreakdownVisibility = (show: boolean) => {
-  try {
-    localStorage.setItem(SHOW_BREAKDOWN_KEY, JSON.stringify(show));
-  } catch (error) {
-    console.error('Error saving breakdown visibility:', error);
-  }
-};
-
-// ============================================
-// TRANSACTION FORM
-// ============================================
-
-interface TransactionFormProps {
-  transaction?: Transaction;
-  onSave: (data: any) => Promise<void>;
-  onCancel: () => void;
-  categories: TransactionCategory[];
-  onAddCategory: (category: TransactionCategory) => void;
-  isLoading?: boolean;
-}
-
-const TransactionForm = ({
-  transaction,
-  onSave,
-  onCancel,
-  categories,
-  onAddCategory,
-  isLoading = false,
-}: TransactionFormProps) => {
-  const [formData, setFormData] = useState({
-    amount: transaction?.amount?.toString() || '',
-    description: transaction?.description || '',
-    type: transaction?.type || 'expense',
-    category: transaction?.category || 'operating',
-    category_id: transaction?.category_id || '',
-    date: transaction?.date ? format(new Date(transaction.date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
-    payment_method: transaction?.payment_method || 'cash',
-    status: transaction?.status || 'pending',
-    reference_number: transaction?.reference_number || '',
-    notes: transaction?.notes || '',
-    is_taxable: transaction?.is_taxable || false,
-    tax_amount: transaction?.tax_amount?.toString() || '',
-    is_reconciled: transaction?.is_reconciled || false,
-  });
-
-  const [showNewCategory, setShowNewCategory] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [newCategoryIcon, setNewCategoryIcon] = useState('wallet');
-  const [newCategoryColor, setNewCategoryColor] = useState(CATEGORY_COLORS[0]);
-  const [newCategoryType, setNewCategoryType] = useState<'income' | 'expense' | 'transfer'>('expense');
-
-  const handleAddNewCategory = () => {
-    if (!newCategoryName.trim()) return;
-    if (categories.find(a => a.id == newCategoryName.trim())) return alert('Already Exists!');
-    
-    const category: TransactionCategory = {
-      id: newCategoryName.trim(),
-      name: newCategoryName.trim(),
-      type: newCategoryType,
-      icon: newCategoryIcon,
-      color: newCategoryColor,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    onAddCategory(category);
-    setFormData({ ...formData, category_id: category.id });
-    setNewCategoryName('');
-    setShowNewCategory(false);
-    toast.success(`Category "${category.name}" created`);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await onSave(formData);
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto px-1">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Amount *</Label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">₱</span>
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
-              value={formData.amount}
-              onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-              className="pl-8"
-              required
-            />
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Date *</Label>
-          <Input
-            type="date"
-            value={formData.date}
-            onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-            required
-          />
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Description *</Label>
-        <Input
-          placeholder="Transaction description"
-          value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          required
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Type *</Label>
-          <Select
-            value={formData.type}
-            onValueChange={(value) => setFormData({ ...formData, type: value })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select type" />
-            </SelectTrigger>
-            <SelectContent>
-              {TRANSACTION_TYPES.map((type) => (
-                <SelectItem key={type.value} value={type.value}>
-                  <div className="flex items-center gap-2">
-                    {type.icon}
-                    {type.label}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Category *</Label>
-          <Select
-            value={formData.category}
-            onValueChange={(value) => setFormData({ ...formData, category: value })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent>
-              {TRANSACTION_CATEGORIES.map((cat) => (
-                <SelectItem key={cat.value} value={cat.value}>
-                  <div className="flex items-center gap-2">
-                    {cat.icon}
-                    {cat.label}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label>Sub-Category</Label>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-6 text-xs"
-            onClick={() => setShowNewCategory(!showNewCategory)}
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            New Sub-Category
-          </Button>
-        </div>
-
-        {showNewCategory && (
-          <div className="space-y-2 p-3 border rounded-md bg-muted/30">
-            <Input
-              placeholder="Sub-category name"
-              value={newCategoryName}
-              onChange={(e) => setNewCategoryName(e.target.value)}
-              className="h-8"
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <Select value={newCategoryType} onValueChange={(value: any) => setNewCategoryType(value)}>
-                <SelectTrigger className="h-8">
-                  <SelectValue placeholder="Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TRANSACTION_TYPES.map((type) => (
-                    <SelectItem key={type.value} value={type.value}>
-                      <div className="flex items-center gap-2">
-                        {type.icon}
-                        {type.label}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={newCategoryIcon} onValueChange={setNewCategoryIcon}>
-                <SelectTrigger className="h-8">
-                  <SelectValue placeholder="Icon" />
-                </SelectTrigger>
-                <SelectContent>
-                  {AVAILABLE_ICONS.map((icon) => (
-                    <SelectItem key={icon} value={icon}>
-                      <div className="flex items-center gap-2">
-                        {ICON_MAP[icon]}
-                        {icon}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex gap-2">
-              <Select value={newCategoryColor} onValueChange={setNewCategoryColor}>
-                <SelectTrigger className="flex-1 h-8">
-                  <SelectValue placeholder="Color" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORY_COLORS.map((color) => (
-                    <SelectItem key={color} value={color}>
-                      <div className="flex items-center gap-2">
-                        <div className={cn("w-3 h-3 rounded-full", color)} />
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button type="button" size="sm" className="h-8" onClick={handleAddNewCategory}>
-                Add
-              </Button>
-            </div>
-          </div>
-        )}
-
-        <Select
-          value={formData.category_id || 'none'}
-          onValueChange={(value) => setFormData({ ...formData, category_id: value === 'none' ? '' : value })}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select sub-category" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">None</SelectItem>
-            {categories.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                <div className="flex items-center gap-2">
-                  <span className={cn("w-2 h-2 rounded-full", c.color)} />
-                  {ICON_MAP[c.icon || 'wallet']}
-                  {c.name}
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Payment Method</Label>
-          <Select
-            value={formData.payment_method}
-            onValueChange={(value) => setFormData({ ...formData, payment_method: value })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select method" />
-            </SelectTrigger>
-            <SelectContent>
-              {PAYMENT_METHODS.map((method) => (
-                <SelectItem key={method.value} value={method.value}>
-                  {method.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Status</Label>
-          <Select
-            value={formData.status}
-            onValueChange={(value) => setFormData({ ...formData, status: value })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select status" />
-            </SelectTrigger>
-            <SelectContent>
-              {TRANSACTION_STATUS.map((status) => (
-                <SelectItem key={status.value} value={status.value}>
-                  {status.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Reference Number</Label>
-        <Input
-          placeholder="Invoice/Reference number"
-          value={formData.reference_number}
-          onChange={(e) => setFormData({ ...formData, reference_number: e.target.value })}
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="is_taxable"
-            checked={formData.is_taxable}
-            onCheckedChange={(checked) => setFormData({ ...formData, is_taxable: checked as boolean })}
-          />
-          <Label htmlFor="is_taxable" className="text-sm font-normal">Taxable</Label>
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="is_reconciled"
-            checked={formData.is_reconciled}
-            onCheckedChange={(checked) => setFormData({ ...formData, is_reconciled: checked as boolean })}
-          />
-          <Label htmlFor="is_reconciled" className="text-sm font-normal">Reconciled</Label>
-        </div>
-      </div>
-
-      {formData.is_taxable && (
-        <div className="space-y-2">
-          <Label>Tax Amount</Label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">₱</span>
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
-              value={formData.tax_amount}
-              onChange={(e) => setFormData({ ...formData, tax_amount: e.target.value })}
-              className="pl-8"
-            />
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-2">
-        <Label>Notes</Label>
-        <Textarea
-          placeholder="Additional notes..."
-          value={formData.notes}
-          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-          rows={2}
-        />
-      </div>
-
-      <DialogFooter>
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={isLoading}>
-          {isLoading ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            <>
-              <CheckCircle className="h-4 w-4 mr-2" />
-              {transaction ? 'Update' : 'Save'}
-            </>
-          )}
-        </Button>
-      </DialogFooter>
-    </form>
-  );
-};
 
 // ============================================
 // TRANSACTIONS TABLE
@@ -563,7 +135,9 @@ interface TransactionsTableProps {
   categories: TransactionCategory[];
   onEdit: (transaction: Transaction) => void;
   onDelete: (transaction: Transaction) => void;
+  onRefresh?: () => void;
   isMobile?: boolean;
+  isLoading?: boolean;
 }
 
 const TransactionsTable = ({
@@ -571,16 +145,17 @@ const TransactionsTable = ({
   categories,
   onEdit,
   onDelete,
+  onRefresh,
   isMobile = false,
+  isLoading = false,
 }: TransactionsTableProps) => {
   const getCategory = (id: string) => categories.find((c) => c.id === id);
 
   const TransactionTypeBadge = ({ type }: { type: string }) => {
-    const config: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' }> = {
+    const config: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' }> = {
       expense: { label: 'Expense', variant: 'secondary' },
       income: { label: 'Income', variant: 'success' },
       transfer: { label: 'Transfer', variant: 'outline' },
-      adjustment: { label: 'Adjustment', variant: 'warning' },
     };
     const { label, variant } = config[type] || config.expense;
     return <Badge variant={variant as any} className="text-xs">{label}</Badge>;
@@ -590,27 +165,12 @@ const TransactionsTable = ({
     const config: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' }> = {
       pending: { label: 'Pending', variant: 'warning' },
       completed: { label: 'Completed', variant: 'success' },
+      failed: { label: 'Failed', variant: 'destructive' },
       cancelled: { label: 'Cancelled', variant: 'destructive' },
+      refunded: { label: 'Refunded', variant: 'secondary' },
     };
     const { label, variant } = status ? config[status] : config.pending;
     return <Badge variant={variant as any} className="text-xs">{label}</Badge>;
-  };
-
-  const CategoryBadge = ({ category }: { category?: string }) => {
-    const config: Record<string, { label: string; color: string }> = {
-      operating: { label: 'Operating', color: 'bg-blue-500' },
-      capital: { label: 'Capital', color: 'bg-purple-500' },
-      payroll: { label: 'Payroll', color: 'bg-green-500' },
-      tax: { label: 'Tax', color: 'bg-red-500' },
-      other: { label: 'Other', color: 'bg-gray-500' },
-    };
-    const { label, color } = category ? config[category] : config.other;
-    return (
-      <Badge variant="outline" className="gap-1 text-xs">
-        <span className={cn("w-1.5 h-1.5 rounded-full", color)} />
-        {label}
-      </Badge>
-    );
   };
 
   if (isMobile) {
@@ -624,12 +184,11 @@ const TransactionsTable = ({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <TransactionTypeBadge type={transaction.type} />
-                    <CategoryBadge category={transaction.category} />
                     {transaction.status && <StatusBadge status={transaction.status} />}
                     {category && (
                       <Badge variant="outline" className="gap-1 text-xs">
                         <span className={cn("w-1.5 h-1.5 rounded-full", category.color)} />
-                        {ICON_MAP[category.icon || 'wallet']}
+                        {category.icon && <span>{category.icon}</span>}
                         <span className="truncate max-w-[80px]">{category.name}</span>
                       </Badge>
                     )}
@@ -657,7 +216,7 @@ const TransactionsTable = ({
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <CalendarIcon className="h-3.5 w-3.5" />
-                  {format(new Date(transaction.created_at), 'MMM dd, yyyy')}
+                  {format(new Date(transaction.transaction_date || transaction.created_at), 'MMM dd, yyyy')}
                 </span>
                 <div className="flex items-center gap-2">
                   {transaction.payment_method && (
@@ -706,79 +265,92 @@ const TransactionsTable = ({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {transactions.map((transaction) => {
-              const category = getCategory(transaction.category_id);
-              return (
-                <TableRow key={transaction.id} className="hover:bg-muted/20">
-                  <TableCell className="text-sm">
-                    {format(new Date(transaction.created_at), 'MMM dd, yyyy')}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-medium text-sm max-w-[200px] truncate">
-                        {transaction.description}
-                      </span>
-                      {transaction.reference_number && (
-                        <span className="text-xs text-muted-foreground">Ref: {transaction.reference_number}</span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <TransactionTypeBadge type={transaction.type} />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <CategoryBadge category={transaction.category} />
-                      {category && (
-                        <Badge variant="outline" className="gap-1 text-xs w-fit">
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+                </TableCell>
+              </TableRow>
+            ) : transactions.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  No transactions found
+                </TableCell>
+              </TableRow>
+            ) : (
+              transactions.map((transaction) => {
+                const category = getCategory(transaction.category_id);
+                return (
+                  <TableRow key={transaction.id} className="hover:bg-muted/20">
+                    <TableCell className="text-sm">
+                      {format(new Date(transaction.transaction_date || transaction.created_at), 'MMM dd, yyyy')}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-sm max-w-[200px] truncate">
+                          {transaction.description}
+                        </span>
+                        {transaction.reference_number && (
+                          <span className="text-xs text-muted-foreground">Ref: {transaction.reference_number}</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <TransactionTypeBadge type={transaction.type} />
+                    </TableCell>
+                    <TableCell>
+                      {category ? (
+                        <Badge variant="outline" className="gap-1 text-xs">
                           <span className={cn("w-1.5 h-1.5 rounded-full", category.color)} />
-                          {ICON_MAP[category.icon || 'wallet']}
+                          {category.icon && <span>{category.icon}</span>}
                           {category.name}
                         </Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">-</span>
                       )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {transaction.status && <StatusBadge status={transaction.status} />}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex flex-col items-end">
-                      <span className={cn(
-                        "font-semibold text-sm",
-                        transaction.type === 'income' ? 'text-green-600' : 
-                        transaction.type === 'expense' ? 'text-red-600' : 
-                        'text-blue-600'
-                      )}>
-                        {transaction.type === 'income' ? '+' : '-'}₱{Number(transaction.amount).toFixed(2)}
-                      </span>
-                      {transaction.is_taxable && (
-                        <span className="text-xs text-muted-foreground">Tax: ₱{Number(transaction.tax_amount || 0).toFixed(2)}</span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => onEdit(transaction)}
-                      >
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive"
-                        onClick={() => onDelete(transaction)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+                    </TableCell>
+                    <TableCell>
+                      {transaction.status && <StatusBadge status={transaction.status} />}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex flex-col items-end">
+                        <span className={cn(
+                          "font-semibold text-sm",
+                          transaction.type === 'income' ? 'text-green-600' : 
+                          transaction.type === 'expense' ? 'text-red-600' : 
+                          'text-blue-600'
+                        )}>
+                          {transaction.type === 'income' ? '+' : '-'}₱{Number(transaction.amount).toFixed(2)}
+                        </span>
+                        {transaction.is_taxable && (
+                          <span className="text-xs text-muted-foreground">Tax: ₱{Number(transaction.tax_amount || 0).toFixed(2)}</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => onEdit(transaction)}
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+                        {/* <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => onDelete(transaction)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button> */}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
           </TableBody>
         </Table>
       </div>
@@ -793,9 +365,14 @@ const TransactionsTable = ({
 interface TransactionsClientProps {
   initialData?: any;
   user: any;
+  initialCategories?: TransactionCategory[];
 }
 
-export function TransactionsClient({ initialData, user }: TransactionsClientProps) {
+export function TransactionsClient({ 
+  initialData, 
+  user, 
+  initialCategories = [] 
+}: TransactionsClientProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -820,18 +397,20 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
 
   // State
   const [transactions, setTransactions] = useState<Transaction[]>(initialData?.transactions || []);
-  const [categories, setCategories] = useState<TransactionCategory[]>(loadCategories);
+  const [categories, setCategories] = useState<TransactionCategory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCategoriesLoading, setIsCategoriesLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(initialData?.count || 0);
   const [totalPages, setTotalPages] = useState(initialData?.total_pages || 1);
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>(getInitialDateRange());
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
-  const [showBreakdown, setShowBreakdown] = useState(loadBreakdownVisibility());
+  const [showBreakdown, setShowBreakdown] = useState(true);
   const [filters, setFilters] = useState({
     type: searchParams.get('type') || 'all',
-    category: searchParams.get('category') || 'all',
+    category_id: searchParams.get('category_id') || 'all',
     status: searchParams.get('status') || 'all',
+    search: searchParams.get('search') || '',
   });
 
   // Dialog states
@@ -848,22 +427,19 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Save categories to localStorage
+  // Fetch categories on mount
   useEffect(() => {
-    saveCategories(categories);
-  }, [categories]);
-
-  // Save breakdown visibility
-  useEffect(() => {
-    saveBreakdownVisibility(showBreakdown);
-  }, [showBreakdown]);
+    if (initialCategories.length === 0) {
+      fetchCategories();
+    }
+  }, []);
 
   // Update URL with filters
   const updateUrlParams = useCallback((params: Record<string, any>) => {
     const urlParams = new URLSearchParams(searchParams.toString());
 
     Object.entries(params).forEach(([key, value]) => {
-      if (value && value !== 'all') {
+      if (value && value !== 'all' && value !== '') {
         urlParams.set(key, value);
       } else {
         urlParams.delete(key);
@@ -872,6 +448,30 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
 
     router.push(`${pathname}?${urlParams.toString()}`);
   }, [router, pathname, searchParams]);
+
+  // Fetch categories from server
+  const fetchCategories = useCallback(async () => {
+    setIsCategoriesLoading(true);
+    try {
+      const result = await listCategories({
+        limit: 200,
+        is_active: true,
+        order_by: 'name',
+        order_direction: 'ASC',
+      });
+
+
+      console.log(result, 'RSD CCAT')
+      if (result.categories) {
+        setCategories(result.categories);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      toast.error('Failed to load categories');
+    } finally {
+      setIsCategoriesLoading(false);
+    }
+  }, []);
 
   // Fetch transactions
   const fetchTransactions = useCallback(async (page?: number) => {
@@ -882,14 +482,14 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
     if (dateRange.from) queryFilters.date_from = dateRange.from.toISOString();
     if (dateRange.to) queryFilters.date_to = dateRange.to.toISOString();
     if (filters.type && filters.type !== 'all') queryFilters.type = filters.type;
-    if (filters.category && filters.category !== 'all') queryFilters.category = filters.category;
+    if (filters.category_id && filters.category_id !== 'all') queryFilters.category_id = filters.category_id;
     if (filters.status && filters.status !== 'all') queryFilters.status = filters.status;
+    if (filters.search) queryFilters.search = filters.search;
     if (user?.id) queryFilters.customer_id = user.id;
 
     setIsLoading(true);
     try {
       const response = await listTransactions(ITEMS_PER_PAGE, offset, queryFilters);
-
       setTransactions(response.transactions || []);
       setTotalCount(response.count || 0);
       setTotalPages(response.total_pages || 1);
@@ -906,32 +506,7 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
   useEffect(() => {
     fetchTransactions(1);
     setCurrentPage(1);
-  }, [dateRange, filters.type, filters.category, filters.status]);
-
-  useEffect(() => {
-    if (transactions.length && !categories.length) {
-      const uniqueCategories = [...new Set(
-        transactions
-          .filter((a: any) => a.category_id)
-          .map((a: any) => a.category_id.trim())
-      )];
-
-      let transCat = uniqueCategories.map((categoryId: string) => {
-        let number = Math.floor(Math.random() * 12) + 1;
-        return {
-          id: categoryId,
-          name: categoryId,
-          type: 'expense' as const,
-          icon: 'wallet',
-          color: CATEGORY_COLORS[number],
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        } as TransactionCategory;
-      });
-      
-      setCategories(transCat);
-    }
-  }, [transactions]);
+  }, [dateRange, filters.type, filters.category_id, filters.status, filters.search]);
 
   // Handle page change
   const handlePageChange = (page: number) => {
@@ -955,7 +530,14 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
     updateUrlParams({ [key]: value });
   };
 
-  // Handle create/update transaction
+  // Handle search
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setFilters(prev => ({ ...prev, search: value }));
+    updateUrlParams({ search: value });
+  };
+
+  // Handle save transaction
   const handleSaveTransaction = async (data: any) => {
     setIsLoading(true);
     try {
@@ -965,6 +547,7 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
         customer_id: user?.id,
         transaction_date: new Date(data.date).toISOString(),
         tax_amount: data.is_taxable ? parseFloat(data.tax_amount || 0) : 0,
+        notes: data.notes || '',
       };
 
       let result;
@@ -984,6 +567,8 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
         setIsFormOpen(false);
         setEditingTransaction(null);
         fetchTransactions(currentPage);
+        // Refresh categories to get any new ones
+        fetchCategories();
       }
     } catch (error) {
       console.error('Error saving transaction:', error);
@@ -1012,9 +597,87 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
     }
   };
 
-  // Handle categories
-  const handleAddCategory = (category: TransactionCategory) => {
-    setCategories([...categories, category]);
+  // ============================================
+  // CATEGORY CRUD OPERATIONS
+  // ============================================
+
+  // Handle add category
+  const handleAddCategory = async (categoryData: any) => {
+    try {
+      const result = await createCategory({
+        name: categoryData.name,
+        type: categoryData.type || 'expense',
+        icon: categoryData.icon || null,
+        color: categoryData.color || null,
+        description: categoryData.description || null,
+        is_active: true,
+        is_taxable: categoryData.is_taxable || false,
+        tax_rate: categoryData.tax_rate || null,
+      });
+
+      if (result.success && result.category) {
+        setCategories(prev => [...prev, result.category]);
+        toast.success(`Category "${result.category.name}" created successfully`);
+        return result.category;
+      } else {
+        toast.error(result.error || 'Failed to create category');
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Error adding category:', error);
+      toast.error('Failed to create category');
+      throw error;
+    }
+  };
+
+  // Handle update category
+  const handleUpdateCategory = async (id: string, data: any) => {
+    try {
+      const result = await updateCategory(id, data);
+      if (result.success && result.category) {
+        setCategories(prev => 
+          prev.map(c => c.id === id ? result.category : c)
+        );
+        toast.success(`Category updated successfully`);
+        return result.category;
+      } else {
+        toast.error(result.error || 'Failed to update category');
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Error updating category:', error);
+      toast.error('Failed to update category');
+      throw error;
+    }
+  };
+
+  // Handle delete category
+  const handleDeleteCategory = async (id: string) => {
+    try {
+      const result = await deleteCategory(id);
+      if (result.success) {
+        setCategories(prev => prev.filter(c => c.id !== id));
+        // If the deleted category was selected, clear it
+        if (filters.category_id === id) {
+          setFilters(prev => ({ ...prev, category_id: 'all' }));
+          updateUrlParams({ category_id: 'all' });
+        }
+        toast.success('Category deleted successfully');
+      } else {
+        toast.error(result.error || 'Failed to delete category');
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      toast.error('Failed to delete category');
+      throw error;
+    }
+  };
+
+  // Handle refresh categories
+  const handleRefreshCategories = async () => {
+    await fetchCategories();
+    toast.info('Categories refreshed');
   };
 
   // Calculate totals by category
@@ -1031,7 +694,9 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
       totals[key].count += 1;
     });
 
-    return Object.values(totals).sort((a, b) => b.total - a.total);
+    return Object.values(totals)
+      .filter(item => item.total !== 0)
+      .sort((a, b) => b.total - a.total);
   }, [transactions, categories]);
 
   // Calculate overall totals
@@ -1045,17 +710,13 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
     const totalTransfers = transactions
       .filter(t => t.type === 'transfer')
       .reduce((sum, t) => sum + Number(t.amount), 0);
-    const totalAdjustments = transactions
-      .filter(t => t.type === 'adjustment')
-      .reduce((sum, t) => sum + Number(t.amount), 0);
     
     return { 
       totalIncome, 
       totalExpenses, 
       totalTransfers,
-      totalAdjustments,
-      netCashFlow: totalIncome - totalExpenses,
-      total: totalIncome + totalExpenses + totalTransfers + totalAdjustments 
+      netCashFlow: totalIncome - totalExpenses - totalTransfers,
+      total: totalIncome + totalExpenses + totalTransfers 
     };
   }, [transactions]);
 
@@ -1070,7 +731,7 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
   const setDatePreset = (preset: 'today' | 'week' | 'month' | 'quarter' | 'year') => {
     const now = new Date();
     let from: Date;
-    let to: Date = now;
+    const to: Date = now;
 
     switch (preset) {
       case 'today':
@@ -1098,18 +759,33 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
     handleDateRangeChange({ from, to });
   };
 
+  // Filter options for categories dropdown
+  const categoryOptions = useMemo(() => {
+    const uniqueCategories = new Map();
+    categories.forEach(cat => {
+      if (cat.is_active !== false) {
+        uniqueCategories.set(cat.id, cat);
+      }
+    });
+    return Array.from(uniqueCategories.values());
+  }, [categories]);
+
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Transactions</h1>
-          <p className="text-sm text-muted-foreground">Track all cash flow including income, expenses, payroll, and more</p>
+          <p className="text-sm text-muted-foreground">Track all cash flow including income, expenses, and transfers</p>
         </div>
-        <Button onClick={() => {
-          setEditingTransaction(null);
-          setIsFormOpen(true);
-        }} size="sm" className="gap-1">
+        <Button 
+          onClick={() => {
+            setEditingTransaction(null);
+            setIsFormOpen(true);
+          }} 
+          size="sm" 
+          className="gap-1"
+        >
           <Plus className="h-4 w-4" />
           Add Transaction
         </Button>
@@ -1118,7 +794,7 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Net Cash Flow', value: totals.netCashFlow, icon: Wallet, color: 'text-primary' },
+          { label: 'Net Cash Flow', value: totals.netCashFlow, icon: Wallet, color: totals.netCashFlow >= 0 ? 'text-green-500' : 'text-red-500' },
           { label: 'Income', value: totals.totalIncome, icon: TrendingUp, color: 'text-green-500' },
           { label: 'Expenses', value: totals.totalExpenses, icon: TrendingDown, color: 'text-red-500' },
           { label: 'Transfers', value: totals.totalTransfers, icon: Banknote, color: 'text-blue-500' },
@@ -1170,13 +846,13 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
               <div className="flex flex-wrap gap-2">
                 {categoryTotals.map(({ category, total, count }, index) => (
                   <div
-                    key={`${category?.id}${index}`}
+                    key={`${category?.id || 'uncategorized'}_${index}`}
                     className="flex items-center gap-2 bg-muted/30 rounded-full px-3 py-1.5 text-sm"
                   >
                     {category ? (
                       <>
                         <span className={cn("w-2 h-2 rounded-full", category.color)} />
-                        {ICON_MAP[category.icon || 'wallet']}
+                        <span>{category.icon || '📦'}</span>
                         <span className="font-medium">{category.name}</span>
                       </>
                     ) : (
@@ -1193,9 +869,9 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
       )}
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+      <div className="flex flex-col lg:flex-row items-start lg:items-center gap-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-muted-foreground">Date Range:</span>
+          <span className="text-sm text-muted-foreground">Date:</span>
           <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="h-8 gap-1 text-sm min-w-[180px] justify-start">
@@ -1259,12 +935,25 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
           )}
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap flex-1">
+          <div className="relative flex-1 min-w-[150px]">
+            <Input
+              type="search"
+              placeholder="Search transactions..."
+              value={filters.search}
+              onChange={handleSearch}
+              className="h-8 text-sm pl-8"
+            />
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground">
+              🔍
+            </span>
+          </div>
+
           <Select
             value={filters.type}
             onValueChange={(value) => handleFilterChange('type', value)}
           >
-            <SelectTrigger className="h-8 w-[130px] text-xs">
+            <SelectTrigger className="h-8 w-[120px] text-xs">
               <SelectValue placeholder="Type" />
             </SelectTrigger>
             <SelectContent>
@@ -1281,19 +970,30 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
           </Select>
 
           <Select
-            value={filters.category}
-            onValueChange={(value) => handleFilterChange('category', value)}
+            value={filters.category_id}
+            onValueChange={(value) => handleFilterChange('category_id', value)}
           >
             <SelectTrigger className="h-8 w-[130px] text-xs">
-              <SelectValue placeholder="Category" />
+              <SelectValue placeholder="Category">
+                {filters.category_id !== 'all' && categories.find(c => c.id === filters.category_id) ? (
+                  <div className="flex items-center gap-2">
+                    <span className={cn("w-2 h-2 rounded-full", categories.find(c => c.id === filters.category_id)?.color)} />
+                    <span>{categories.find(c => c.id === filters.category_id)?.icon || '📦'}</span>
+                    <span className="truncate">{categories.find(c => c.id === filters.category_id)?.name}</span>
+                  </div>
+                ) : (
+                  <span>Category</span>
+                )}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Categories</SelectItem>
-              {TRANSACTION_CATEGORIES.map((cat) => (
-                <SelectItem key={cat.value} value={cat.value}>
+              {categoryOptions.map((cat) => (
+                <SelectItem key={cat.id} value={cat.id}>
                   <div className="flex items-center gap-2">
-                    {cat.icon}
-                    {cat.label}
+                    <span className={cn("w-2 h-2 rounded-full", cat.color)} />
+                    <span>{cat.icon || '📦'}</span>
+                    <span className="truncate">{cat.name}</span>
                   </div>
                 </SelectItem>
               ))}
@@ -1304,7 +1004,7 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
             value={filters.status}
             onValueChange={(value) => handleFilterChange('status', value)}
           >
-            <SelectTrigger className="h-8 w-[130px] text-xs">
+            <SelectTrigger className="h-8 w-[120px] text-xs">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -1318,38 +1018,33 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
           </Select>
         </div>
 
-        <div className="flex-1 flex items-center justify-end gap-2 text-sm text-muted-foreground">
-          <span>{transactions.length} of {totalCount} transactions</span>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
+          <span>{transactions.length} of {totalCount}</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => fetchTransactions(currentPage)}
+            disabled={isLoading}
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+          </Button>
         </div>
       </div>
 
       {/* Transactions Table */}
-      {isLoading && transactions.length === 0 ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : transactions.length === 0 ? (
-        <div className="text-center py-12 bg-card rounded-lg border">
-          <Wallet className="h-10 w-10 mx-auto mb-2 text-muted-foreground/50" />
-          <p className="text-sm text-muted-foreground">No transactions found</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            {dateRange.from || dateRange.to
-              ? 'Try adjusting your filters'
-              : 'Add your first transaction to get started'}
-          </p>
-        </div>
-      ) : (
-        <TransactionsTable
-          transactions={transactions}
-          categories={categories}
-          onEdit={(transaction) => {
-            setEditingTransaction(transaction);
-            setIsFormOpen(true);
-          }}
-          onDelete={(transaction) => setDeletingTransaction(transaction)}
-          isMobile={isMobile}
-        />
-      )}
+      <TransactionsTable
+        transactions={transactions}
+        categories={categories}
+        onEdit={(transaction) => {
+          setEditingTransaction(transaction);
+          setIsFormOpen(true);
+        }}
+        onDelete={(transaction) => setDeletingTransaction(transaction)}
+        onRefresh={() => fetchTransactions(currentPage)}
+        isMobile={isMobile}
+        isLoading={isLoading}
+      />
 
       {/* Pagination */}
       {totalPages > 1 && (
@@ -1384,8 +1079,11 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
       )}
 
       {/* Transaction Form Dialog */}
-      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="max-w-2xl">
+      <Dialog open={isFormOpen} onOpenChange={(open) => {
+        setIsFormOpen(open);
+        if (!open) setEditingTransaction(null);
+      }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingTransaction ? 'Edit Transaction' : 'Add Transaction'}
@@ -1402,7 +1100,11 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
               setEditingTransaction(null);
             }}
             categories={categories}
+            loadingCategories={isCategoriesLoading}
             onAddCategory={handleAddCategory}
+            onUpdateCategory={handleUpdateCategory}
+            onDeleteCategory={handleDeleteCategory}
+            onRefreshCategories={handleRefreshCategories}
             isLoading={isLoading}
           />
         </DialogContent>
@@ -1415,6 +1117,11 @@ export function TransactionsClient({ initialData, user }: TransactionsClientProp
             <AlertDialogTitle>Delete Transaction</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete "{deletingTransaction?.description}"? This action cannot be undone.
+              {deletingTransaction?.attachments && deletingTransaction.attachments.length > 0 && (
+                <span className="block mt-2 text-yellow-600">
+                  ⚠️ This transaction has {deletingTransaction.attachments.length} attachment(s) that will also be deleted.
+                </span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

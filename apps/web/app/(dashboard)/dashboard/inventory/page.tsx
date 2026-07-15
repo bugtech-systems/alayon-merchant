@@ -1,829 +1,865 @@
-'use client'
+'use client';
 
-import React, { useState, useCallback, useRef, useEffect, useMemo, KeyboardEvent } from 'react';
-import { Input } from '@/components/ui/input';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Plus,
   Trash2,
-  Copy,
   Search,
   ChevronUp,
   ChevronDown,
-  ArrowUpDown,
-  FileSpreadsheet,
+  Download,
+  RefreshCw,
+  Package,
+  AlertCircle,
+  Box,
+  DollarSign,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  listInventoryItems,
+  deleteInventoryItem,
+  createInventoryItem,
+} from '@/lib/actions/inventory';
 
 // Types
 interface InventoryItem {
   id: string;
-  name: string;
+  title: string;
   sku: string;
-  category: string;
-  unitPrice: number | null;
-  stock: number | null;
-  reorderLevel: number | null;
-  location: string;
+  description?: string;
+  unit_price?: number;
+  stock?: number;
+  reorder_level?: number;
+  location?: string;
+  category?: string;
+  supplier?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
-interface SpreadsheetCell {
-  rowId: string;
-  colKey: string;
-  value: any;
-  isEditing: boolean;
-  isSelected: boolean;
-}
-
-interface SpreadsheetProps {
+interface InventoryTableProps {
   initialItems?: InventoryItem[];
   onInventoryChange?: (items: InventoryItem[]) => void;
+  readOnly?: boolean;
 }
 
-// Mock data
-const MOCK_INVENTORY: InventoryItem[] = [
-  {
-    id: 'inv_1',
-    name: 'Premium Hoodie - Black',
-    sku: 'PH-BLK-001',
-    category: 'Apparel',
-    unitPrice: 45.00,
-    stock: 150,
-    reorderLevel: 20,
-    location: 'Warehouse A',
-  },
-  {
-    id: 'inv_2',
-    name: 'Premium Hoodie - White',
-    sku: 'PH-WHT-001',
-    category: 'Apparel',
-    unitPrice: 45.00,
-    stock: 85,
-    reorderLevel: 20,
-    location: 'Warehouse A',
-  },
-  {
-    id: 'inv_3',
-    name: 'Cotton T-Shirt - White',
-    sku: 'CT-WHT-001',
-    category: 'Apparel',
-    unitPrice: 25.00,
-    stock: 200,
-    reorderLevel: 30,
-    location: 'Warehouse B',
-  },
-  {
-    id: 'inv_4',
-    name: 'Denim Jacket - Blue',
-    sku: 'DJ-BLU-001',
-    category: 'Outerwear',
-    unitPrice: 89.00,
-    stock: 45,
-    reorderLevel: 10,
-    location: 'Warehouse A',
-  },
-];
-
-const SUGGESTED_ITEMS = [
-  { name: 'Premium Hoodie - Black', sku: 'PH-BLK-001', category: 'Apparel' },
-  { name: 'Premium Hoodie - White', sku: 'PH-WHT-001', category: 'Apparel' },
-  { name: 'Premium Hoodie - Gray', sku: 'PH-GRY-001', category: 'Apparel' },
-  { name: 'Cotton T-Shirt - White', sku: 'CT-WHT-001', category: 'Apparel' },
-  { name: 'Cotton T-Shirt - Black', sku: 'CT-BLK-001', category: 'Apparel' },
-  { name: 'Denim Jacket - Blue', sku: 'DJ-BLU-001', category: 'Outerwear' },
-  { name: 'Denim Jacket - Black', sku: 'DJ-BLK-001', category: 'Outerwear' },
-  { name: 'Running Shoes - White', sku: 'RS-WHT-001', category: 'Footwear' },
-  { name: 'Running Shoes - Black', sku: 'RS-BLK-001', category: 'Footwear' },
-  { name: 'Leather Backpack', sku: 'LB-001', category: 'Accessories' },
-];
-
+// Column configuration with responsive breakpoints
 const COLUMNS = [
-  { key: 'name', label: 'Item Name', width: '200px', type: 'text' },
-  { key: 'sku', label: 'SKU', width: '120px', type: 'text' },
-  { key: 'category', label: 'Category', width: '120px', type: 'text' },
-  { key: 'unitPrice', label: 'Unit Price', width: '120px', type: 'number' },
-  { key: 'stock', label: 'Stock', width: '100px', type: 'number' },
-  { key: 'reorderLevel', label: 'Reorder Level', width: '120px', type: 'number' },
-  { key: 'location', label: 'Location', width: '130px', type: 'text' },
+  { key: 'title', label: 'Item Name', visible: true },
+  { key: 'sku', label: 'SKU', visible: true },
+  { key: 'category', label: 'Category', visible: { base: false, sm: true } },
+  { key: 'unit_price', label: 'Unit Price', visible: { base: false, md: true } },
+  { key: 'stock', label: 'Stock', visible: { base: false, sm: true } },
+  { key: 'reorder_level', label: 'Reorder Level', visible: { base: false, lg: true } },
+  { key: 'location', label: 'Location', visible: { base: false, md: true } },
 ];
 
-export function Spreadsheet({ 
-  initialItems = MOCK_INVENTORY,
-  onInventoryChange 
-}: SpreadsheetProps) {
+const CATEGORIES = ['Apparel', 'Outerwear', 'Footwear', 'Accessories', 'Electronics', 'Home Goods'];
+const LOCATIONS = ['Warehouse A', 'Warehouse B', 'Warehouse C', 'Showroom', 'Storage'];
+
+export function InventoryTable({
+  initialItems = [],
+  onInventoryChange,
+  readOnly = false,
+}: InventoryTableProps) {
+  // State – initialised once with the prop value
   const [items, setItems] = useState<InventoryItem[]>(initialItems);
-  const [selectedCell, setSelectedCell] = useState<{ rowId: string; colKey: string } | null>(null);
-  const [editingCell, setEditingCell] = useState<{ rowId: string; colKey: string } | null>(null);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchRowId, setSearchRowId] = useState<string | null>(null);
-  const [dragStart, setDragStart] = useState<{ rowId: string; colKey: string } | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragValue, setDragValue] = useState<any>(null);
-  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
+  const [loading, setLoading] = useState(!initialItems.length);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
-  
-  const spreadsheetRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const cellRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [locationFilter, setLocationFilter] = useState<string>('all');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [newItemData, setNewItemData] = useState<Partial<InventoryItem>>({
+    title: '',
+    sku: '',
+    category: 'Apparel',
+    unit_price: 0,
+    stock: 0,
+    reorder_level: 10,
+    location: 'Warehouse A',
+    description: '',
+    supplier: '',
+  });
 
-  // Filter suggestions based on search
-  const filteredSuggestions = useMemo(() => {
-    if (!searchQuery) return SUGGESTED_ITEMS;
-    const query = searchQuery.toLowerCase();
-    return SUGGESTED_ITEMS.filter(item =>
-      item.name.toLowerCase().includes(query) ||
-      item.sku.toLowerCase().includes(query) ||
-      item.category.toLowerCase().includes(query)
-    );
-  }, [searchQuery]);
+  // Ref to prevent multiple loads
+  const hasLoadedRef = useRef(false);
 
-  // Check if item exists
-  const isItemInInventory = useCallback((name: string, sku: string) => {
-    return items.some(item => 
-      item.name.toLowerCase() === name.toLowerCase() || 
-      item.sku.toLowerCase() === sku.toLowerCase()
-    );
-  }, [items]);
-
-  // Sort items
-  const sortedItems = useMemo(() => {
-    if (!sortConfig) return items;
-    
-    return [...items].sort((a, b) => {
-      const aVal = a[sortConfig.key as keyof InventoryItem];
-      const bVal = b[sortConfig.key as keyof InventoryItem];
-      
-      if (aVal === null || aVal === undefined) return 1;
-      if (bVal === null || bVal === undefined) return -1;
-      
-      if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return sortConfig.direction === 'asc' 
-          ? aVal.localeCompare(bVal)
-          : bVal.localeCompare(aVal);
+  // Load items – only called once on mount if initialItems is empty
+  const loadItems = useCallback(async () => {
+    if (hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await listInventoryItems(1000, 0, {});
+      if (result.items) {
+        setItems(result.items);
+        // Notify parent, but parent will re‑render with new initialItems – we ignore that
+        if (onInventoryChange) onInventoryChange(result.items);
       }
-      
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
-      }
-      
-      return 0;
-    });
-  }, [items, sortConfig]);
+    } catch (err) {
+      console.error('Failed to load inventory:', err);
+      setError('Failed to load inventory. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [onInventoryChange]);
 
-  // Handle cell click
-  const handleCellClick = (rowId: string, colKey: string) => {
-    setSelectedCell({ rowId, colKey });
-    setEditingCell(null);
-  };
+  // Run once on mount: load if no initial items, else just use the provided items
+  useEffect(() => {
+    if (initialItems.length > 0) {
+      // We already have items from parent – no need to load
+      setItems(initialItems);
+      setLoading(false);
+    } else if (!hasLoadedRef.current) {
+      loadItems();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps – runs only once
 
-  // Handle cell double click to edit
-  const handleCellDoubleClick = (rowId: string, colKey: string) => {
-    setEditingCell({ rowId, colKey });
-    setSelectedCell({ rowId, colKey });
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.focus();
-        inputRef.current.select();
-      }
-    }, 10);
-  };
+  // Filter and sort (memoized)
+  const filteredAndSortedItems = useMemo(() => {
+    let result = [...items];
 
-  // Handle cell value change
-  const handleCellChange = (rowId: string, colKey: string, value: any) => {
-    setItems(prev => prev.map(item => {
-      if (item.id === rowId) {
-        return { ...item, [colKey]: value };
-      }
-      return item;
-    }));
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (item) =>
+          item.title?.toLowerCase().includes(q) ||
+          item.sku?.toLowerCase().includes(q) ||
+          item.description?.toLowerCase().includes(q)
+      );
+    }
 
-    if (onInventoryChange) {
-      const updatedItems = items.map(item => {
-        if (item.id === rowId) {
-          return { ...item, [colKey]: value };
+    if (categoryFilter !== 'all') {
+      result = result.filter((item) => (item.category || 'Uncategorized') === categoryFilter);
+    }
+
+    if (locationFilter !== 'all') {
+      result = result.filter((item) => (item.location || 'Warehouse A') === locationFilter);
+    }
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        const aVal = a[sortConfig.key as keyof InventoryItem];
+        const bVal = b[sortConfig.key as keyof InventoryItem];
+        if (aVal === undefined || aVal === null) return 1;
+        if (bVal === undefined || bVal === null) return -1;
+        if (typeof aVal === 'string' && typeof bVal === 'string') {
+          return sortConfig.direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
         }
-        return item;
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
+          return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+        return 0;
       });
-      onInventoryChange(updatedItems);
+    }
+
+    return result;
+  }, [items, searchQuery, categoryFilter, locationFilter, sortConfig]);
+
+  // Selection handlers
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredAndSortedItems.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredAndSortedItems.map((item) => item.id)));
     }
   };
 
-  // Handle cell blur
-  const handleCellBlur = () => {
-    setEditingCell(null);
+  const toggleSelect = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedIds(newSet);
   };
 
-  // Handle keyboard navigation
-  const handleKeyDown = (e: KeyboardEvent, rowId: string, colKey: string) => {
-    const colIndex = COLUMNS.findIndex(col => col.key === colKey);
-    const rowIndex = sortedItems.findIndex(item => item.id === rowId);
-    
-    switch (e.key) {
-      case 'Enter':
-        e.preventDefault();
-        if (editingCell) {
-          setEditingCell(null);
-        } else {
-          setEditingCell({ rowId, colKey });
-          setTimeout(() => {
-            if (inputRef.current) {
-              inputRef.current.focus();
-              inputRef.current.select();
-            }
-          }, 10);
-        }
-        break;
-      
-      case 'Tab':
-        e.preventDefault();
-        const nextCol = e.shiftKey ? colIndex - 1 : colIndex + 1;
-        if (nextCol >= 0 && nextCol < COLUMNS.length) {
-          setSelectedCell({ rowId, colKey: COLUMNS[nextCol].key });
-        } else if (e.shiftKey && rowIndex > 0) {
-          setSelectedCell({ rowId: sortedItems[rowIndex - 1].id, colKey: COLUMNS[COLUMNS.length - 1].key });
-        } else if (!e.shiftKey && rowIndex < sortedItems.length - 1) {
-          setSelectedCell({ rowId: sortedItems[rowIndex + 1].id, colKey: COLUMNS[0].key });
-        }
-        break;
-      
-      case 'ArrowUp':
-        e.preventDefault();
-        if (rowIndex > 0) {
-          setSelectedCell({ rowId: sortedItems[rowIndex - 1].id, colKey });
-        }
-        break;
-      
-      case 'ArrowDown':
-        e.preventDefault();
-        if (rowIndex < sortedItems.length - 1) {
-          setSelectedCell({ rowId: sortedItems[rowIndex + 1].id, colKey });
-        }
-        break;
-      
-      case 'ArrowLeft':
-        e.preventDefault();
-        if (colIndex > 0) {
-          setSelectedCell({ rowId, colKey: COLUMNS[colIndex - 1].key });
-        }
-        break;
-      
-      case 'ArrowRight':
-        e.preventDefault();
-        if (colIndex < COLUMNS.length - 1) {
-          setSelectedCell({ rowId, colKey: COLUMNS[colIndex + 1].key });
-        }
-        break;
-      
-      case 'Delete':
-      case 'Backspace':
-        if (!editingCell) {
-          e.preventDefault();
-          handleCellChange(rowId, colKey, null);
-        }
-        break;
-      
-      case 'Escape':
-        setEditingCell(null);
-        setSelectedCell(null);
-        break;
+  // Delete selected
+  const deleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedIds.size} item(s)?`)) return;
+
+    setIsDeleting(true);
+    try {
+      const ids = Array.from(selectedIds);
+      await Promise.all(ids.map((id) => deleteInventoryItem(id)));
+      const remainingItems = items.filter((item) => !selectedIds.has(item.id));
+      setItems(remainingItems);
+      setSelectedIds(new Set());
+      if (onInventoryChange) onInventoryChange(remainingItems);
+    } catch (err) {
+      console.error('Failed to delete items:', err);
+      alert('Failed to delete some items. Please try again.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
-  // Handle drag start
-  const handleMouseDown = (e: React.MouseEvent, rowId: string, colKey: string) => {
-    const cell = e.currentTarget as HTMLDivElement;
-    const rect = cell.getBoundingClientRect();
-    const isInDragHandle = e.clientX > rect.right - 10 && e.clientY > rect.bottom - 10;
-    
-    if (isInDragHandle) {
-      const value = items.find(item => item.id === rowId)?.[colKey as keyof InventoryItem];
-      setDragStart({ rowId, colKey });
-      setDragValue(value);
-      setIsDragging(true);
-      e.preventDefault();
-    }
-  };
-
-  // Handle drag over
-  const handleMouseEnter = (e: React.MouseEvent, rowId: string, colKey: string) => {
-    if (!isDragging || !dragStart) return;
-    
-    const targetRow = items.find(item => item.id === rowId);
-    const targetCol = COLUMNS.find(col => col.key === colKey);
-    
-    if (targetRow && targetCol && dragValue !== null && dragValue !== undefined) {
-      const colType = targetCol.type;
-      let value = dragValue;
-      
-      if (colType === 'number' && typeof dragValue === 'number') {
-        handleCellChange(rowId, colKey, dragValue);
-      } else if (colType === 'text' && typeof dragValue === 'string') {
-        handleCellChange(rowId, colKey, dragValue);
-      }
-    }
-  };
-
-  // End drag
-  const handleMouseUp = () => {
-    setIsDragging(false);
-    setDragStart(null);
-    setDragValue(null);
-  };
-
-  // Add new row
-  const addNewRow = () => {
-    const newId = `inv_new_${Date.now()}`;
-    const newRow: InventoryItem = {
-      id: newId,
-      name: '',
-      sku: '',
-      category: '',
-      unitPrice: null,
-      stock: null,
-      reorderLevel: null,
-      location: '',
-    };
-    setItems(prev => [...prev, newRow]);
-    setSelectedCell({ rowId: newId, colKey: 'name' });
-    setEditingCell({ rowId: newId, colKey: 'name' });
-    setSearchRowId(newId);
-    setSearchOpen(true);
-    
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.focus();
-      }
-    }, 10);
-  };
-
-  // Delete row
-  const deleteRow = (rowId: string) => {
-    if (items.length <= 1) {
-      alert('Cannot delete the last item. Add more items first.');
+  // Add item
+  const handleAddItem = async () => {
+    if (!newItemData.title?.trim()) {
+      alert('Please enter an item name.');
       return;
     }
-    
-    const item = items.find(i => i.id === rowId);
-    if (item?.name && !confirm(`Delete "${item.name}" from inventory?`)) {
-      return;
-    }
-    
-    setItems(prev => prev.filter(item => item.id !== rowId));
-    setSelectedCell(null);
-    setEditingCell(null);
-    
-    if (onInventoryChange) {
-      onInventoryChange(items.filter(item => item.id !== rowId));
-    }
-  };
-
-  // Copy row
-  const copyRow = (rowId: string) => {
-    const item = items.find(i => i.id === rowId);
-    if (!item) return;
-    
-    const newId = `inv_copy_${Date.now()}`;
-    const newRow: InventoryItem = {
-      ...item,
-      id: newId,
-      name: `${item.name} (Copy)`,
-    };
-    setItems(prev => [...prev, newRow]);
-    setSelectedCell({ rowId: newId, colKey: 'name' });
-  };
-
-  // Select item from search
-  const selectItemFromSearch = (item: typeof SUGGESTED_ITEMS[0]) => {
-    if (isItemInInventory(item.name, item.sku)) {
-      alert('This item already exists in your inventory!');
+    if (!newItemData.sku?.trim()) {
+      alert('Please enter an SKU.');
       return;
     }
 
-    if (!searchRowId) return;
+    setIsCreating(true);
+    try {
+      const result = await createInventoryItem({
+        title: newItemData.title.trim(),
+        sku: newItemData.sku.trim(),
+        requires_shipping: false,
+        description: newItemData.description || '',
+        metadata: {
+        category: newItemData.category || 'Apparel',
+        unit_price: newItemData.unit_price || 0,
+        stock: newItemData.stock || 0,
+        reorder_level: newItemData.reorder_level || 10,
+        location: newItemData.location || 'Warehouse A',
+        supplier: newItemData.supplier || ''
+        }
 
-    setItems(prev => prev.map(row => {
-      if (row.id === searchRowId) {
-        return {
-          ...row,
-          name: item.name,
-          sku: item.sku,
-          category: item.category,
-        };
+      });
+
+      if (result.success && result.inventoryItem) {
+        const newItem = result.inventoryItem;
+        const newItems = [newItem, ...items];
+        setItems(newItems);
+        if (onInventoryChange) onInventoryChange(newItems);
+        setIsDialogOpen(false);
+        setNewItemData({
+          title: '',
+          sku: '',
+          category: 'Apparel',
+          unit_price: 0,
+          stock: 0,
+          reorder_level: 10,
+          location: 'Warehouse A',
+          description: '',
+          supplier: '',
+        });
+      } else {
+        alert('Failed to create item: ' + result.error);
       }
-      return row;
-    }));
-
-    setSearchOpen(false);
-    setSearchQuery('');
-    setSearchRowId(null);
-    setEditingCell(null);
-  };
-
-  // Toggle sort
-  const toggleSort = (colKey: string) => {
-    setSortConfig(prev => {
-      if (prev?.key === colKey) {
-        return { key: colKey, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
-      }
-      return { key: colKey, direction: 'asc' };
-    });
-  };
-
-  // Get cell value
-  const getCellValue = (item: InventoryItem, colKey: string) => {
-    return item[colKey as keyof InventoryItem];
-  };
-
-  // Format cell display
-  const formatCellDisplay = (value: any, colKey: string) => {
-    if (value === null || value === undefined) return '';
-    
-    if (colKey === 'unitPrice') {
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        minimumFractionDigits: 2,
-      }).format(value);
+    } catch (err) {
+      console.error('Failed to create item:', err);
+      alert('Failed to create item. Please try again.');
+    } finally {
+      setIsCreating(false);
     }
-    
-    return String(value);
   };
 
-  // Check if cell is being edited
-  const isEditing = (rowId: string, colKey: string) => {
-    return editingCell?.rowId === rowId && editingCell?.colKey === colKey;
-  };
-
-  // Check if cell is selected
-  const isSelected = (rowId: string, colKey: string) => {
-    return selectedCell?.rowId === rowId && selectedCell?.colKey === colKey;
-  };
-
-  // Render cell
-  const renderCell = (item: InventoryItem, col: typeof COLUMNS[0]) => {
-    const value = getCellValue(item, col.key);
-    const editing = isEditing(item.id, col.key);
-    const selected = isSelected(item.id, col.key);
-    const isNameColumn = col.key === 'name';
-    
-    return (
-      <div
-        ref={el => {
-          if (el) {
-            cellRefs.current.set(`${item.id}-${col.key}`, el);
-          }
-        }}
-        className={cn(
-          "relative h-10 px-3 py-1 border-r border-b border-gray-200 cursor-cell select-none",
-          "hover:bg-blue-50/30 transition-colors",
-          selected && "ring-2 ring-blue-500 ring-inset bg-blue-50/50 z-10",
-          editing && "ring-2 ring-blue-500 ring-inset bg-blue-50/50 z-20",
-          isDragging && "cursor-copy",
-          col.key === 'name' && "sticky left-0 bg-white z-10",
-          isNameColumn && selected && "ring-2 ring-blue-500 ring-inset bg-blue-50/50 z-20"
-        )}
-        style={{ 
-          width: col.width,
-          minWidth: col.width,
-          maxWidth: col.width,
-        }}
-        onClick={() => handleCellClick(item.id, col.key)}
-        onDoubleClick={() => handleCellDoubleClick(item.id, col.key)}
-        onMouseDown={(e) => handleMouseDown(e, item.id, col.key)}
-        onMouseEnter={(e) => handleMouseEnter(e, item.id, col.key)}
-        onKeyDown={(e) => handleKeyDown(e, item.id, col.key)}
-        tabIndex={0}
-      >
-        {isNameColumn && editing ? (
-          <Popover open={searchOpen && searchRowId === item.id} onOpenChange={setSearchOpen}>
-            <PopoverTrigger asChild>
-              <div className="relative w-full h-full">
-                <Input
-                  ref={inputRef}
-                  type="text"
-                  value={value as string || ''}
-                  onChange={(e) => {
-                    handleCellChange(item.id, col.key, e.target.value);
-                    setSearchQuery(e.target.value);
-                    setSearchOpen(true);
-                  }}
-                  onFocus={() => {
-                    setSearchRowId(item.id);
-                    setSearchOpen(true);
-                  }}
-                  onBlur={() => {
-                    if (!searchOpen) {
-                      handleCellBlur();
-                    }
-                  }}
-                  className="h-full w-full border-0 bg-transparent p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-                  placeholder="Search or type..."
-                  autoFocus
-                />
-                <Search className="absolute right-1 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-              </div>
-            </PopoverTrigger>
-            <PopoverContent className="w-[400px] p-0" align="start">
-              <Command>
-                <CommandInput 
-                  placeholder="Search items..." 
-                  value={searchQuery}
-                  onValueChange={setSearchQuery}
-                />
-                <CommandList>
-                  <CommandEmpty>No items found.</CommandEmpty>
-                  <CommandGroup heading="Suggested Items">
-                    {filteredSuggestions.map((suggested) => (
-                      <CommandItem
-                        key={`${suggested.name}-${suggested.sku}`}
-                        onSelect={() => selectItemFromSearch(suggested)}
-                        className="flex items-center justify-between"
-                      >
-                        <div className="flex flex-col">
-                          <span className="font-medium">{suggested.name}</span>
-                          <span className="text-xs text-gray-500">
-                            SKU: {suggested.sku} • {suggested.category}
-                          </span>
-                        </div>
-                        {isItemInInventory(suggested.name, suggested.sku) && (
-                          <Badge variant="outline" className="text-xs">
-                            Already added
-                          </Badge>
-                        )}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-        ) : editing ? (
-          <Input
-            ref={inputRef}
-            type={col.type === 'number' ? 'number' : 'text'}
-            step={col.type === 'number' ? '0.01' : undefined}
-            min={col.type === 'number' ? '0' : undefined}
-            value={value ?? ''}
-            onChange={(e) => {
-              const val = col.type === 'number' 
-                ? e.target.value === '' ? null : parseFloat(e.target.value)
-                : e.target.value;
-              handleCellChange(item.id, col.key, val);
-            }}
-            onBlur={handleCellBlur}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                setEditingCell(null);
-              }
-              if (e.key === 'Escape') {
-                setEditingCell(null);
-                setSelectedCell(null);
-              }
-            }}
-            className="h-full w-full border-0 bg-transparent p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-            autoFocus
-          />
-        ) : (
-          <div className={cn(
-            "truncate",
-            value === null || value === undefined ? "text-gray-400" : "",
-            col.type === 'number' && "text-right font-mono"
-          )}>
-            {formatCellDisplay(value, col.key)}
-          </div>
-        )}
-        
-        {/* Drag handle */}
-        {selected && !editing && (
-          <div 
-            className="absolute bottom-0 right-0 w-3 h-3 cursor-crosshair opacity-0 group-hover:opacity-100 hover:opacity-100"
-            style={{
-              background: 'linear-gradient(135deg, transparent 50%, #3b82f6 50%)',
-              bottom: '-1px',
-              right: '-1px',
-            }}
-          />
-        )}
-      </div>
+  // Export CSV
+  const exportCSV = () => {
+    const headers = COLUMNS.map((col) => col.label).join(',');
+    const rows = items.map((item) =>
+      COLUMNS.map((col) => {
+        const value = item[col.key as keyof InventoryItem];
+        if (value === undefined || value === null) return '';
+        if (typeof value === 'string' && value.includes(',')) return `"${value}"`;
+        return String(value);
+      }).join(',')
     );
+    const csv = [headers, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `inventory_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
   };
 
-  // Calculate summary stats
+  // Stats
   const totalItems = items.length;
   const totalStock = items.reduce((sum, item) => sum + (item.stock || 0), 0);
-  const totalValue = items.reduce((sum, item) => sum + (item.unitPrice || 0) * (item.stock || 0), 0);
+  const totalValue = items.reduce((sum, item) => sum + (item.unit_price || 0) * (item.stock || 0), 0);
+  const lowStockItems = items.filter(
+    (i) => i.stock !== undefined && i.reorder_level !== undefined && i.stock <= i.reorder_level
+  ).length;
+  const filteredCount = filteredAndSortedItems.length;
+
+  const toggleSort = (key: string) => {
+    setSortConfig((prev) => {
+      if (prev?.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+
+  const renderValue = (item: InventoryItem, key: string) => {
+    const val = item[key as keyof InventoryItem];
+    if (val === undefined || val === null) return '-';
+    if (key === 'unit_price') {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val as number);
+    }
+    return String(val);
+  };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <Skeleton className="h-10 w-40" />
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-20" />
+            <Skeleton className="h-9 w-20" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-20" />
+          ))}
+        </div>
+        <Skeleton className="h-[400px]" />
+      </div>
+    );
+  }
 
   return (
-    <div 
-      className="w-full space-y-4"
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-    >
-      {/* Toolbar */}
-      <div className="flex items-center justify-between bg-white border rounded-lg px-4 py-3 shadow-sm">
-        <div className="flex items-center gap-4">
-          <FileSpreadsheet className="h-5 w-5 text-gray-500" />
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="font-mono">
-              {totalItems} rows
-            </Badge>
-            <Badge variant="outline" className="font-mono">
-              {COLUMNS.length} columns
-            </Badge>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={addNewRow}
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Add Row
+    <div className="space-y-4">
+      {/* Error */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" />
+            {error}
+          </span>
+          <Button variant="ghost" size="sm" onClick={() => setError(null)}>
+            <span className="sr-only">Dismiss</span>×
           </Button>
         </div>
-      </div>
+      )}
 
-      {/* Stats Bar */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white border rounded-lg px-4 py-2">
-          <p className="text-xs text-gray-500">Total Items</p>
-          <p className="text-lg font-semibold">{totalItems}</p>
+      {/* Toolbar – unchanged */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white border rounded-lg px-4 py-3 shadow-sm">
+        <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
+          <div className="flex items-center gap-2">
+            <Package className="h-5 w-5 text-gray-500" />
+            <span className="font-semibold text-gray-700">Inventory</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="font-mono">
+              {totalItems} items
+            </Badge>
+            {lowStockItems > 0 && (
+              <Badge variant="destructive" className="font-mono flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {lowStockItems} low stock
+              </Badge>
+            )}
+          </div>
         </div>
-        <div className="bg-white border rounded-lg px-4 py-2">
-          <p className="text-xs text-gray-500">Total Stock</p>
-          <p className="text-lg font-semibold">{totalStock}</p>
-        </div>
-        <div className="bg-white border rounded-lg px-4 py-2">
-          <p className="text-xs text-gray-500">Total Value</p>
-          <p className="text-lg font-semibold">
-            {new Intl.NumberFormat('en-US', {
-              style: 'currency',
-              currency: 'USD',
-            }).format(totalValue)}
-          </p>
-        </div>
-      </div>
 
-      {/* Spreadsheet */}
-      <div 
-        ref={spreadsheetRef}
-        className="border rounded-lg overflow-auto bg-white shadow-sm"
-        style={{ maxHeight: '600px' }}
-      >
-        <div className="relative" style={{ minWidth: 'fit-content' }}>
-          {/* Header Row */}
-          <div className="flex sticky top-0 z-20 bg-gray-100 border-b border-gray-300">
-            <div 
-              className="flex-shrink-0 w-10 h-10 border-r border-gray-300 bg-gray-100"
-              style={{ minWidth: '40px' }}
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 sm:flex-initial">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 w-full sm:w-[200px] h-8"
             />
-            {COLUMNS.map((col) => (
-              <div
-                key={col.key}
-                className={cn(
-                  "flex items-center justify-between h-10 px-3 border-r border-gray-300 font-semibold text-sm cursor-pointer select-none",
-                  "hover:bg-gray-200 transition-colors",
-                  col.key === 'name' && "sticky left-10 bg-gray-100 z-10"
-                )}
-                style={{ 
-                  width: col.width,
-                  minWidth: col.width,
-                  maxWidth: col.width,
-                }}
-                onClick={() => toggleSort(col.key)}
-              >
-                <span className="truncate">{col.label}</span>
-                {sortConfig?.key === col.key && (
-                  <span className="ml-1">
-                    {sortConfig.direction === 'asc' ? (
-                      <ChevronUp className="h-3 w-3" />
-                    ) : (
-                      <ChevronDown className="h-3 w-3" />
-                    )}
-                  </span>
-                )}
-              </div>
-            ))}
-            <div 
-              className="flex-shrink-0 w-20 h-10 border-r border-gray-300 bg-gray-100 text-center text-sm font-semibold"
-              style={{ minWidth: '80px' }}
-            >
-              Actions
-            </div>
           </div>
 
-          {/* Data Rows */}
-          {sortedItems.map((item) => (
-            <div key={item.id} className="flex hover:bg-gray-50/50">
-              {/* Row Number */}
-              <div 
-                className={cn(
-                  "flex-shrink-0 w-10 h-10 border-r border-b border-gray-200 flex items-center justify-center text-xs text-gray-400 font-mono bg-gray-50/50",
-                  hoveredRow === item.id && "bg-gray-100"
-                )}
-                style={{ minWidth: '40px' }}
-                onMouseEnter={() => setHoveredRow(item.id)}
-                onMouseLeave={() => setHoveredRow(null)}
-              >
-                {items.indexOf(item) + 1}
-              </div>
-
-              {/* Cells */}
-              {COLUMNS.map((col) => (
-                <div key={`${item.id}-${col.key}`}>
-                  {renderCell(item, col)}
-                </div>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="h-8 w-[130px]">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {CATEGORIES.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {cat}
+                </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
 
-              {/* Actions */}
-              <div 
-                className={cn(
-                  "flex-shrink-0 w-20 h-10 border-r border-b border-gray-200 flex items-center justify-center gap-1 bg-white",
-                  hoveredRow === item.id && "bg-gray-50"
-                )}
-                style={{ minWidth: '80px' }}
-                onMouseEnter={() => setHoveredRow(item.id)}
-                onMouseLeave={() => setHoveredRow(null)}
+          <Select value={locationFilter} onValueChange={setLocationFilter}>
+            <SelectTrigger className="h-8 w-[130px]">
+              <SelectValue placeholder="Location" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Locations</SelectItem>
+              {LOCATIONS.map((loc) => (
+                <SelectItem key={loc} value={loc}>
+                  {loc}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSearchQuery('');
+              setCategoryFilter('all');
+              setLocationFilter('all');
+            }}
+            className="h-8"
+          >
+            Reset
+          </Button>
+
+          <div className="w-px h-6 bg-gray-200" />
+
+          <Button variant="ghost" size="sm" onClick={exportCSV} className="gap-1 h-8">
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">Export</span>
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              hasLoadedRef.current = false;
+              loadItems();
+            }}
+            className="h-8 w-8 p-0"
+            title="Refresh"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+
+          {!readOnly && (
+            <>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={deleteSelected}
+                disabled={selectedIds.size === 0 || isDeleting}
+                className="gap-1 h-8"
               >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0"
-                  onClick={() => copyRow(item.id)}
-                  title="Copy row"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                  onClick={() => deleteRow(item.id)}
-                  title="Delete row"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-          ))}
+                {isDeleting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                <span className="hidden sm:inline">Delete</span>
+                {selectedIds.size > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1 text-xs">
+                    {selectedIds.size}
+                  </Badge>
+                )}
+              </Button>
 
-          {/* Empty state */}
-          {items.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-              <FileSpreadsheet className="h-16 w-16 mb-4" />
-              <p className="text-lg font-medium">No inventory items</p>
-              <p className="text-sm">Click "Add Row" to start building your inventory</p>
-            </div>
+              <Button
+                size="sm"
+                onClick={() => setIsDialogOpen(true)}
+                className="gap-1 h-8 bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Add</span>
+              </Button>
+            </>
           )}
         </div>
       </div>
 
-      {/* Instructions */}
-      <div className="grid grid-cols-3 gap-4 text-xs text-gray-500">
-        <div className="bg-gray-50 border rounded-lg px-3 py-2">
-          <span className="font-medium text-gray-700">Double-click</span> to edit cell
+      {/* Stats – unchanged */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="bg-white border rounded-lg px-4 py-3">
+          <p className="text-xs text-gray-500 flex items-center gap-1">
+            <Package className="h-3 w-3" /> Total Items
+          </p>
+          <p className="text-lg font-semibold">{totalItems}</p>
         </div>
-        <div className="bg-gray-50 border rounded-lg px-3 py-2">
-          <span className="font-medium text-gray-700">Drag corner</span> to copy values down
+        <div className="bg-white border rounded-lg px-4 py-3">
+          <p className="text-xs text-gray-500 flex items-center gap-1">
+            <Box className="h-3 w-3" /> Total Stock
+          </p>
+          <p className="text-lg font-semibold">{totalStock}</p>
         </div>
-        <div className="bg-gray-50 border rounded-lg px-3 py-2">
-          <span className="font-medium text-gray-700">Arrow keys</span> to navigate
+        <div className="bg-white border rounded-lg px-4 py-3">
+          <p className="text-xs text-gray-500 flex items-center gap-1">
+            <DollarSign className="h-3 w-3" /> Total Value
+          </p>
+          <p className="text-lg font-semibold">
+            {new Intl.NumberFormat('en-US', {
+              style: 'currency',
+              currency: 'USD',
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0,
+            }).format(totalValue)}
+          </p>
+        </div>
+        <div className="bg-white border rounded-lg px-4 py-3">
+          <p className="text-xs text-gray-500 flex items-center gap-1">
+            <AlertCircle className="h-3 w-3" /> Low Stock
+          </p>
+          <p className={cn('text-lg font-semibold', lowStockItems > 0 ? 'text-red-600' : 'text-green-600')}>
+            {lowStockItems}
+          </p>
         </div>
       </div>
+
+      {/* Table – unchanged */}
+      <div className="border rounded-lg overflow-x-auto bg-white shadow-sm">
+        <Table>
+          <TableHeader className="bg-gray-100">
+            <TableRow>
+              <TableHead className="w-10 px-3">
+                <Checkbox
+                  checked={
+                    filteredAndSortedItems.length > 0 &&
+                    selectedIds.size === filteredAndSortedItems.length
+                  }
+                  onCheckedChange={toggleSelectAll}
+                  aria-label="Select all"
+                />
+              </TableHead>
+              {COLUMNS.map((col) => (
+                <TableHead
+                  key={col.key}
+                  className={cn(
+                    'cursor-pointer hover:bg-gray-200 transition-colors',
+                    typeof col.visible === 'object' && col.visible.base === false
+                      ? 'hidden'
+                      : ''
+                  )}
+                  onClick={() => toggleSort(col.key)}
+                >
+                  <div className="flex items-center gap-1">
+                    {col.label}
+                    {sortConfig?.key === col.key &&
+                      (sortConfig.direction === 'asc' ? (
+                        <ChevronUp className="h-3 w-3" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3" />
+                      ))}
+                  </div>
+                </TableHead>
+              ))}
+              {!readOnly && <TableHead className="w-16 text-center">Actions</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredAndSortedItems.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={COLUMNS.length + 2} className="h-24 text-center text-gray-400">
+                  No items found
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredAndSortedItems.map((item) => {
+                const isLowStock =
+                  item.stock !== undefined &&
+                  item.reorder_level !== undefined &&
+                  item.stock <= item.reorder_level;
+                return (
+                  <TableRow
+                    key={item.id}
+                    className={cn(
+                      'hover:bg-gray-50/50',
+                      isLowStock && 'bg-red-50/30 hover:bg-red-50/50'
+                    )}
+                  >
+                    <TableCell className="w-10 px-3">
+                      <Checkbox
+                        checked={selectedIds.has(item.id)}
+                        onCheckedChange={() => toggleSelect(item.id)}
+                        aria-label={`Select ${item.title}`}
+                      />
+                    </TableCell>
+                    {COLUMNS.map((col) => {
+                      const isVisible =
+                        typeof col.visible === 'object'
+                          ? col.visible.base !== false
+                          : col.visible !== false;
+                      return (
+                        <TableCell
+                          key={`${item.id}-${col.key}`}
+                          className={cn(
+                            'py-2',
+                            !isVisible && 'hidden',
+                            col.key === 'unit_price' && 'font-mono text-right',
+                            col.key === 'stock' && 'font-mono text-center',
+                            col.key === 'reorder_level' && 'font-mono text-center'
+                          )}
+                        >
+                          {renderValue(item, col.key)}
+                        </TableCell>
+                      );
+                    })}
+                    {!readOnly && (
+                      <TableCell className="w-16 text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={async () => {
+                            if (confirm(`Delete "${item.title}"?`)) {
+                              try {
+                                await deleteInventoryItem(item.id);
+                                const remaining = items.filter((i) => i.id !== item.id);
+                                setItems(remaining);
+                                if (onInventoryChange) onInventoryChange(remaining);
+                              } catch (err) {
+                                alert('Failed to delete item.');
+                              }
+                            }
+                          }}
+                          className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span className="sr-only">Delete</span>
+                        </Button>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Footer info */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-sm text-gray-500 gap-2">
+        <div>
+          Showing {filteredCount} of {totalItems} items
+        </div>
+        <div className="flex gap-2">
+          {selectedIds.size > 0 && <span>{selectedIds.size} selected</span>}
+        </div>
+      </div>
+
+      {/* Add Item Dialog – unchanged */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Add New Inventory Item
+            </DialogTitle>
+            <DialogDescription>
+              Enter the details of the new item to add to your inventory.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            {/* ... form fields (same as before) */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="itemName" className="text-right text-sm">
+                Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="itemName"
+                placeholder="Item name"
+                value={newItemData.title || ''}
+                onChange={(e) => setNewItemData({ ...newItemData, title: e.target.value })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="itemSku" className="text-right text-sm">
+                SKU <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="itemSku"
+                placeholder="SKU"
+                value={newItemData.sku || ''}
+                onChange={(e) => setNewItemData({ ...newItemData, sku: e.target.value })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="itemCategory" className="text-right text-sm">
+                Category
+              </Label>
+              <Select
+                value={newItemData.category || 'Apparel'}
+                onValueChange={(value) => setNewItemData({ ...newItemData, category: value })}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="itemPrice" className="text-right text-sm">
+                Unit Price
+              </Label>
+              <Input
+                id="itemPrice"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                value={newItemData.unit_price ?? ''}
+                onChange={(e) =>
+                  setNewItemData({
+                    ...newItemData,
+                    unit_price: parseFloat(e.target.value) || 0,
+                  })
+                }
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="itemStock" className="text-right text-sm">
+                Stock
+              </Label>
+              <Input
+                id="itemStock"
+                type="number"
+                min="0"
+                placeholder="0"
+                value={newItemData.stock ?? ''}
+                onChange={(e) =>
+                  setNewItemData({
+                    ...newItemData,
+                    stock: parseInt(e.target.value) || 0,
+                  })
+                }
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="itemReorder" className="text-right text-sm">
+                Reorder Level
+              </Label>
+              <Input
+                id="itemReorder"
+                type="number"
+                min="0"
+                placeholder="10"
+                value={newItemData.reorder_level ?? ''}
+                onChange={(e) =>
+                  setNewItemData({
+                    ...newItemData,
+                    reorder_level: parseInt(e.target.value) || 0,
+                  })
+                }
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="itemLocation" className="text-right text-sm">
+                Location
+              </Label>
+              <Select
+                value={newItemData.location || 'Warehouse A'}
+                onValueChange={(value) => setNewItemData({ ...newItemData, location: value })}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select location" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LOCATIONS.map((loc) => (
+                    <SelectItem key={loc} value={loc}>
+                      {loc}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="itemDescription" className="text-right text-sm">
+                Description
+              </Label>
+              <Input
+                id="itemDescription"
+                placeholder="Brief description"
+                value={newItemData.description || ''}
+                onChange={(e) =>
+                  setNewItemData({ ...newItemData, description: e.target.value })
+                }
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="itemSupplier" className="text-right text-sm">
+                Supplier
+              </Label>
+              <Input
+                id="itemSupplier"
+                placeholder="Supplier name"
+                value={newItemData.supplier || ''}
+                onChange={(e) =>
+                  setNewItemData({ ...newItemData, supplier: e.target.value })
+                }
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddItem} disabled={isCreating} className="bg-blue-600 hover:bg-blue-700">
+              {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add Item'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-// Example usage
-export function SpreadsheetExample() {
-  const [inventory, setInventory] = useState<InventoryItem[]>(MOCK_INVENTORY);
+// Example usage (unchanged)
+export function InventoryPage() {
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
 
   return (
-    <div className="container mx-auto py-8 max-w-7xl">
-      <Spreadsheet 
-        initialItems={inventory}
-        onInventoryChange={setInventory}
-      />
+    <div className="container mx-auto py-4 sm:py-8 px-2 sm:px-4 max-w-7xl">
+      <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 flex items-center gap-2">
+        <Package className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600" />
+        Inventory Management
+      </h1>
+      <InventoryTable initialItems={inventory} onInventoryChange={setInventory} />
     </div>
   );
 }
 
-export default Spreadsheet;
+export default InventoryTable;

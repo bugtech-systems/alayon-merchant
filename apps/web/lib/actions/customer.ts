@@ -274,7 +274,7 @@ export async function getCustomerById(
       tags: [await getCacheTag(`customer-${id}`)],
     }
 
-    const { customer } = await sdk.client.fetch<{ customer: B2BCustomer }>(
+    const { customer } = await sdk.client.fetch(
       `/store/customers/${id}`,
       {
         method: "GET",
@@ -576,7 +576,7 @@ export const retrieveCustomer = async (): Promise<B2BCustomer | null> => {
       headers,
       next,
     })
-    .then(({ customer }) => customer as B2BCustomer)
+    .then(({ customer }: any) => customer as B2BCustomer)
     .catch(() => null)
 }
 
@@ -587,7 +587,7 @@ export const updateCustomer = async (body: HttpTypes.StoreUpdateCustomer) => {
 
   const updateRes = await sdk.store.customer
     .update(body, {}, headers)
-    .then(({ customer }) => customer)
+    .then(({ customer }: any) => customer)
     .catch(medusaError)
 
   const cacheTag = await getCacheTag("customers")
@@ -719,7 +719,7 @@ export const addCustomerAddress = async (
       revalidateTag("customers-list", "max")
       return { success: true, error: null }
     })
-    .catch((err) => {
+    .catch((err: any) => {
       return { success: false, error: err.toString() }
     })
 }
@@ -739,7 +739,7 @@ export const deleteCustomerAddress = async (
       revalidateTag("customers-list", "max")
       return { success: true, error: null }
     })
-    .catch((err) => {
+    .catch((err: any) => {
       return { success: false, error: err.toString() }
     })
 }
@@ -775,7 +775,7 @@ export const updateCustomerAddress = async (
       revalidateTag("customers-list", "max")
       return { success: true, error: null }
     })
-    .catch((err) => {
+    .catch((err: any) => {
       return { success: false, error: err.toString() }
     })
 }
@@ -918,7 +918,7 @@ export async function bulkUpdateCustomerStatus(
 }
 
 
-export async function bulkSendSms(data: any): Promise<{ success: boolean; error?: string; updatedCount?: number }> {
+export async function bulkSendSms(data: any): Promise<any> {
   try {
     const headers = {
       ...(await getAuthHeaders()),
@@ -931,7 +931,7 @@ export async function bulkSendSms(data: any): Promise<{ success: boolean; error?
         ...(await getAuthHeaders())
       },
       body: JSON.stringify(data),
-    });
+    }) as any;
 
     return { success: true, response }
   } catch (error) {

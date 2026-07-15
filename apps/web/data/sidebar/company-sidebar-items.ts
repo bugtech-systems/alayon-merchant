@@ -72,12 +72,43 @@ export const companySidebarItems: NavGroup[] = [
       //   icon: Forklift,
       //   comingSoon: false,
       // },
-      // {
-      //   title: "POS",
-      //   url: "/pos",
-      //   icon: Banknote,
-      //   // comingSoon: true
-      // },
+      {
+        title: "Products",
+        url: "/dashboard/products",
+        icon: Banknote,
+         subItems: [
+          {
+          title: "Products",
+          url: "/dashboard/products",
+        },
+        {
+          title: "Categories",
+          url: "/dashboard/categories",
+        },
+
+      ]
+        // comingSoon: true
+      },
+       {
+        title: "Inventory",
+        url: "/dashboard/inventory",
+        icon: Banknote,
+        // comingSoon: true
+        subItems: [
+          {
+          title: "Products",
+          url: "/dashboard/products",
+        },
+        {
+          title: "Inventory Items",
+          url: "/dashboard/inventory",
+        },
+        {
+          title: "Purchases",
+          url: "/dashboard/purchases",
+        }
+      ],
+      },
       // {
       //   title: "Analytics",
       //   url: "/dashboard/analytics",
@@ -136,30 +167,24 @@ export const riderSidebarItems: NavGroup[] = [
         icon: Users,
         // comingSoon: true
       },
-      //  {
-      //   title: "Map",
-      //   url: "/map",
-      //   icon: Forklift,
-      //   comingSoon: false,
-      // },
       {
         title: "Inventory",
         url: "/dashboard/inventory",
         icon: Banknote,
         // comingSoon: true
         subItems: [
-        {
-          title: "History",
-          url: "#",
+          {
+          title: "Products",
+          url: "/dashboard/products",
         },
         {
-          title: "Starred",
-          url: "#",
+          title: "Inventory Items",
+          url: "/dashboard/inventory",
         },
         {
-          title: "Settings",
-          url: "#",
-        },
+          title: "Purchases",
+          url: "/dashboard/purchases",
+        }
       ],
       },
       // {

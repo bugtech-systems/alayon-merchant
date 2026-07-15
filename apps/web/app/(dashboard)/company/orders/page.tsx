@@ -1,10 +1,11 @@
-// app/orders/page.tsx (Server Component)
+// app/orders/page.tsx (Updated)
 import { Suspense } from 'react';
 import { OrdersClient } from '@/components/orders/orders-client';
 import { OrderTableSkeleton } from '@/components/ui/table-skeleton';
 import { retrieveUser } from '@/lib/data';
-import { listPosOrders } from '@/lib/data/orders';
+import { listOrders, listPosOrders } from '@/lib/data/orders';
 import { sortOrders } from '@/lib/utils/helpers';
+import { buildDateFilters, getDateRangePreset } from '@/lib/utils/date-filters';
 
 interface PageProps {
   searchParams: Promise<{
@@ -16,6 +17,7 @@ interface PageProps {
     status?: string;
     date_from?: string;
     date_to?: string;
+    date_preset?: string; // Add preset support
     min_total?: string;
     max_total?: string;
     payment_status?: string;
@@ -57,12 +59,21 @@ export default async function OrdersPage({ searchParams }: PageProps) {
     filters.payment_status = params.payment_status;
   }
   
-  // Date range filters
-  if (params.date_from) {
-    filters.date_from = params.date_from;
+  // Date range filters - support both custom dates and presets
+  let dateFrom = params.date_from;
+  let dateTo = params.date_to;
+  
+  // If preset is provided and no custom dates, use preset
+  if (params.date_preset && !dateFrom && !dateTo) {
+    const range = getDateRangePreset(params.date_preset);
+    dateFrom = range.from;
+    dateTo = range.to;
   }
-  if (params.date_to) {
-    filters.date_to = params.date_to;
+  
+  // Apply date filters if we have dates
+  if (dateFrom || dateTo) {
+    const dateFilters = buildDateFilters(dateFrom, dateTo);
+    Object.assign(filters, dateFilters);
   }
   
   // Total amount range filters
@@ -78,17 +89,18 @@ export default async function OrdersPage({ searchParams }: PageProps) {
     filters.customer_id = params.customer_id;
   }
   
-  // if(user?.employee?.company?.id){
-  //   filters.company = user?.employee?.company?.id;
-  // }
-
-  if (user?.id) {
-    filters.seller_id = user.id
+  if (user?.employee?.company?.id) {
+    filters.company = user?.employee?.company?.id;
   }
+
+  // if (user?.id) {
+  //   filters.seller_id = user?.id;
+  // }
 
   // Fetch initial data based on order type
   let initialOrders = await listPosOrders(limit, offset, filters);
-  let initialData = sortOrders(initialOrders.orders, 'created_at', 'desc')
+  let initialData = sortOrders(initialOrders.orders, 'created_at', 'desc');
+
   return (
     <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8">
       <div className="mb-6">
@@ -100,7 +112,7 @@ export default async function OrdersPage({ searchParams }: PageProps) {
 
       <Suspense fallback={<OrderTableSkeleton />}>
         <OrdersClient 
-          initialData={{...initialOrders, orders: initialData}}
+          initialData={{...initialOrders, orders: []}}
           initialPage={page}
           initialLimit={limit}
           initialSortField={sortField}
@@ -108,8 +120,9 @@ export default async function OrdersPage({ searchParams }: PageProps) {
           initialSearch={params.search || ''}
           initialStatus={params.status || 'all'}
           initialPaymentStatus={params.payment_status || 'all'}
-          initialDateFrom={params.date_from || ''}
-          initialDateTo={params.date_to || ''}
+          initialDateFrom={dateFrom || ''}
+          initialDateTo={dateTo || ''}
+          initialDatePreset={params.date_preset || ''}
           initialMinTotal={params.min_total || ''}
           initialMaxTotal={params.max_total || ''}
           initialCustomerId={params.customer_id || ''}
