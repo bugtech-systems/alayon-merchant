@@ -104,7 +104,6 @@ export const companySidebarItems: NavGroup[] = [
           title: "Purchases",
           url: "/dashboard/purchases",
           comingSoon: true
-
         }
       ],
       },
