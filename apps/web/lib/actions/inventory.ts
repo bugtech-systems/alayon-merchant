@@ -4,6 +4,7 @@
 import { revalidatePath } from 'next/cache';
 import { sdk } from '../config';
 import { adminFetch } from '../apiClient';
+import { getAuthHeaders } from '../data/cookies';
 
 // ---------- Types ----------
 export interface InventoryItem {
@@ -272,6 +273,41 @@ export async function getInventoryItem(id: string): Promise<ApiResponse<Inventor
       error: extractErrorMessage(error),
     };
   }
+}
+
+export async function fetchInventoryItemsByLocation(
+  locationId: string,
+  params?: {
+    limit?: number;
+    offset?: number;
+    fields?: string; // override the fields string if needed
+  }
+): Promise<any> {
+  const {
+    limit = 10000,
+    offset = 0,
+    fields = "id,title,sku,hs_code,location_levels", // include location levels to get stock qty
+  } = params || {};
+
+  const headers = await getAuthHeaders();
+
+  const { inventory_items } = await sdk.admin.inventoryItem.list(
+    {
+        location_levels: {
+          stock_location_id: locationId,
+        },
+        limit,
+        offset
+    },
+    {
+       limit,
+       offset,
+      headers,
+      fields, // tells the API which fields to return
+    }
+  );
+
+  return inventory_items;
 }
 
 /**

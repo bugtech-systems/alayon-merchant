@@ -65,6 +65,7 @@ import {
   getInventoryItem,
   listInventoryLevels,
   updateInventoryLevel,
+  fetchInventoryItemsByLocation,
 } from '@/lib/actions/inventory';
 
 // ---------- Types ----------
@@ -234,14 +235,11 @@ export function InventoryTable({user}: any) {
       setError(null);
 
       // Fetch inventory items from Medusa
-      const result = await listInventoryItems(100, 0, {
-        company_id: user?.companyId,
-        location_id: user?.stockLocationId
-      });
-
-      if (result.items) {
+      const result = await fetchInventoryItemsByLocation(user?.stockLocationId);
+        console.log(result, "RESSS")
+      if (result) {
         // Map the response to our interface
-        const transformedItems: InventoryItem[] = result.items.map((item: any) => ({
+        const transformedItems: InventoryItem[] = result.map((item: any) => ({
           id: item.id,
           sku: item.sku || '',
           title: item.title || item.sku,
@@ -258,7 +256,7 @@ export function InventoryTable({user}: any) {
         console.log(result, "RESULLT")
 
         setItems(transformedItems);
-        setTotalCount(result.count || transformedItems.length);
+        setTotalCount(result.length || transformedItems.length);
 
         // Extract unique locations from the items
         const uniqueLocations = new Map<string, Location>();
