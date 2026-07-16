@@ -42,6 +42,7 @@ class MedusaClientManager {
         baseUrl: MEDUSA_BACKEND_URL,
         debug: process.env.NODE_ENV === "development",
         publishableKey: PUBLISHABLE_KEY,
+        apiKey: process.env.NEXT_PUBLIC_MEDUSA_SECRET_KEY!,
         // The JS SDK automatically adds region header if you pass region in options,
         // but you can also set default headers globally. We'll handle region per request.
       });
@@ -128,7 +129,7 @@ export const getAdminClient = () => {
   }
   // Dynamically import medusa-js or js-sdk with admin key
   const { Medusa } = require("@medusajs/js-sdk");
-  return Medusa({
+  return new Medusa({
     baseUrl: process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL!,
     apiKey: process.env.NEXT_PUBLIC_MEDUSA_SECRET_KEY!,
   });

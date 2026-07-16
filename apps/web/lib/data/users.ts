@@ -5,17 +5,26 @@ import { setCustomerGroupId } from "../medusa/data/cookies";
 
 export async function retrieveUser() {
   try {
-    const { user } = await sdk.client.fetch<{
-      user: any | null;
-    }>("/store/users/me", {
+    const { user } = await sdk.client.fetch("/store/users/me", {
       headers: {
         ...(await getAuthHeaders()),
         ...getCacheOptions("users"),
       },
     });
+    let userContext = {
+        priceListId: user?.metadata?.role === 'company' 
+          ? user.employee?.company?.price_list_id 
+          : user?.driver?.price_list_id,
+        customerGroupId: user?.metadata?.role === 'company' 
+          ? user.employee?.company?.customer_group_id 
+          : user?.driver?.customer_group_id,
+        customerId: user?.id,
+        companyId: user?.metadata?.role == 'company' ? user.employee?.company_id : user?.driver?.company_id,
+        stockLocationId: user?.metadata?.role == 'company' ? user.employee?.company?.stock_location_id : user?.driver?.stock_location_id,
+        pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
+      }
 
-
-    return user;
+    return {...userContext, ...user};
   } catch (error) {
     console.error(error);
     return null;

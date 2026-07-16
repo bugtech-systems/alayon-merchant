@@ -83,8 +83,8 @@ export const companySidebarItems: NavGroup[] = [
         },
         {
           title: "Categories",
-          url: "/dashboard/categories",
-          comingSoon: true
+          url: "/dashboard/products/categories",
+          comingSoon: false
         },
 
       ]
