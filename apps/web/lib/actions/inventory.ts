@@ -281,7 +281,7 @@ export async function fetchInventoryItemsByLocation(
     limit?: number;
     offset?: number;
     fields?: string; // override the fields string if needed
-  }
+  } 
 ): Promise<any> {
   const {
     limit = 10000,
