@@ -284,24 +284,7 @@ console.log(order.metadata, order, 'HOOORD')
       encoder.newline(2);
     }
 
-    // ============================================
-    // FOOTER SECTION - CENTERED
-    // ============================================
-     encoder
-      .text(this.formatHeaderLine('═'.repeat(30)))
-
-    encoder
-      .align('center')
-      .newline(2)
-      .text(this.formatHeaderLine(store.footer))
-      .newline()
-      .text(this.formatHeaderLine('Returns within 7 days'))
-      .text(this.formatHeaderLine('with original receipt'))
-      .newline(2)
-      .text(this.formatHeaderLine('Thank you!'))
-      .newline(3)
-      .cut('full');
-
+  
     return encoder.encode();
   }
 }
