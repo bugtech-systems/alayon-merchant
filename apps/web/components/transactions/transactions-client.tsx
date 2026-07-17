@@ -82,8 +82,6 @@ import {
   listTransactions, 
   updateTransaction, 
   deleteTransaction,
-  uploadTransactionAttachment,
-  deleteTransactionAttachment,
   // Category actions
   listCategories,
   createCategory,
@@ -218,7 +216,7 @@ const TransactionsTable = ({
                   <CalendarIcon className="h-3.5 w-3.5" />
                   {format(new Date(transaction.transaction_date || transaction.created_at), 'MMM dd, yyyy')}
                 </span>
-                <div className="flex items-center gap-2">
+                {/* <div className="flex items-center gap-2">
                   {transaction.payment_method && (
                     <span className="text-xs capitalize">{transaction.payment_method.replace('_', ' ')}</span>
                   )}
@@ -240,7 +238,7 @@ const TransactionsTable = ({
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
-                </div>
+                </div> */}
               </div>
             </div>
           );
@@ -329,14 +327,14 @@ const TransactionsTable = ({
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button
+                        {/* <Button
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7"
                           onClick={() => onEdit(transaction)}
                         >
                           <Edit2 className="h-3.5 w-3.5" />
-                        </Button>
+                        </Button> */}
                         {/* <Button
                           variant="ghost"
                           size="icon"
