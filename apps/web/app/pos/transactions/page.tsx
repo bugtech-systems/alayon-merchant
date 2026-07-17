@@ -59,11 +59,11 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
   // Company and user filters
   if (user?.employee?.company?.id) {
     filters.company_id = user.employee.company.id;
-  }
-
-  if (user?.id) {
+  } else {
     filters.customer_id = user?.id;
   }
+
+
 
   const initialData = await listTransactions(limit, offset, filters);
 

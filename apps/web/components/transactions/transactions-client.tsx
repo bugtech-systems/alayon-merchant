@@ -483,7 +483,11 @@ export function TransactionsClient({
     if (filters.category_id && filters.category_id !== 'all') queryFilters.category_id = filters.category_id;
     if (filters.status && filters.status !== 'all') queryFilters.status = filters.status;
     if (filters.search) queryFilters.search = filters.search;
-    if (user?.id) queryFilters.customer_id = user.id;
+     if (user?.employee?.company?.id) {
+    queryFilters.company_id = user.employee.company.id;
+  } else {
+    queryFilters.customer_id = user?.id;
+  }
 
     setIsLoading(true);
     try {
@@ -1104,6 +1108,7 @@ export function TransactionsClient({
             onDeleteCategory={handleDeleteCategory}
             onRefreshCategories={handleRefreshCategories}
             isLoading={isLoading}
+            user={user}
           />
         </DialogContent>
       </Dialog>

@@ -103,6 +103,7 @@ interface TransactionFormProps {
   onDeleteCategory: (id: string) => Promise<any>;
   onRefreshCategories?: () => Promise<void>;
   isLoading?: boolean;
+  user?: any;
 }
 
 // Constants
@@ -564,6 +565,7 @@ export const TransactionForm = ({
   onDeleteCategory,
   onRefreshCategories,
   isLoading = false,
+  user
 }: TransactionFormProps) => {
   const [formData, setFormData] = useState<TransactionFormData>({
     amount: transaction?.amount?.toString() || '',
@@ -738,6 +740,7 @@ export const TransactionForm = ({
       tax_amount: formData.tax_amount ? parseFloat(formData.tax_amount) : 0,
       transaction_date: new Date(formData.date).toISOString(),
       notes: formData.notes,
+      company_id: user?.companyId
     };
     
     await onSave(submitData);

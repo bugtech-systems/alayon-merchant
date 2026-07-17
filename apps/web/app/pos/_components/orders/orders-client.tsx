@@ -1693,7 +1693,7 @@ export function OrdersClient({
                     Convert to Order
                   </Button>
                 )}
-                {selectedOrder && (
+                {/* {selectedOrder && (
                   <Button 
                     variant="destructive" 
                     size="sm"
@@ -1705,7 +1705,7 @@ export function OrdersClient({
                     <Trash2 className="mr-2 h-4 w-4" />
                     Delete
                   </Button>
-                )}
+                )} */}
               </div>
               <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
                 Close

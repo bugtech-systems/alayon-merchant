@@ -29,7 +29,12 @@ export async function listTransactions(
       }
     );
 
-        const filteredTransactions = response.transactions.filter((trans: any) => trans?.customer_id === filters?.customer_id);
+        let filteredTransactions = [] as any;
+        if(filters?.company_id){
+          filteredTransactions = response.transactions.filter((trans: any) => trans?.company_id == filters?.company_id)
+        } else {
+       filteredTransactions = response.transactions.filter((trans: any) => trans?.customer_id == filters?.customer_id)
+        }
     const count = filteredTransactions.length;
 
     return {
