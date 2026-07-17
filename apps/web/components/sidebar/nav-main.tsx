@@ -206,19 +206,13 @@ export function NavMain({ items, role }: NavMainProps) {
                 align="end"
                 side="bottom"
               /> */}
-              {/* <MinimalSMSDialog
-                trigger={
-<Button
-                size="icon"
-                className="h-9 w-9 shrink-0 group-data-[collapsible=icon]:opacity-0"
-                variant="outline"
-              >
+                            <Link href={`/dashboard/messages`} >
+              <Button>
                 <MailIcon />
                 <span className="sr-only">Inbox</span>
               </Button>
-                }
-              /> */}
-              
+                </Link>
+
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroupContent>

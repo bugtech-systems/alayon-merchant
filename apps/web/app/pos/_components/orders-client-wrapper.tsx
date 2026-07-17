@@ -65,7 +65,6 @@ export function OrdersClientWrapper({
           listDraftOrders(limit, offset, filters)
         ]);
 
-console.log(ordersResult, draftsResult, 'dataas')
 
         setOrdersData(ordersResult);
         setDraftsData(draftsResult);

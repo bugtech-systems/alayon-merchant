@@ -122,7 +122,6 @@ export function LoginForm({onSuccess }: LoginFormProps) {
         localStorage.removeItem('pos_cart_id');
         await removeCartId()
         removeSession();
-        console.log( data, 'DATAA')
         const result = await login(data, formData);
         console.log(result, 'RESSS')
         if (!result?.success) {

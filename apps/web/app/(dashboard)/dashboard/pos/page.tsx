@@ -22,7 +22,7 @@ export default async function PosPage() {
 
 function PosSkeleton() {
   return (
-    <div className="flex h-[90vh]">
+    <div className="flex h-full">
       {/* Categories Skeleton */}
       <div className="sticky top-0 z-10 bg-background/95 border-b">
         <div className="p-4">

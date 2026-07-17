@@ -435,7 +435,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
   if (isMobile) {
     return (
       <>
-        <div className="flex flex-col h-full pb-14">
+        <div className="flex flex-col h-[90vh] pb-14">
           {/* Header */}
           <div className="sticky top-0 z-10 bg-background border-b p-2">
             <div className="flex justify-between items-center mb-2">
@@ -515,7 +515,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
           
           {/* Mobile Cart Sheet */}
           <Sheet open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
-            <SheetContent side="bottom" className="rounded-t-xl p-0 h-[85vh]">
+            <SheetContent side="bottom" className="rounded-t-xl p-0 h-[95vh]">
               <SheetHeader className="border-b p-3">
                 <SheetTitle>Your Order</SheetTitle>
               </SheetHeader>
@@ -574,7 +574,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
 
   // Desktop Layout
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-[90vh] overflow-hidden">
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
@@ -643,7 +643,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
       </div>
       
       {/* Cart Sidebar */}
-      <aside className="hidden w-86 flex-col border-l bg-card lg:flex">
+      <aside className="hidden w-86 flex-col border-l bg-card lg:flex h-[90vh]">
         <CartSidebar {...cartSidebarProps} />
       </aside>
       

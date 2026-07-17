@@ -18,7 +18,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
 
-    const userData = await retrieveUser() as any;
+  const userData = await retrieveUser() as any;
   const [variant, collapsible] = await Promise.all([
     getPreference("sidebar_variant", SIDEBAR_VARIANT_VALUES, "inset"),
     getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
@@ -66,7 +66,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
             </div>
           </div>
         </header>
-        <div className="h-full p-3">{children}</div>
+        <div className="h-full p-3 overflow-hidden">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   );

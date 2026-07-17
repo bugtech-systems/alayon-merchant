@@ -24,9 +24,9 @@ export function useMedusaOrders(params: UseMedusaOrdersParams) {
   return useQuery({
     queryKey: ["medusa-orders", params],
     queryFn: async () => {
-        let { limit, offset} = params;
-      const response = await listOrders(limit, offset, params.filters);
-      console.log(response, 'USE MEDUSA')
+        let { limit, offset, filters} = params;
+      const response = await listOrders(limit, offset, filters);
+      console.log(response, 'USE MEDUSA', params)
       return response;
     },
     staleTime: 30000, // 30 seconds
@@ -41,8 +41,8 @@ export function usePosOrders(params: UseMedusaOrdersParams) {
   return useQuery({
     queryKey: ["pos-orders", params],
     queryFn: async () => {
-        let { limit, offset} = params;
-      const response = await listPosOrders(limit, offset, params.filters);
+        let { limit, offset, sort} = params;
+      const response = await listPosOrders(limit, offset, params.filters, sort);
       console.log(response, 'USE MEDUSA')
       return response;
     },

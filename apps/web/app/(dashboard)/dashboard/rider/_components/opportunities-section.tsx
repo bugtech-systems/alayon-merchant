@@ -417,7 +417,6 @@ export function WaterDeliveryOrdersSection({
   );
 
 
-  console.log(data, 'DATAA')
   const table = useReactTable({
     data: data,
     columns: waterDeliveryColumns as any,

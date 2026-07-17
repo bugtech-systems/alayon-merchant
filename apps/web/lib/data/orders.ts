@@ -371,24 +371,101 @@ export const listOrders = async (
   try {
     const headers = await getAuthHeaders();
     const next = await getCacheOptions("orders");
-    const queryString = buildQueryString(limit, offset, filters, sort);
-    
+        const fields = [
+      'id',
+      'status',
+      'created_at',
+      'updated_at',
+      'email',
+      'display_id',
+      'custom_display_id',
+      'payment_status',
+      'fulfillment_status',
+      'total',
+      'subtotal',
+      'tax_total',
+      'shipping_total',
+      'discount_total',
+      'currency_code',
+      'customer.*',
+      'sales_channel',
+      'payment_collections.*',
+      'payments',
+      'items',
+      'shipping_address',
+      'billing_address',
+      'shipping_methods',
+      'metadata',
+      'fulfillments',
+      'claims',
+      'swaps',
+      'returns',
+      'refunds',
+      'promotions',
+      'discounts',
+      'delivery.*'
+    ].join(',');
+
+
+    const queryParams = new URLSearchParams({
+      limit: limit.toString(),
+      offset: offset.toString(),
+      fields: fields,
+      order: '-created_at' // Show newest first
+    });
+
+    // Add status filter to exclude cancelled and refunded by default
+    const excludedStatuses = ['canceled', 'refunded'];
+
+    // Add date filters if provided - with proper start/end of day handling
+    if (filters?.created_at_from) {
+      // Ensure we're using the start of the day (00:00:00)
+      const fromDate = new Date(filters.created_at_from);
+      fromDate.setHours(0, 0, 0, 0);
+      queryParams.append('created_at[gte]', fromDate.toISOString());
+    }
+    if (filters?.created_at_to) {
+      // Ensure we're using the end of the day (23:59:59.999)
+      const toDate = new Date(filters.created_at_to);
+      toDate.setHours(23, 59, 59, 999);
+      queryParams.append('created_at[lte]', toDate.toISOString());
+    }
+
+    // Add search filter
+    if (filters?.search) {
+      queryParams.append('q', filters.search);
+    }
+
+    // Add specific status filter
+    if (filters?.status && filters.status !== 'all' && !filters.status.includes('!')) {
+      queryParams.append('status', filters.status);
+    }
+
+    // Add payment status filter
+    if (filters?.payment_status && filters.payment_status !== 'all') {
+      queryParams.append('payment_status', filters.payment_status);
+    }
+
+    // Add customer filter
+    if (filters?.customer_id) {
+      queryParams.append('customer_id', filters.customer_id);
+    }
+
     // Use Medusa SDK client to fetch from custom endpoint
     const response = await sdk.client.fetch(
-      `/dashboard/orders?${queryString}`,
+      `/admin/orders?${queryParams.toString()}`,
       {
         method: "GET",
-        headers,
+        // headers,
         next,
       }
     );
     
 
-    console.log(response, "RESSPPp", queryString)
     // Get all orders from response
     let orders = response.orders || [];
     const totalCount = response.count || 0;
-    
+
     // Filter out cancelled and refunded on client side (matching listPosOrders)
     if (!filters?.include_cancelled && !filters?.include_refunded) {
       orders = orders.filter((order: any) => 
@@ -401,22 +478,29 @@ export const listOrders = async (
       orders = orders.filter((order: any) => order.metadata?.seller_id === filters.seller_id);
     }
     if (filters?.company_id) {
-      orders = orders.filter((order: any) => order.metadata?.company_id === filters.company_id);
+      orders = orders.filter((order: any) => order.metadata?.company_id == filters.company_id);
     }
-    
-    // Additional client-side filtering for date range if needed
-    const dateFrom = filters?.date_from || filters?.created_from;
-    const dateTo = filters?.date_to || filters?.created_to;
-    
-    // if (dateFrom) {
-    //   const fromDate = new Date(dateFrom);
-    //   orders = orders.filter((order: any) => new Date(order.created_at) >= fromDate);
-    // }
-    // if (dateTo) {
-    //   const toDate = new Date(dateTo);
-    //   orders = orders.filter((order: any) => new Date(order.created_at) <= toDate);
-    // }
-    
+
+
+    // Client-side date filtering with proper start/end of day handling
+    if (filters?.date_from) {
+      const fromDate = new Date(filters.date_from);
+      fromDate.setHours(0, 0, 0, 0); // Start of day
+      orders = orders.filter((order: any) => {
+        const orderDate = new Date(order.created_at);
+        return orderDate >= fromDate;
+      });
+    }
+    if (filters?.date_to) {
+      const toDate = new Date(filters.date_to);
+      toDate.setHours(23, 59, 59, 999); // End of day
+      orders = orders.filter((order: any) => {
+        const orderDate = new Date(order.created_at);
+        return orderDate <= toDate;
+      });
+    }
+
+
     // Sort orders by created_at descending (newest first)
     orders.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     
@@ -425,7 +509,6 @@ export const listOrders = async (
     const start = offset;
     const end = Math.min(offset + limit, filteredCount);
     const paginatedOrders = orders.slice(start, end);
-    
     // Transform orders for dashboard
     const transformedOrders = paginatedOrders.map(transformOrderForDashboard) || [];
     
@@ -791,10 +874,10 @@ export async function listPosOrders(limit: number = 1000, offset: number = 0, fi
       'shipping_total',
       'discount_total',
       'currency_code',
-      'customer',
+      'customer.*',
       'sales_channel',
-      'payment_collections',
-      'payments',
+      'payment_collections.*',
+      "payments",
       'items',
       'shipping_address',
       'billing_address',
@@ -802,12 +885,11 @@ export async function listPosOrders(limit: number = 1000, offset: number = 0, fi
       'metadata',
       'fulfillments',
       'claims',
-      'swaps',
       'returns',
       'refunds',
       'promotions',
       'discounts',
-      // 'deliveries'
+      'delivery.*'
     ].join(',');
 
     const queryParams = new URLSearchParams({
@@ -858,7 +940,7 @@ export async function listPosOrders(limit: number = 1000, offset: number = 0, fi
     // Get all orders from response
     let orders = response.orders || [];
     const totalCount = response.count || 0;
-
+    console.log(response, 'RESPPO')
     // Filter by seller_id or company_id from metadata
     if (filters?.seller_id) {
       orders = orders.filter((order: any) => order.metadata?.seller_id === filters.seller_id);

@@ -338,7 +338,7 @@ export function CartSidebar({
         </div>
 
         {/* Scrollable cart items */}
-        <div className="flex-1 overflow-y-auto min-h-0 h-full">
+        <div className="flex-1 overflow-y-auto min-h-0 max-h-[40vh]">
           <div className="p-3 md:p-4">
             {isLoading ? (
               <div className="flex justify-center py-8">

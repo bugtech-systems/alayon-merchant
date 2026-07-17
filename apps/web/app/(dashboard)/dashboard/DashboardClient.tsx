@@ -5,10 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import DriverDashboard from "./rider/page";
 import { CompanyOrdersTable } from "@/components/company-orders-table/table";
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useMedusaOrders } from "@/hooks/useMedusaOrders";
+import { useMedusaOrders, usePosOrders } from "@/hooks/useMedusaOrders";
 import { assignDriverToOrder, unassignDriverToOrder } from "@/lib/data";
 import { PrintDialog } from "@/app/pos/_components/print-dialog";
 import { startOfDay, endOfDay, format } from 'date-fns';
+import { buildDateFilters } from "@/lib/utils/date-filters";
 
 interface DashboardClientProps {
   user: any;
@@ -43,8 +44,14 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
         date_from: format(from, 'yyyy-MM-dd'),
         date_to: format(to, 'yyyy-MM-dd'),
       };
+
+        // Apply date filters if we have dates
+          // const dateFilters = buildDateFilters(filters.dateFrom, filters.dateTo);
+          // Object.assign(filters, dateFilters);
   
 
+
+          
 
 
   const pricingContext = React.useMemo(() => ({
@@ -60,6 +67,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
   }), [user]);
 
+
   // Fetch orders with pagination and filters
   const { data, refetch, isLoading } = useMedusaOrders({
     filters: { 
@@ -73,7 +81,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   });
 
 
-  console.log(data, "DATAAA")
 
   // Initialize audio for notification sound
   useEffect(() => {
@@ -430,6 +437,8 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     setIsSoundEnabled(prev => !prev);
   };
 
+
+
   // Company role view
   if (userRole === "company") {
     const { company } = user.employee;
@@ -438,7 +447,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
         <PrintDialog open={cartPrint} onOpenChange={setCartPrint} cart={cartPrint} />
         
         {/* Sound control and test buttons */}
-        <div className="flex justify-end items-center gap-3 px-4">
+        {/* <div className="flex justify-end items-center gap-3 px-4">
           <button
             onClick={handleTestNotification}
             className="text-sm px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md transition-colors"
@@ -464,7 +473,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           <span className="text-xs text-muted-foreground">
             Auto-refresh: 10s
           </span>
-        </div>
+        </div> */}
         
         <CompanyOrdersTable
           data={data?.orders || []}

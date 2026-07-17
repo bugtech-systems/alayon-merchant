@@ -1,38 +1,6 @@
 "use client";
 
-import { useSortable } from "@dnd-kit/sortable";
-import type { ColumnDef, Row } from "@tanstack/react-table";
-import { flexRender } from "@tanstack/react-table";
-import { GripVerticalIcon, Package, Phone, Truck, User, X, ChevronsUpDown, Check, ChevronDown, Loader2, RefreshCw, Settings2, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MoreVertical, Banknote, Search, Printer } from "lucide-react";
 import * as React from "react";
-import { toast } from "sonner";
-
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatDistanceToNow, formatDistanceToNowStrict } from 'date-fns';
-
 import {
   closestCenter,
   DndContext,
@@ -44,9 +12,13 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
-import { arrayMove, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import {
+  type ColumnFiltersState,
+  flexRender,
   getCoreRowModel,
+  getFacetedRowModel,
+  getFacetedUniqueValues,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
@@ -54,14 +26,74 @@ import {
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { fetchAvailableDrivers } from "@/lib/data";
+import {
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ChevronsLeftIcon,
+  ChevronsRightIcon,
+  Loader2,
+  RefreshCw,
+  Search,
+  Filter,
+  Settings2,
+  Package,
+  Printer,
+  Clock,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Truck,
+  ShoppingBag,
+  PackageCheck,
+  Hourglass,
+  Ban,
+  CircleCheckIcon,
+  LoaderIcon,
+} from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 import { cn } from "@/lib/utils";
 import { ORDER_STATUS_CONFIG, OrderStatusBadge } from "./OrderStatusBadge";
-import { DriverAssignment } from "./driver-assignment";
 import { OrderDetailsView } from "./OrderDetailsView";
 import { TimeFromNow } from "./time-from-now";
+import { StatusDropdown } from "./StatusDropdown";
 
 // ==================== Types ====================
+
+export type OrderStatus = 
+  | "pending"
+  | "company_accepted"
+  | "driver_accepted"
+  | "preparing"
+  | "ready_for_pickup"
+  | "in_transit"
+  | "delivered"
+  | "completed"
+  | "declined";
 
 export interface Order {
   id: string;
@@ -85,155 +117,57 @@ export interface Order {
     price: number;
   }[];
   quantity: number;
+  totalQuantity?: number;
   total: number;
-  status: "pending" | "company_accepted" | "driver_accepted" | "preparing" | "ready_for_pickup" | "in_transit" | "delivered" | "declined" | "completed";
+  status: OrderStatus;
   orderDate: string;
   assignedDriver: string | null;
   assignedDriverId: string | null;
   notes?: string;
-}
-
-export interface Driver {
-  id: string;
-  name: string;
-  phone: string;
-  email?: string;
-  activeDeliveries: number;
-  status: "available" | "busy" | "offline";
-  joinedDate?: string;
-  rating?: number;
-}
-
-
-
-// ==================== Status Dropdown Component ====================
-
-interface StatusDropdownProps {
-  currentStatus: string;
-  onStatusChange: (status: string) => void;
-  disabled?: boolean;
   paymentStatus?: string;
   canCapturePayment?: boolean;
-  onCapturePayment?: () => void;
-  isMobile?: boolean;
+  delivery?: {
+    eta?: string;
+  };
+  metadata?: Record<string, any>;
 }
 
-const StatusDropdown = ({
-  currentStatus,
-  onStatusChange,
-  disabled = false,
-  paymentStatus,
-  canCapturePayment = false,
-  onCapturePayment,
-  isMobile = false,
-}: StatusDropdownProps) => {
-  const [isOpen, setIsOpen] = React.useState(false);
-  const [isUpdating, setIsUpdating] = React.useState(false);
-  const statuses = ['pending', 'company_accepted', 'driver_accepted',  'preparing', 'ready_for_pickup', 'in_transit', 'delivered', 'completed', 'declined'];
-  const currentConfig = ORDER_STATUS_CONFIG[currentStatus?.toLowerCase()];
+// ==================== Status Tab Configuration ====================
 
-  const handleStatusChange = async (status: string) => {
-    if (isUpdating) return;
-    setIsUpdating(true);
-    try {
-      await onStatusChange(status);
-      setIsOpen(false);
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const handleCapturePayment = async () => {
-    if (!onCapturePayment || isUpdating) return;
-    setIsUpdating(true);
-    try {
-      await onCapturePayment();
-      setIsOpen(false);
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  return (
-    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button 
-          variant="ghost" 
-          size={isMobile ? "default" : "sm"}
-          className={cn(
-            "h-8 px-2 hover:bg-transparent",
-            isMobile && "h-10 w-full justify-start"
-          )}
-          disabled={disabled || isUpdating}
-        >
-          <div className={cn(
-            "flex items-center gap-1.5",
-            isMobile && "w-full"
-          )}>
-            <OrderStatusBadge status={currentStatus} showLabel={!isOpen} />
-            {!isOpen && currentConfig?.icon && (
-              <span className="text-muted-foreground">{currentConfig.icon}</span>
-            )}
-            <ChevronDown className={cn(
-              "h-3 w-3 text-muted-foreground transition-transform",
-              isOpen && "rotate-180",
-              isMobile && "ml-auto"
-            )} />
-          </div>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent 
-        align={isMobile ? "center" : "start"} 
-        className={cn(
-          "w-48",
-          isMobile && "w-[calc(100vw-2rem)] max-w-[320px]"
-        )}
-        sideOffset={5}
-      >
-        <DropdownMenuLabel>Change Status</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {statuses.map((status) => {
-          const config = ORDER_STATUS_CONFIG[status];
-          const isActive = currentStatus?.toLowerCase() === status;
-          return (
-            <DropdownMenuItem
-              key={status}
-              onClick={() => handleStatusChange(status)}
-              className={cn(
-                "gap-2 capitalize cursor-pointer",
-                isActive && "bg-muted",
-                isUpdating && "opacity-50 pointer-events-none"
-              )}
-            >
-              <span className="flex items-center gap-2 flex-1">
-                {config?.icon}
-                {config?.label}
-              </span>
-              {isActive && <Check className="h-3 w-3 text-primary" />}
-            </DropdownMenuItem>
-          );
-        })}
-        {canCapturePayment && paymentStatus === 'authorized' && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={handleCapturePayment}
-              className="gap-2 text-blue-600 cursor-pointer"
-              disabled={isUpdating}
-            >
-              <Banknote className="h-4 w-4" />
-              Capture Payment
-              {isUpdating && <Loader2 className="h-3 w-3 animate-spin ml-auto" />}
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+// ✅ Define icon mapping separately to avoid undefined issues
+const STATUS_ICONS: Record<OrderStatus | "all", React.ComponentType<{ className?: string }>> = {
+  all: Package,
+  pending: Clock,
+  company_accepted: CheckCircle,
+  driver_accepted: Truck,
+  preparing: PackageCheck,
+  ready_for_pickup: Package,
+  in_transit: Truck,
+  delivered: CheckCircle,
+  completed: CheckCircle,
+  declined: XCircle,
 };
 
+// ✅ Define tabs with safe icon references
+const STATUS_TABS: Array<{
+  value: OrderStatus | "all";
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}> = [
+  { value: "all", label: "All Orders", icon: Package },
+  { value: "pending", label: "Pending", icon: Clock },
+  // { value: "preparing", label: "Preparing", icon: PackageCheck },
+  // { value: "ready_for_pickup", label: "Ready", icon: Package },
+  // { value: "in_transit", label: "In Transit", icon: Truck },
+  // { value: "delivered", label: "Delivered", icon: CheckCircle },
+  { value: "completed", label: "Completed", icon: CheckCircle },
+  { value: "declined", label: "Declined", icon: XCircle },
+] as const;
 
-// Drag Handle Component
+type StatusTabValue = (typeof STATUS_TABS)[number]["value"];
+
+// ==================== Drag Handle ====================
+
 function DragHandle({ id }: { id: string }) {
   const { attributes, listeners } = useSortable({ id });
 
@@ -245,213 +179,39 @@ function DragHandle({ id }: { id: string }) {
       size="icon"
       className="size-7 cursor-grab text-muted-foreground hover:bg-transparent active:cursor-grabbing"
     >
-      <GripVerticalIcon className="size-4" />
+      <svg className="size-4" viewBox="0 0 16 16" fill="currentColor">
+        <circle cx="5" cy="3" r="1.5" />
+        <circle cx="11" cy="3" r="1.5" />
+        <circle cx="5" cy="8" r="1.5" />
+        <circle cx="11" cy="8" r="1.5" />
+        <circle cx="5" cy="13" r="1.5" />
+        <circle cx="11" cy="13" r="1.5" />
+      </svg>
       <span className="sr-only">Drag to reorder</span>
     </Button>
   );
 }
 
+// ==================== Customer View ====================
 
-
-// Customer View Component
 function CustomerView({ customer }: { customer: Order["customer"] }) {
+  if (!customer) return <span className="text-muted-foreground">Guest</span>;
+
   return (
-    <>
-    {!customer ? 'Guest' : 
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="link" className="w-fit px-0 text-left font-medium">
-          {customer?.first_name} {customer?.last_name}
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Customer Information</DialogTitle>
-          <DialogDescription>View customer details and contact information</DialogDescription>
-        </DialogHeader>
-        
-        <div className="space-y-4">
-          <div className="rounded-lg border p-4">
-            <div className="space-y-2">
-              <div>
-                <span className="text-sm text-muted-foreground">Name</span>
-                <p className="font-medium">{customer?.first_name} {customer?.last_name}</p>
-              </div>
-              <div>
-                <span className="text-sm text-muted-foreground">Phone</span>
-                <p className="font-medium flex items-center gap-2">
-                  {customer?.phone}
-                  <Button variant="outline" size="sm" className="h-7">
-                    <Phone className="size-3 mr-1" />
-                    Call
-                  </Button>
-                </p>
-              </div>
-              {customer?.email && (
-                <div>
-                  <span className="text-sm text-muted-foreground">Email</span>
-                  <p className="font-medium">{customer?.email}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-    }
-    </>
+    <Button variant="link" className="w-fit px-0 text-left font-medium h-auto p-0">
+      {customer.first_name} {customer.last_name}
+    </Button>
   );
 }
 
-// ==================== Driver Assignment Component (FIXED) ====================
+// ==================== Columns Definition ====================
 
-
-
-// ==================== Driver Selection List Component ====================
-
-// interface DriverSelectionListProps {
-//   drivers: Driver[];
-//   isLoading: boolean;
-//   searchQuery: string;
-//   onSearchChange: (query: string) => void;
-//   onSelect: (driver: Driver | null) => void;
-//   currentDriverId?: string | null;
-//   onRefresh: () => void;
-// }
-
-// function DriverSelectionList({
-//   drivers,
-//   isLoading,
-//   searchQuery,
-//   onSearchChange,
-//   onSelect,
-//   currentDriverId,
-//   onRefresh,
-// }: DriverSelectionListProps) {
-//   const [isRefreshing, setIsRefreshing] = React.useState(false);
-
-//   const handleRefresh = async () => {
-//     setIsRefreshing(true);
-//     await onRefresh();
-//     setIsRefreshing(false);
-//   };
-
-//   return (
-//     <Command className="rounded-lg border shadow-md">
-//       <div className="flex items-center border-b px-3">
-//         <CommandInput
-//           placeholder="Search drivers..."
-//           value={searchQuery}
-//           onValueChange={onSearchChange}
-//           className="flex-1 border-0 focus:ring-0"
-//         />
-//         <Button
-//           variant="ghost"
-//           size="icon"
-//           className="size-8 flex-shrink-0"
-//           onClick={handleRefresh}
-//           disabled={isRefreshing}
-//         >
-//           <RefreshCw className={`size-4 ${isRefreshing ? "animate-spin" : ""}`} />
-//         </Button>
-//       </div>
-      
-//       <CommandList className="max-h-[300px] overflow-y-auto">
-//         {isLoading ? (
-//           <div className="flex items-center justify-center py-8">
-//             <Loader2 className="size-6 animate-spin text-muted-foreground" />
-//           </div>
-//         ) : drivers.length === 0 ? (
-//           <CommandEmpty>
-//             <div className="flex flex-col items-center gap-2 py-6">
-//               <Truck className="size-8 text-muted-foreground/50" />
-//               <p className="text-sm text-muted-foreground">No drivers available</p>
-//               <p className="text-xs text-muted-foreground">
-//                 {searchQuery ? "Try adjusting your search" : "All drivers are currently busy"}
-//               </p>
-//             </div>
-//           </CommandEmpty>
-//         ) : (
-//           <CommandGroup heading="Available Drivers">
-//             {/* Unassign option - only show if currently assigned */}
-//             {currentDriverId && (
-//               <CommandItem
-//                 onSelect={() => onSelect(null)}
-//                 className="text-destructive hover:text-destructive"
-//               >
-//                 <X className="mr-2 size-4" />
-//                 <span>Unassign driver</span>
-//               </CommandItem>
-//             )}
-
-//             {drivers.map((driver) => (
-//               <CommandItem
-//                 key={driver.id}
-//                 onSelect={() => onSelect(driver)}
-//                 className="flex items-center justify-between py-2.5 cursor-pointer"
-//               >
-//                 <div className="flex items-center gap-3 min-w-0 flex-1">
-//                   <div className="flex-shrink-0">
-//                     <div className="relative">
-//                       <div className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-//                         <User className="size-4" />
-//                       </div>
-//                       {driver.status === "available" && (
-//                         <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-green-500 ring-2 ring-background" />
-//                       )}
-//                       {driver.status === "busy" && (
-//                         <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-amber-500 ring-2 ring-background" />
-//                       )}
-//                     </div>
-//                   </div>
-//                   <div className="min-w-0 flex-1">
-//                     <div className="flex items-center gap-2">
-//                       <span className="text-sm font-medium truncate">
-//                         {driver.name}
-//                       </span>
-//                       {driver.id === currentDriverId && (
-//                         <Badge variant="secondary" className="text-xs h-5 px-1.5">
-//                           Current
-//                         </Badge>
-//                       )}
-//                     </div>
-//                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-//                       <Phone className="size-3" />
-//                       <span className="truncate">{driver.phone}</span>
-//                     </div>
-//                   </div>
-//                 </div>
-//                 <div className="flex items-center gap-2 flex-shrink-0">
-//                   <Badge variant="outline" className="text-xs h-5 px-1.5">
-//                     {driver.activeDeliveries} active
-//                   </Badge>
-//                   {driver.rating && (
-//                     <span className="text-xs text-amber-500">
-//                       ★ {driver.rating.toFixed(1)}
-//                     </span>
-//                   )}
-//                   {driver.id === currentDriverId && (
-//                     <Check className="size-4 text-primary" />
-//                   )}
-//                 </div>
-//               </CommandItem>
-//             ))}
-//           </CommandGroup>
-//         )}
-//       </CommandList>
-//     </Command>
-//   );
-// }
-
-// ==================== Updated Table Columns with Status Dropdown ====================
-
-export function getOrderColumns({
+function getOrderColumns({
   onAssignDriver,
   onPrint,
   onRowClick,
   companyId,
   onStatusChange,
-  onError,
   isMobile = false,
 }: {
   onAssignDriver?: (orderId: string, driverId: string | null, driverName: string | null) => void;
@@ -460,120 +220,75 @@ export function getOrderColumns({
   onStatusChange?: (orderId: string, newStatus: string) => Promise<void>;
   onError?: (error: Error) => void;
   isMobile?: boolean;
-  onPrint?: any;
-}): ColumnDef<Order>[] {
-  const getStatusColor = (status: Order["status"]) => {
-    const colors = {
-      pending: "bg-amber-100 text-amber-800",
-      driver_accepted: "bg-blue-100 text-blue-800",
-      company_accepted: "bg-blue-100 text-blue-800",
-      preparing: "bg-indigo-100 text-indigo-800",
-      ready_for_pickup: "bg-cyan-100 text-cyan-800",
-      in_transit: "bg-emerald-100 text-emerald-800",
-      delivered: "bg-green-100 text-green-800",
-      completed: "bg-green-100 text-green-800",
-      declined: "bg-red-100 text-red-800",
-    };
-    return colors[status] || "bg-gray-100 text-gray-800";
-  };
-
-  const statusLabels: Record<Order["status"], string> = {
-    pending: "Pending",
-    driver_accepted: "Driver Accepted",
-    company_accepted: "Accepted",
-    preparing: "Preparing",
-    ready_for_pickup: "Ready",
-    // ready_for_pickup: "Ready for Pickup",
-    in_transit: "In Transit",
-    delivered: "Delivered",
-    declined: "Declined",
-    completed: "Completed",
-  };
-
-
-  // For mobile, we combine everything into a single cell
+  onPrint?: (order: Order) => void;
+}) {
+  // Mobile columns - compact card layout
   if (isMobile) {
     return [
       {
-        id: "expand",
+        id: "mobile_card",
         header: () => null,
-        cell: ({ row }) => {
-          const order = row.original;
+        cell: ({ row }: { row: any }) => {
+          const order = row.original as Order;
+          const config = ORDER_STATUS_CONFIG[order.status];
+
           return (
-            <div className="flex flex-col gap-2 p-2 w-full">
+            <div className="flex flex-col gap-2 p-3 w-full">
+              {/* Header row */}
               <div className="flex items-center justify-between">
                 <OrderDetailsView order={order} />
-                <div className="flex items-center gap-2">
-                  <Badge className={getStatusColor(order.status)}>
-                    {statusLabels[order.status]}
-                  </Badge>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="size-8">
-                        <MoreVertical className="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => onRowClick?.(order)}>
-                        View Details
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <div className="px-2 py-1.5">
-                        <StatusDropdown
-                          currentStatus={order.status}
-                          onStatusChange={(status) => onStatusChange?.(order.id, status)}
-                          paymentStatus={order.paymentStatus}
-                          canCapturePayment={order.canCapturePayment}
-                          isMobile
-                        />
-                      </div>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive">
-                        Cancel Order
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                <OrderStatusBadge status={order.status} />
               </div>
-              <div className="grid grid-cols-2 gap-1 text-sm">
+
+              {/* Details grid */}
+              <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
-                  <span className="text-muted-foreground">Customer:</span>
-                  <p className="font-medium truncate">{order.customer?.first_name} {order.customer?.last_name}</p>
+                  <span className="text-muted-foreground text-xs">Customer</span>
+                  <p className="font-medium truncate">
+                    {order.customer?.first_name} {order.customer?.last_name}
+                  </p>
                 </div>
-
-                <TimeFromNow date={row.original.delivery?.eta} />
-                <div className="text-primary">{row.original.metadata.isTakeOut && 'Takeout' }</div>
-
                 <div>
-                  <span className="text-muted-foreground">Total:</span>
+                  <span className="text-muted-foreground text-xs">Total</span>
                   <p className="font-medium">₱{order.total.toLocaleString()}</p>
                 </div>
-                <div className="col-span-2 w-full space-between d-flex">
-                  {/* <DriverAssignment
-                  
-                    order={row.original}
-                    currentDriver={row.original.assignedDriverId}
-                    currentDriverId={row.original.assignedDriverId}
-                    companyId={companyId}
-                    onAssign={(driverId, driverName) => {
-                      onAssignDriver?.(row.original.id, driverId, driverName);
-                      row.original.assignedDriver = driverName;
-                      row.original.assignedDriverId = driverId;
-                    }}
-                    onError={onError}
-                  /> */}
-                <Button onClick={() => onPrint(order)}>
-                  <Printer/>
-                </Button>
+                <div>
+                  <span className="text-muted-foreground text-xs">ETA</span>
+                  <TimeFromNow date={order.delivery?.eta} />
                 </div>
-                
+                <div>
+                  <span className="text-muted-foreground text-xs">Type</span>
+                  <p className="text-primary text-xs">
+                    {order.metadata?.isTakeOut ? "Takeout" : "Dine-in"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-between pt-1 border-t">
+                <Badge variant="outline" className="px-1.5 text-muted-foreground">
+                        {(row.original.status == "completed" || row.original.status == 'delivered') ? (
+                          <CircleCheckIcon className="fill-green-500 stroke-primary-foreground dark:fill-green-600" />
+                        ) : (
+                          <LoaderIcon />
+                        )}
+                        {row.original.status}
+                        {console.log(row.original.status, 'stattsss')}
+                      </Badge>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" className="size-8" onClick={() => onPrint?.(order)}>
+                    <Printer className="size-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="size-8" onClick={() => onRowClick?.(order)}>
+                    <ChevronRightIcon className="size-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           );
         },
         enableSorting: false,
         enableHiding: false,
-        size: 400,
       },
     ];
   }
@@ -583,23 +298,25 @@ export function getOrderColumns({
     {
       id: "drag",
       header: () => null,
-      cell: ({ row }) => <DragHandle id={row.original.id} />,
+      cell: ({ row }: { row: any }) => <DragHandle id={row.original.id} />,
       enableSorting: false,
       enableHiding: false,
       size: 40,
     },
     {
       id: "select",
-      header: ({ table }) => (
+      header: ({ table }: { table: any }) => (
         <Checkbox
           checked={table.getIsAllPageRowsSelected()}
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all"
         />
       ),
-      cell: ({ row }) => (
+      cell: ({ row }: { row: any }) => (
         <Checkbox
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
         />
       ),
       enableSorting: false,
@@ -609,119 +326,98 @@ export function getOrderColumns({
     {
       accessorKey: "orderNumber",
       header: "Order #",
-      cell: ({ row }) => <OrderDetailsView order={row.original} />,
+      cell: ({ row }: { row: any }) => <OrderDetailsView order={row.original} />,
       enableHiding: false,
     },
     {
       accessorKey: "customer",
       header: "Customer",
-      cell: ({ row }) => <CustomerView customer={row.original.customer} />,
+      cell: ({ row }: { row: any }) => <CustomerView customer={row.original.customer} />,
     },
     {
-      accessorKey: "totalQuantity",
+      accessorKey: "quantity",
       header: "Qty",
-      cell: ({ row }) => <div>{row.original.totalQuantity || row.original.quantity}</div>,
+      cell: ({ row }: { row: any }) => (
+        <span>{row.original.totalQuantity || row.original.quantity}</span>
+      ),
+      size: 60,
     },
     {
       accessorKey: "total",
       header: "Total",
-      cell: ({ row }) => (
-        <div className="font-medium">₱{row.original.total.toLocaleString()}</div>
+      cell: ({ row }: { row: any }) => (
+        <span className="font-medium">₱{row.original.total.toLocaleString()}</span>
       ),
     },
     {
       accessorKey: "eta",
       header: "ETA",
-      cell: ({ row }) => (
+      cell: ({ row }: { row: any }) => (
         <div>
-<TimeFromNow date={row.original.delivery?.eta} />
-<div className="text-primary">{row.original.metadata.isTakeOut && 'Takeout' }</div>
+          <TimeFromNow date={row.original.delivery?.eta} />
+          {row.original.metadata?.isTakeOut && (
+            <span className="text-primary text-xs block">Takeout</span>
+          )}
         </div>
       ),
     },
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }) => (
-        <StatusDropdown
-          currentStatus={row.original.status}
-          onStatusChange={(status) => onStatusChange?.(row.original.id, status)}
-          paymentStatus={row.original.paymentStatus}
-          canCapturePayment={row.original.canCapturePayment}
-        />
+      cell: ({ row }: { row: any }) => (
+              <Badge variant="outline" className="px-1.5 text-muted-foreground">
+         {(row.original.status == "completed" || row.original.status == 'delivered') ? (
+                          <CircleCheckIcon className="fill-green-500 stroke-primary-foreground dark:fill-green-600" />
+                        ) : (
+                          <LoaderIcon />
+                        )}
+        {row.original.status}
+      </Badge>
+        // <StatusDropdown
+        //   currentStatus={row.original.status}
+        //   onStatusChange={(status) => onStatusChange?.(row.original.id, status)}
+        //   paymentStatus={row.original.paymentStatus}
+        //   canCapturePayment={row.original.canCapturePayment}
+        // />
       ),
     },
-    // {
-    //   accessorKey: "assignedDriver",
-    //   header: "Driver",
-    //   cell: ({ row }) => (
-    //     <DriverAssignment
-    //       order={row.original}
-    //       currentDriver={row.original.assignedDriverId}
-    //       currentDriverId={row.original.assignedDriverId}
-    //       companyId={companyId}
-    //       onAssign={(driverId, driverName) => {
-    //         onAssignDriver?.(row.original.id, driverId, driverName);
-    //         row.original.assignedDriver = driverName;
-    //         row.original.assignedDriverId = driverId;
-    //       }}
-    //       onError={onError}
-    //     />
-    //   ),
-    // },
-   
     {
       id: "actions",
-      cell: ({ row }) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="size-8">
-              <MoreVertical className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => onRowClick?.(row.original)}>
-              View Details
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <div className="px-2 py-1.5">
-              <StatusDropdown
-                currentStatus={row.original.status}
-                onStatusChange={(status) => onStatusChange?.(row.original.id, status)}
-                paymentStatus={row.original.paymentStatus}
-                canCapturePayment={row.original.canCapturePayment}
-              />
-            </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">
-              Cancel Order
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      header: () => <span className="sr-only">Actions</span>,
+      cell: ({ row }: { row: any }) => (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          onClick={(e) => {
+            e.stopPropagation();
+            onPrint?.(row.original);
+          }}
+        >
+          <Printer className="size-4" />
+          <span className="sr-only">Print</span>
+        </Button>
       ),
       enableSorting: false,
       size: 50,
     },
   ];
 }
-// ==================== Main Table Component ====================
+
+// ==================== Main Orders Table Component ====================
 
 interface OrdersTableProps {
-  data: any;
+  data: Order[];
   totalCount: number;
   isLoading?: boolean;
   onAssignDriver?: (orderId: string, driverId: string | null, driverName: string | null) => void;
   onRefresh?: () => void;
   onRowClick?: (order: Order) => void;
-  onBulkAction?: (action: string, selectedOrders: Order[]) => void;
   onStatusChange?: (orderId: string, newStatus: string) => Promise<void>;
-  enableDragDrop?: boolean;
-  enableColumnVisibility?: boolean;
-  enableRowSelection?: boolean;
   companyId?: string;
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
-  onPrint?: (query: string) => void;
+  onPrint?: (order: Order) => void;
 }
 
 export function CompanyOrdersTable({
@@ -732,15 +428,12 @@ export function CompanyOrdersTable({
   onAssignDriver,
   onRefresh,
   onRowClick,
-  onBulkAction,
   onStatusChange,
-  enableDragDrop = true,
-  enableColumnVisibility = true,
-  enableRowSelection = true,
   searchQuery = "",
   onSearchChange,
   onPrint,
 }: OrdersTableProps) {
+  const [activeTab, setActiveTab] = React.useState<StatusTabValue>("all");
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [sorting, setSorting] = React.useState<SortingState>([]);
@@ -751,37 +444,51 @@ export function CompanyOrdersTable({
   const [localSearchQuery, setLocalSearchQuery] = React.useState(searchQuery);
   const [isMobile, setIsMobile] = React.useState(false);
 
-  // Detect mobile
+  // Detect mobile viewport
   React.useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
+  const sortableId = React.useId();
   const sensors = useSensors(
     useSensor(MouseSensor, {}),
     useSensor(TouchSensor, {}),
     useSensor(KeyboardSensor, {})
   );
 
+  // Filter data by active tab
+  const filteredByTab = React.useMemo(() => {
+    if (activeTab === "all") return data;
+    return data.filter((order) => order.status === activeTab);
+  }, [data, activeTab]);
+
+  // Count orders per status
+  const statusCounts = React.useMemo(() => {
+    const counts: Record<string, number> = { all: data.length };
+    data.forEach((order) => {
+      counts[order.status] = (counts[order.status] || 0) + 1;
+    });
+    return counts;
+  }, [data]);
 
   const columns = React.useMemo(
-    () => getOrderColumns({ 
-      onAssignDriver, 
-      onRowClick, 
-      companyId, 
-      onStatusChange,
-      isMobile,
-      onPrint
-    }),
+    () =>
+      getOrderColumns({
+        onAssignDriver,
+        onRowClick,
+        companyId,
+        onStatusChange,
+        isMobile,
+        onPrint,
+      }),
     [onAssignDriver, onRowClick, companyId, onStatusChange, isMobile, onPrint]
   );
 
   const table = useReactTable({
-    data,
+    data: filteredByTab,
     columns,
     state: {
       sorting,
@@ -790,7 +497,7 @@ export function CompanyOrdersTable({
       pagination,
     },
     getRowId: (row) => row.id,
-    enableRowSelection,
+    enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
@@ -799,21 +506,20 @@ export function CompanyOrdersTable({
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    manualPagination: true,
-    pageCount: Math.ceil(totalCount / pagination.pageSize),
+    getFacetedRowModel: getFacetedRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
   });
 
   function handleDragEnd(event: DragEndEvent) {
-    if (!enableDragDrop) return;
     const { active, over } = event;
     if (active && over && active.id !== over.id) {
-      toast.info("Order reordered");
+      // Handle reorder logic here if needed
     }
   }
 
   const selectedCount = Object.keys(rowSelection).length;
 
-  // Handle search with debounce
+  // Debounced search
   React.useEffect(() => {
     const timer = setTimeout(() => {
       if (localSearchQuery !== searchQuery) {
@@ -824,15 +530,84 @@ export function CompanyOrdersTable({
   }, [localSearchQuery, searchQuery, onSearchChange]);
 
   return (
-    <div className="w-full space-y-4">
-      {/* Toolbar */}
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) => {
+        setActiveTab(value as StatusTabValue);
+        setPagination({ pageIndex: 0, pageSize: pagination.pageSize });
+        setRowSelection({});
+      }}
+      className="w-full flex-col justify-start gap-6"
+    >
+      {/* Header with tab selector and toolbar */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-          <div className="relative flex-1">
+        {/* Mobile tab selector */}
+        <Select value={activeTab} onValueChange={(value) => setActiveTab(value as StatusTabValue)}>
+          <SelectTrigger className="flex @4xl/main:hidden w-fit" size="sm" id="status-selector">
+            <SelectValue placeholder="Select status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {STATUS_TABS.map((tab) => (
+                <SelectItem key={tab.value} value={tab.value}>
+                  <span className="flex items-center gap-2">
+                    {tab.label}
+                    {statusCounts[tab.value] > 0 && (
+                      <Badge variant="secondary" className="ml-auto">
+                        {statusCounts[tab.value]}
+                      </Badge>
+                    )}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+
+        {/* Desktop tab list */}
+        <TabsList className="@4xl/main:flex hidden flex-wrap h-auto gap-1 bg-transparent p-0">
+          {STATUS_TABS.map((tab) => {
+            const Icon = tab.icon; // ✅ Icon is always defined
+            const count = statusCounts[tab.value] || 0;
+            const isActive = activeTab === tab.value;
+
+            return (
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                className={cn(
+                  "data-[state=active]:bg-background data-[state=active]:shadow-sm gap-2",
+                  "border border-transparent data-[state=active]:border-border",
+                  "rounded-md px-3 py-1.5"
+                )}
+              >
+                {/* ✅ Icon is guaranteed to exist */}
+                <Icon className="size-4" />
+                <span>{tab.label}</span>
+                {count > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "h-5 min-w-[20px] px-1 text-xs",
+                      isActive && "bg-primary/10 text-primary"
+                    )}
+                  >
+                    {count}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+
+        {/* Toolbar actions */}
+        <div className="flex items-center gap-2">
+          {/* Search */}
+          <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search orders..."
-              className="pl-8 w-full"
+              className="pl-8 w-[200px] h-9"
               value={localSearchQuery}
               onChange={(e) => setLocalSearchQuery(e.target.value)}
             />
@@ -843,52 +618,49 @@ export function CompanyOrdersTable({
                 className="absolute right-0 top-0 h-9 w-9"
                 onClick={() => setLocalSearchQuery("")}
               >
-                <X className="h-4 w-4" />
+                <svg className="size-4" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" />
+                </svg>
               </Button>
             )}
           </div>
-          
-          <Button variant="outline" size="sm">
-            <Filter className="size-4 mr-2" />
-            <span className="hidden sm:inline">Filters</span>
-          </Button>
-        </div>
 
-        <div className="flex items-center gap-2">
+          {/* Refresh */}
           {onRefresh && (
-            <Button variant="outline" size="sm" onClick={onRefresh} disabled={isLoading}>
-              {isLoading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-              <span className="ml-2 hidden sm:inline">Refresh</span>
+            <Button variant="outline" size="icon" className="h-9 w-9" onClick={onRefresh} disabled={isLoading}>
+              {isLoading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
+              <span className="sr-only">Refresh</span>
             </Button>
           )}
 
-          {enableColumnVisibility && !isMobile && (
+          {/* Column visibility */}
+          {!isMobile && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="icon" className="h-9 w-9">
                   <Settings2 className="size-4" />
-                  <span className="ml-2 hidden sm:inline">View</span>
+                  <span className="sr-only">View options</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+                <DropdownMenuSeparator />
                 {table
                   .getAllColumns()
-                  .filter(col => col.getCanHide())
-                  .map(column => (
-                    <div
+                  .filter((column) => typeof column.accessorFn !== "undefined" && column.getCanHide())
+                  .map((column) => (
+                    <DropdownMenuCheckboxItem
                       key={column.id}
-                      className="flex items-center px-2 py-1.5 hover:bg-accent rounded-sm cursor-pointer"
-                      onClick={() => column.toggleVisibility()}
+                      className="capitalize"
+                      checked={column.getIsVisible()}
+                      onCheckedChange={(value) => column.toggleVisibility(!!value)}
                     >
-                      <Checkbox
-                        checked={column.getIsVisible()}
-                        onCheckedChange={() => column.toggleVisibility()}
-                        className="mr-2"
-                      />
-                      <span className="capitalize">
-                        {typeof column.columnDef.header === 'string' ? column.columnDef.header : column.id}
-                      </span>
-                    </div>
+                      {column.id}
+                    </DropdownMenuCheckboxItem>
                   ))}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -896,61 +668,73 @@ export function CompanyOrdersTable({
         </div>
       </div>
 
-      {/* Bulk Actions */}
-      {enableRowSelection && selectedCount > 0 && onBulkAction && (
-        <div className="flex items-center justify-between bg-muted/50 p-2 rounded-lg flex-wrap gap-2">
-          <span className="text-sm">{selectedCount} order(s) selected</span>
-          <div className="flex gap-2 flex-wrap">
-            <Button variant="outline" size="sm" onClick={() => onBulkAction("update-status", [])}>
-              Update Status
-            </Button>
+      {/* Tab content */}
+      <TabsContent value={activeTab} className="relative flex flex-col gap-4 overflow-auto mt-0">
+        {/* Selected count bar */}
+        {selectedCount > 0 && (
+          <div className="flex items-center justify-between bg-muted/50 p-2 rounded-lg">
+            <span className="text-sm text-muted-foreground">
+              {selectedCount} order(s) selected
+            </span>
             <Button variant="ghost" size="sm" onClick={() => setRowSelection({})}>
-              Clear
+              Clear selection
             </Button>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Table */}
-      <div className="overflow-hidden rounded-lg border">
-        <DndContext
-          collisionDetection={closestCenter}
-          modifiers={[restrictToVerticalAxis]}
-          onDragEnd={handleDragEnd}
-          sensors={sensors}
-        >
-          <div className="relative">
-            {isLoading && data.length === 0 && (
-              <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/50 backdrop-blur-sm">
-                <Loader2 className="size-6 animate-spin text-muted-foreground" />
-              </div>
-            )}
-            
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader className={isMobile ? "hidden" : ""}>
-                  {table.getHeaderGroups().map(headerGroup => (
-                    <TableRow key={headerGroup.id}>
-                      {headerGroup.headers.map(header => (
-                        <TableHead key={header.id} style={{ width: header.getSize() }}>
-                          {flexRender(header.column.columnDef.header, header.getContext())}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableHeader>
-                <TableBody>
-                  {table.getRowModel().rows.length ? (
-                    enableDragDrop && !isMobile ? (
-                      <SortableContext items={data.map(d => d.id)} strategy={verticalListSortingStrategy}>
+        {/* Table */}
+        <div className="overflow-hidden rounded-lg border">
+          <DndContext
+            collisionDetection={closestCenter}
+            modifiers={[restrictToVerticalAxis]}
+            onDragEnd={handleDragEnd}
+            sensors={sensors}
+            id={sortableId}
+          >
+            <div className="relative">
+              {/* Loading overlay */}
+              {isLoading && filteredByTab.length === 0 && (
+                <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/50 backdrop-blur-sm">
+                  <Loader2 className="size-8 animate-spin text-muted-foreground" />
+                </div>
+              )}
+
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className={cn("sticky top-0 z-10 bg-muted", isMobile && "hidden")}>
+                    {table.getHeaderGroups().map((headerGroup) => (
+                      <TableRow key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => (
+                          <TableHead
+                            key={header.id}
+                            colSpan={header.colSpan}
+                            style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
+                          >
+                            {header.isPlaceholder
+                              ? null
+                              : flexRender(header.column.columnDef.header, header.getContext())}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableHeader>
+                  <TableBody>
+                    {table.getRowModel().rows.length ? (
+                      <SortableContext
+                        items={filteredByTab.map((d) => d.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
                         {table.getRowModel().rows.map((row) => (
                           <TableRow
                             key={row.id}
                             data-state={row.getIsSelected() && "selected"}
-                            className="cursor-pointer hover:bg-muted/50"
+                            className={cn(
+                              "cursor-pointer hover:bg-muted/50",
+                              !isMobile && "**:data-[slot=table-cell]:first:w-8"
+                            )}
                             onClick={() => onRowClick?.(row.original)}
                           >
-                            {row.getVisibleCells().map(cell => (
+                            {row.getVisibleCells().map((cell) => (
                               <TableCell key={cell.id} className={isMobile ? "p-0" : ""}>
                                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
                               </TableCell>
@@ -959,105 +743,122 @@ export function CompanyOrdersTable({
                         ))}
                       </SortableContext>
                     ) : (
-                      table.getRowModel().rows.map(row => (
-                        <TableRow
-                          key={row.id}
-                          data-state={row.getIsSelected() && "selected"}
-                          className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => onRowClick?.(row.original)}
+                      <TableRow>
+                        <TableCell
+                          colSpan={table.getVisibleLeafColumns().length}
+                          className="h-24 text-center"
                         >
-                          {row.getVisibleCells().map(cell => (
-                            <TableCell key={cell.id} className={isMobile ? "p-0" : ""}>
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))
-                    )
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={table.getVisibleLeafColumns().length} className="h-24 text-center">
-                        <div className="flex flex-col items-center gap-2">
-                          <Package className="size-8 text-muted-foreground/50" />
-                          <p className="text-muted-foreground">No orders found</p>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                          <div className="flex flex-col items-center gap-2">
+                            <Package className="size-8 text-muted-foreground/50" />
+                            <p className="text-muted-foreground">
+                              {isLoading ? "Loading orders..." : "No orders found"}
+                            </p>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </DndContext>
+        </div>
+
+        {/* Pagination */}
+        <div className="flex items-center justify-between px-2 flex-wrap gap-4">
+          <div className="text-muted-foreground text-sm hidden sm:block">
+            {table.getFilteredSelectedRowModel().rows.length} of{" "}
+            {filteredByTab.length} row(s) selected
+          </div>
+          <div className="flex w-full items-center gap-4 sm:w-fit">
+            {/* Rows per page */}
+            <div className="hidden items-center gap-2 sm:flex">
+              <Label htmlFor="rows-per-page" className="font-medium text-sm">
+                Rows
+              </Label>
+              <Select
+                value={`${pagination.pageSize}`}
+                onValueChange={(value) => {
+                  setPagination({ pageIndex: 0, pageSize: Number(value) });
+                }}
+              >
+                <SelectTrigger size="sm" className="w-20" id="rows-per-page">
+                  <SelectValue placeholder={pagination.pageSize} />
+                </SelectTrigger>
+                <SelectContent side="top">
+                  <SelectGroup>
+                    {[10, 20, 30, 50].map((pageSize) => (
+                      <SelectItem key={pageSize} value={`${pageSize}`}>
+                        {pageSize}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Page indicator */}
+            <div className="flex items-center justify-center font-medium text-sm">
+              Page {pagination.pageIndex + 1} of {Math.max(1, Math.ceil(filteredByTab.length / pagination.pageSize))}
+            </div>
+
+            {/* Pagination buttons */}
+            <div className="ml-auto flex items-center gap-1 sm:ml-0">
+              <Button
+                variant="outline"
+                className="hidden h-8 w-8 p-0 sm:flex"
+                onClick={() => setPagination((prev) => ({ ...prev, pageIndex: 0 }))}
+                disabled={pagination.pageIndex === 0}
+              >
+                <span className="sr-only">First page</span>
+                <ChevronsLeftIcon className="size-4" />
+              </Button>
+              <Button
+                variant="outline"
+                className="h-8 w-8 p-0"
+                onClick={() =>
+                  setPagination((prev) => ({ ...prev, pageIndex: prev.pageIndex - 1 }))
+                }
+                disabled={pagination.pageIndex === 0}
+              >
+                <span className="sr-only">Previous page</span>
+                <ChevronLeftIcon className="size-4" />
+              </Button>
+              <Button
+                variant="outline"
+                className="h-8 w-8 p-0"
+                onClick={() =>
+                  setPagination((prev) => ({ ...prev, pageIndex: prev.pageIndex + 1 }))
+                }
+                disabled={
+                  pagination.pageIndex >=
+                  Math.ceil(filteredByTab.length / pagination.pageSize) - 1
+                }
+              >
+                <span className="sr-only">Next page</span>
+                <ChevronRightIcon className="size-4" />
+              </Button>
+              <Button
+                variant="outline"
+                className="hidden h-8 w-8 p-0 sm:flex"
+                onClick={() =>
+                  setPagination((prev) => ({
+                    ...prev,
+                    pageIndex: Math.ceil(filteredByTab.length / pagination.pageSize) - 1,
+                  }))
+                }
+                disabled={
+                  pagination.pageIndex >=
+                  Math.ceil(filteredByTab.length / pagination.pageSize) - 1
+                }
+              >
+                <span className="sr-only">Last page</span>
+                <ChevronsRightIcon className="size-4" />
+              </Button>
             </div>
           </div>
-        </DndContext>
-      </div>
-
-      {/* Pagination */}
-      <div className="flex items-center justify-between px-4 flex-wrap gap-4">
-        <div className="text-muted-foreground text-sm">
-          Showing {table.getRowModel().rows.length} of {totalCount} orders
         </div>
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="text-sm hidden sm:inline">Rows</span>
-            <Select
-              value={`${pagination.pageSize}`}
-              onValueChange={(value) => {
-                setPagination(prev => ({ ...prev, pageSize: Number(value), pageIndex: 0 }));
-              }}
-            >
-              <SelectTrigger className="w-20">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[10, 20, 30, 50].map(size => (
-                  <SelectItem key={size} value={`${size}`}>{size}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="text-sm">
-            Page {pagination.pageIndex + 1} of {Math.ceil(totalCount / pagination.pageSize)}
-          </div>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setPagination(prev => ({ ...prev, pageIndex: 0 }))}
-              disabled={pagination.pageIndex === 0}
-            >
-              <ChevronsLeft className="size-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setPagination(prev => ({ ...prev, pageIndex: prev.pageIndex - 1 }))}
-              disabled={pagination.pageIndex === 0}
-            >
-              <ChevronLeft className="size-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setPagination(prev => ({ ...prev, pageIndex: prev.pageIndex + 1 }))}
-              disabled={pagination.pageIndex >= Math.ceil(totalCount / pagination.pageSize) - 1}
-            >
-              <ChevronRight className="size-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setPagination(prev => ({ ...prev, pageIndex: Math.ceil(totalCount / pagination.pageSize) - 1 }))}
-              disabled={pagination.pageIndex >= Math.ceil(totalCount / pagination.pageSize) - 1}
-            >
-              <ChevronsRight className="size-4" />
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
+      </TabsContent>
+    </Tabs>
   );
 }

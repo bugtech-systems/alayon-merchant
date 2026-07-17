@@ -98,7 +98,7 @@ export default async function OrdersPage({ searchParams }: PageProps) {
   // }
 
   // Fetch initial data based on order type
-  let initialOrders = await listPosOrders(limit, offset, filters);
+  let initialOrders = await listOrders(limit, offset, filters);
   let initialData = sortOrders(initialOrders.orders, 'created_at', 'desc');
 
   return (
