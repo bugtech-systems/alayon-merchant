@@ -81,6 +81,7 @@ import { ORDER_STATUS_CONFIG, OrderStatusBadge } from "./OrderStatusBadge";
 import { OrderDetailsView } from "./OrderDetailsView";
 import { TimeFromNow } from "./time-from-now";
 import { StatusDropdown } from "./StatusDropdown";
+import { DriverAssignment } from "./driver-assignment";
 
 // ==================== Types ====================
 
@@ -212,6 +213,7 @@ function getOrderColumns({
   onRowClick,
   companyId,
   onStatusChange,
+  onError,
   isMobile = false,
 }: {
   onAssignDriver?: (orderId: string, driverId: string | null, driverName: string | null) => void;
@@ -231,7 +233,7 @@ function getOrderColumns({
         cell: ({ row }: { row: any }) => {
           const order = row.original as Order;
           const config = ORDER_STATUS_CONFIG[order.status];
-
+            console.log(order, 'ORDDDS')
           return (
             <div className="flex flex-col gap-2 p-3 w-full">
               {/* Header row */}
@@ -276,6 +278,18 @@ function getOrderColumns({
                         {console.log(row.original.status, 'stattsss')}
                       </Badge>
                 <div className="flex items-center gap-1">
+                                  <DriverAssignment
+                    order={row.original}
+                    currentDriver={row.original.delivery.driver_id}
+                    currentDriverId={row.original.delivery.driver_id}
+                    companyId={companyId}
+                    onAssign={(driverId, driverName) => {
+                      onAssignDriver?.(row.original.id, driverId, driverName);
+                      row.original.assignedDriver = driverName;
+                      row.original.assignedDriverId = driverId;
+                    }}
+                    onError={onError}
+                  /> 
                   <Button variant="ghost" size="icon" className="size-8" onClick={() => onPrint?.(order)}>
                     <Printer className="size-4" />
                   </Button>
@@ -379,6 +393,24 @@ function getOrderColumns({
         //   paymentStatus={row.original.paymentStatus}
         //   canCapturePayment={row.original.canCapturePayment}
         // />
+      ),
+    },
+    {
+      accessorKey: "assignedDriver",
+      header: "Driver",
+      cell: ({ row }) => (
+        <DriverAssignment
+          order={row.original}
+          currentDriver={row.original.delivery.driver_id}
+          currentDriverId={row.original.delivery.driver_id}
+          companyId={companyId}
+          onAssign={(driverId, driverName) => {
+            onAssignDriver?.(row.original.id, driverId, driverName);
+            row.original.assignedDriver = driverId;
+            row.original.assignedDriverId = driverId;
+          }}
+          onError={onError}
+        />
       ),
     },
     {
@@ -486,6 +518,7 @@ export function CompanyOrdersTable({
       }),
     [onAssignDriver, onRowClick, companyId, onStatusChange, isMobile, onPrint]
   );
+
 
   const table = useReactTable({
     data: filteredByTab,

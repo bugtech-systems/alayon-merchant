@@ -499,7 +499,23 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   if (userRole === "driver") {
     return (
       <div className="@container/main flex flex-col gap-4 md:gap-6">
-        <DriverDashboard user={user}/>
+        {/* <DriverDashboard user={user}/> */}
+        <CompanyOrdersTable
+          data={data?.orders || []}
+          totalCount={data?.total || 0}
+          isLoading={isLoading}
+          onAssignDriver={handleAssignRider}
+          onStatusChange={handleUpdateStatus}
+          onRefresh={handleManualRefresh}
+          onRowClick={handleRowClick}
+          companyId={pricingContext?.companyId}
+          searchQuery={search}
+          onSearchChange={handleSearchChange}
+          enableDragDrop={true}
+          enableColumnVisibility={true}
+          enableRowSelection={true}
+          onPrint={handlePrint}
+        />
       </div>
     );
   }

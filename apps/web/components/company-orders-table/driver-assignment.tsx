@@ -198,10 +198,9 @@ export function DriverAssignment({
     try {
       const response = await fetchAvailableDrivers({companyId});
       
-      
       // Handle different response structures
       const driversList = Array.isArray(response) ? response : response || [];
-      
+
       // Map API response to Driver type
       const mappedDrivers: any[] = driversList.map((driver: any) => ({
         id: driver.id || driver.driver_id,
@@ -287,9 +286,9 @@ export function DriverAssignment({
     if (!currentDriverId) return null;
     return drivers.find(d => d.id === currentDriverId) || null;
   }, [drivers, currentDriverId]);
-
+console.log(order, 'ORSDSS')
   // If driver is assigned - show with change option
-  if (currentDriver) {
+  if (currentDriverId) {
 
     return (
       <div className="flex items-center gap-2 flex-grow">
@@ -309,7 +308,7 @@ export function DriverAssignment({
             </span>
           )}
         </div>
-{order?.status_display != 'delivered' && 
+{(order?.status_display != 'delivered' && order?.status != 'completed') && 
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button

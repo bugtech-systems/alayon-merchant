@@ -26,7 +26,6 @@ export function useMedusaOrders(params: UseMedusaOrdersParams) {
     queryFn: async () => {
         let { limit, offset, filters} = params;
       const response = await listOrders(limit, offset, filters);
-      console.log(response, 'USE MEDUSA', params)
       return response;
     },
     staleTime: 30000, // 30 seconds
@@ -43,7 +42,6 @@ export function usePosOrders(params: UseMedusaOrdersParams) {
     queryFn: async () => {
         let { limit, offset, sort} = params;
       const response = await listPosOrders(limit, offset, params.filters, sort);
-      console.log(response, 'USE MEDUSA')
       return response;
     },
     staleTime: 30000, // 30 seconds

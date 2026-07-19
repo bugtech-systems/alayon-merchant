@@ -17,6 +17,7 @@ export interface CapturePaymentParams {
   payment_data: {
     amount: number;
     change?: number;
+    received?: number;
     cash_amount?: number;
     provider_id?: string;
     transaction_id?: string;
