@@ -773,7 +773,7 @@ export const TransactionForm = ({
         <div className="space-y-2">
           <Label>Date *</Label>
           <Input
-            type="date"
+            type="datetime-local"
             value={formData.date}
             onChange={(e) => setFormData({ ...formData, date: e.target.value })}
             required

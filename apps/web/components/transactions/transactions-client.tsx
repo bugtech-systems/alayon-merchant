@@ -98,7 +98,7 @@ import { TransactionForm } from './transaction-form';
 // CONSTANTS
 // ============================================
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 10000;
 
 const TRANSACTION_TYPES = [
   { value: 'expense', label: 'Expense', icon: <TrendingDown className="h-4 w-4" />, color: 'text-red-500' },
@@ -214,7 +214,7 @@ const TransactionsTable = ({
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <CalendarIcon className="h-3.5 w-3.5" />
-                  {format(new Date(transaction.transaction_date || transaction.created_at), 'MMM dd, yyyy')}
+                  {format(new Date(transaction?.transaction_date || transaction.created_at), 'MMM dd, yyyy hh:mm a')}
                 </span>
                 {/* <div className="flex items-center gap-2">
                   {transaction.payment_method && (
@@ -281,7 +281,7 @@ const TransactionsTable = ({
                 return (
                   <TableRow key={transaction.id} className="hover:bg-muted/20">
                     <TableCell className="text-sm">
-                      {format(new Date(transaction.transaction_date || transaction.created_at), 'MMM dd, yyyy')}
+                  {format(new Date(transaction?.transaction_date || transaction.created_at), 'MMM dd, yyyy hh:mm a')}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col">

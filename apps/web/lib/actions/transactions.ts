@@ -3,13 +3,12 @@
 'use server';
 
 import sdk from '@/lib/config';
-import { Transaction } from '@/types/transactions';
 import { getAuthHeaders } from '../data/cookies';
 import { adminFetch } from '../apiClient';
 
 
 export async function listTransactions(
-  limit: number = 10,
+  limit: number = 10000,
   offset: number = 0,
   filters: Record<string, any> = {}
 ) {
@@ -36,7 +35,7 @@ export async function listTransactions(
        filteredTransactions = response.transactions.filter((trans: any) => trans?.customer_id == filters?.customer_id)
         }
     const count = filteredTransactions.length;
-
+console.log(response, 'REspp', filteredTransactions)
     return {
       transactions: filteredTransactions || [],
       count: count || 0,
