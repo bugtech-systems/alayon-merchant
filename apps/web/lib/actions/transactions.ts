@@ -44,7 +44,7 @@ console.log(response, 'REspp', filteredTransactions)
       has_next: offset + limit < (count || 0),
       has_previous: offset > 0,
     };
-  } catch (error) {
+  } catch (error) { 
     console.error('Error listing transactions:', error);
     throw error;
   }
