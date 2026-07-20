@@ -38,6 +38,19 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
   Search,
   ChevronUp,
   ChevronDown,
@@ -54,6 +67,8 @@ import {
   Trash2,
   RefreshCw,
   ArrowUpDown,
+  Check,
+  ChevronsUpDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -68,7 +83,7 @@ import {
   fetchInventoryItemsByLocation,
 } from '@/lib/actions/inventory';
 
-// ---------- Types ----------
+// ---------- Types (unchanged) ----------
 interface InventoryItem {
   id: string;
   sku: string;
@@ -99,7 +114,7 @@ interface Location {
   name: string;
 }
 
-// ---------- Stock level helpers ----------
+// ---------- Stock level helpers (unchanged) ----------
 type StockLevel = 'all' | 'in_stock' | 'low_stock' | 'out_of_stock';
 
 const getStockLevel = (
@@ -107,7 +122,6 @@ const getStockLevel = (
   reorderLevel: number = 10
 ): StockLevel => {
   const availableStock = getAvailableStock(item);
-  
   if (availableStock === 0) return 'out_of_stock';
   if (availableStock <= reorderLevel) return 'low_stock';
   return 'in_stock';
@@ -164,7 +178,7 @@ const STOCK_LEVEL_BADGE_COLORS: Record<StockLevel, string> = {
   out_of_stock: 'bg-red-100 text-red-800 hover:bg-red-200',
 };
 
-// ---------- Column configuration ----------
+// ---------- Column configuration (unchanged) ----------
 const COLUMNS = [
   { key: 'title', label: 'Inventory Name', sortable: true },
   { key: 'sku', label: 'SKU', sortable: true },
@@ -176,7 +190,7 @@ const COLUMNS = [
 ];
 
 // ---------- Main Component ----------
-export function InventoryTable({user}: any) {
+export function InventoryTable({ user }: any) {
   // Data state
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [locations, setLocations] = useState<Location[]>([
@@ -222,23 +236,23 @@ export function InventoryTable({user}: any) {
     adjustment_type: 'set' as 'set' | 'add' | 'subtract',
   });
 
+  // Combobox state
+  const [comboboxOpen, setComboboxOpen] = useState(false);
+
   // Loading states for operations
   const [isCreating, setIsCreating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isAdjustingStock, setIsAdjustingStock] = useState(false);
 
-  // ---------- Data fetching ----------
+  // ---------- Data fetching (unchanged) ----------
   const loadItems = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Fetch inventory items from Medusa
       const result = await fetchInventoryItemsByLocation(user?.stockLocationId);
-        console.log(result, "RESSS")
       if (result) {
-        // Map the response to our interface
         const transformedItems: InventoryItem[] = result.map((item: any) => ({
           id: item.id,
           sku: item.sku || '',
@@ -253,12 +267,10 @@ export function InventoryTable({user}: any) {
           updated_at: item.updated_at,
         }));
 
-        console.log(result, "RESULLT")
-
         setItems(transformedItems);
         setTotalCount(result.length || transformedItems.length);
 
-        // Extract unique locations from the items
+        // Extract unique locations
         const uniqueLocations = new Map<string, Location>();
         transformedItems.forEach((item) => {
           item.location_levels?.forEach((level) => {
@@ -281,13 +293,13 @@ export function InventoryTable({user}: any) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.stockLocationId]);
 
   useEffect(() => {
     loadItems();
   }, [loadItems]);
 
-  // ---------- Load inventory levels for an item ----------
+  // ---------- Load inventory levels for an item (unchanged) ----------
   const loadItemLevels = async (itemId: string) => {
     try {
       const result = await listInventoryLevels(itemId);
@@ -305,11 +317,10 @@ export function InventoryTable({user}: any) {
     }
   };
 
-  // ---------- Filtering and sorting ----------
+  // ---------- Filtering and sorting (unchanged) ----------
   const filteredAndSorted = useMemo(() => {
     let result = [...items];
 
-    // Search filter
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       result = result.filter(
@@ -320,14 +331,12 @@ export function InventoryTable({user}: any) {
       );
     }
 
-    // Stock level filter
     if (stockLevelFilter !== 'all') {
       result = result.filter(
         (item) => getStockLevel(item, getReorderLevel(item)) === stockLevelFilter
       );
     }
 
-    // Sorting
     if (sortConfig) {
       result.sort((a, b) => {
         let aVal: any;
@@ -375,7 +384,7 @@ export function InventoryTable({user}: any) {
     return result;
   }, [items, searchQuery, stockLevelFilter, sortConfig]);
 
-  // ---------- Selection handlers ----------
+  // ---------- Selection handlers (unchanged) ----------
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredAndSorted.length) {
       setSelectedIds(new Set());
@@ -391,7 +400,7 @@ export function InventoryTable({user}: any) {
     setSelectedIds(next);
   };
 
-  // ---------- CRUD Operations ----------
+  // ---------- CRUD Operations (unchanged) ----------
   const handleCreateItem = async () => {
     if (!formData.sku.trim()) {
       toast.error('SKU is required');
@@ -412,11 +421,9 @@ export function InventoryTable({user}: any) {
           category: formData.category,
           location: formData.location,
           company_id: user?.companyId,
-          location_id: user?.stockLocationId
+          location_id: user?.stockLocationId,
         },
       });
-
-      console.log(response, "RESPPPOn")
 
       if (response.success) {
         const newItem: any = {
@@ -485,7 +492,6 @@ export function InventoryTable({user}: any) {
 
   const handleDeleteItems = async () => {
     if (selectedIds.size === 0) return;
-    
     if (!confirm(`Are you sure you want to delete ${selectedIds.size} item(s)?`)) return;
 
     setIsDeleting(true);
@@ -493,10 +499,9 @@ export function InventoryTable({user}: any) {
       const deletePromises = Array.from(selectedIds).map((id) =>
         deleteInventoryItem(id)
       );
-      
       const results = await Promise.all(deletePromises);
       const failedDeletes = results.filter((r) => !r.success);
-      
+
       if (failedDeletes.length > 0) {
         throw new Error(`${failedDeletes.length} item(s) failed to delete`);
       }
@@ -508,8 +513,6 @@ export function InventoryTable({user}: any) {
     } catch (err: any) {
       console.error('Failed to delete items:', err);
       toast.error(err.message || 'Failed to delete some items');
-      
-      // Reload to get accurate state
       await loadItems();
     } finally {
       setIsDeleting(false);
@@ -524,13 +527,12 @@ export function InventoryTable({user}: any) {
 
     setIsAdjustingStock(true);
     try {
-      // Get current level for this location
       const currentLevel = stockManagingItem.location_levels?.find(
         (level) => level.location_id === stockFormData.location_id
       );
 
       let newQuantity = stockFormData.adjustment_quantity;
-      
+
       if (stockFormData.adjustment_type === 'add') {
         newQuantity = (currentLevel?.stocked_quantity || 0) + stockFormData.adjustment_quantity;
       } else if (stockFormData.adjustment_type === 'subtract') {
@@ -544,7 +546,6 @@ export function InventoryTable({user}: any) {
       );
 
       if (response.success) {
-        // Reload the item's levels
         await loadItemLevels(stockManagingItem.id);
         toast.success('Stock updated successfully');
         setIsStockDialogOpen(false);
@@ -578,11 +579,9 @@ export function InventoryTable({user}: any) {
   };
 
   const openStockDialog = async (item: InventoryItem) => {
-    // Ensure we have the latest levels
     if (!item.location_levels || item.location_levels.length === 0) {
       await loadItemLevels(item.id);
     }
-    
     setStockManagingItem(item);
     setStockFormData({
       location_id: item.location_levels?.[0]?.location_id || locations[0]?.id || 'default',
@@ -604,9 +603,49 @@ export function InventoryTable({user}: any) {
       origin_country: '',
       requires_shipping: false,
     });
+    setComboboxOpen(false);
   };
 
-  // ---------- Export ----------
+  // ---------- Combobox handlers ----------
+  const handleTitleSelect = (selectedValue: string) => {
+    setComboboxOpen(false);
+    if (selectedValue === 'create') {
+      // Create new item: keep the title as typed, clear other fields
+      const typedTitle = formData.title.trim();
+      setFormData({
+        title: typedTitle,
+        sku: '',
+        description: '',
+        unit_price: 0,
+        reorder_level: 10,
+        category: 'General',
+        location: 'Default',
+        origin_country: '',
+        requires_shipping: false,
+      });
+      // Optionally focus SKU field
+      return;
+    }
+
+    // Find the selected item
+    const selectedItem = items.find((item) => item.id === selectedValue);
+    if (!selectedItem) return;
+
+    // Populate form with selected item's data
+    setFormData({
+      title: selectedItem.title || '',
+      sku: selectedItem.sku,
+      description: selectedItem.description || '',
+      unit_price: getUnitPrice(selectedItem),
+      reorder_level: getReorderLevel(selectedItem),
+      category: getCategory(selectedItem),
+      location: getLocation(selectedItem),
+      origin_country: selectedItem.origin_country || '',
+      requires_shipping: selectedItem.requires_shipping || false,
+    });
+  };
+
+  // ---------- Export (unchanged) ----------
   const exportCSV = () => {
     const headers = COLUMNS.map((c) => c.label).join(',');
     const rows = items.map((item) =>
@@ -631,7 +670,7 @@ export function InventoryTable({user}: any) {
         }
       }).join(',')
     );
-    
+
     const csv = [headers, ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -642,7 +681,7 @@ export function InventoryTable({user}: any) {
     URL.revokeObjectURL(url);
   };
 
-  // ---------- Stats ----------
+  // ---------- Stats (unchanged) ----------
   const stats = useMemo(() => {
     const totalItems = items.length;
     const totalStock = items.reduce((sum, item) => sum + getTotalStock(item), 0);
@@ -670,7 +709,7 @@ export function InventoryTable({user}: any) {
     };
   }, [items]);
 
-  // ---------- Sorting handler ----------
+  // ---------- Sorting handler (unchanged) ----------
   const toggleSort = (key: string) => {
     setSortConfig((prev) =>
       prev?.key === key
@@ -679,7 +718,7 @@ export function InventoryTable({user}: any) {
     );
   };
 
-  // ---------- Loading state ----------
+  // ---------- Loading state (unchanged) ----------
   if (loading) {
     return (
       <div className="space-y-4 p-4">
@@ -702,10 +741,11 @@ export function InventoryTable({user}: any) {
     );
   }
 
+  // ---------- Render ----------
   return (
     <TooltipProvider>
       <div className="space-y-4 p-4">
-        {/* Error banner */}
+        {/* Error banner (unchanged) */}
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center justify-between">
             <span className="flex items-center gap-2">
@@ -722,7 +762,7 @@ export function InventoryTable({user}: any) {
           </div>
         )}
 
-        {/* Toolbar */}
+        {/* Toolbar (unchanged) */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white border rounded-lg px-4 py-3 shadow-sm">
           <div className="flex items-center gap-2">
             <Package className="h-5 w-5 text-gray-500" />
@@ -860,7 +900,7 @@ export function InventoryTable({user}: any) {
           </div>
         </div>
 
-        {/* Stats (optional) */}
+        {/* Stats (unchanged) */}
         {showStats && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-white border rounded-lg px-4 py-3">
@@ -915,7 +955,7 @@ export function InventoryTable({user}: any) {
           </div>
         )}
 
-        {/* Table */}
+        {/* Table (unchanged) */}
         <div className="border rounded-lg overflow-x-auto bg-white shadow-sm">
           <Table>
             <TableHeader className="bg-gray-100">
@@ -1000,12 +1040,8 @@ export function InventoryTable({user}: any) {
                         </div>
                       </TableCell>
                       <TableCell className="font-mono text-sm ">{item.sku}</TableCell>
-                      <TableCell className="font-mono">
-                        {totalStock}
-                      </TableCell>
-                      <TableCell className="font-mono">
-                        {reserved}
-                      </TableCell>
+                      <TableCell className="font-mono">{totalStock}</TableCell>
+                      <TableCell className="font-mono">{reserved}</TableCell>
                       <TableCell className="font-mono">
                         <span
                           className={cn(
@@ -1101,7 +1137,7 @@ export function InventoryTable({user}: any) {
           </Table>
         </div>
 
-        {/* Footer */}
+        {/* Footer (unchanged) */}
         <div className="flex justify-between text-sm text-gray-500">
           <span>
             Showing {filteredAndSorted.length} of {totalCount} items
@@ -1113,14 +1149,12 @@ export function InventoryTable({user}: any) {
           )}
         </div>
 
-        {/* Create/Edit Dialog */}
+        {/* Create Dialog with Autocomplete Combobox */}
         <Dialog
-          open={isCreateDialogOpen || isEditDialogOpen}
+          open={isCreateDialogOpen}
           onOpenChange={(open) => {
             if (!open) {
               setIsCreateDialogOpen(false);
-              setIsEditDialogOpen(false);
-              setEditingItem(null);
               resetForm();
             }
           }}
@@ -1129,15 +1163,96 @@ export function InventoryTable({user}: any) {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Package className="h-5 w-5" />
-                {editingItem ? 'Edit Inventory Item' : 'Add New Inventory Item'}
+                Add New Inventory Item
               </DialogTitle>
               <DialogDescription>
-                {editingItem
-                  ? 'Update the details of this inventory item.'
-                  : 'Enter the details of the new item to add to your inventory.'}
+                Enter the details of the new item to add to your inventory. You can also
+                select an existing item to pre‑fill the form.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
+              {/* Title with Combobox */}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="title" className="text-right">
+                  Title
+                </Label>
+                <div className="col-span-3">
+                  <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={comboboxOpen}
+                        className="w-full justify-between font-normal"
+                      >
+                        {formData.title || 'Search or enter title...'}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                      <Command>
+                        <CommandInput
+                          placeholder="Search existing items..."
+                          value={formData.title}
+                          onValueChange={(value) =>
+                            setFormData((prev) => ({ ...prev, title: value }))
+                          }
+                        />
+                        <CommandList>
+                          <CommandEmpty>
+                            <Button
+                              variant="ghost"
+                              className="w-full justify-start text-blue-600"
+                              onClick={() => {
+                                const typedTitle = formData.title.trim();
+                                if (typedTitle) {
+                                  handleTitleSelect('create');
+                                } else {
+                                  toast.warning('Please type a title first');
+                                }
+                              }}
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              Create new "{formData.title || 'item'}"
+                            </Button>
+                          </CommandEmpty>
+                          <CommandGroup heading="Existing items">
+                            {items
+                              .filter((item) =>
+                                item.title
+                                  ?.toLowerCase()
+                                  .includes(formData.title.toLowerCase())
+                              )
+                              .slice(0, 10)
+                              .map((item) => (
+                                <CommandItem
+                                  key={item.id}
+                                  value={item.id}
+                                  onSelect={() => handleTitleSelect(item.id)}
+                                >
+                                  <Check
+                                    className={cn(
+                                      'mr-2 h-4 w-4',
+                                      formData.title === item.title
+                                        ? 'opacity-100'
+                                        : 'opacity-0'
+                                    )}
+                                  />
+                                  <span>{item.title}</span>
+                                  <span className="ml-2 text-xs text-muted-foreground">
+                                    {item.sku}
+                                  </span>
+                                </CommandItem>
+                              ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+
+              {/* SKU */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="sku" className="text-right">
                   SKU <span className="text-red-500">*</span>
@@ -1150,18 +1265,8 @@ export function InventoryTable({user}: any) {
                   className="col-span-3"
                 />
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="title" className="text-right">
-                  Title
-                </Label>
-                <Input
-                  id="title"
-                  placeholder="Item name"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
+
+              {/* Description */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="description" className="text-right">
                   Description
@@ -1177,6 +1282,8 @@ export function InventoryTable({user}: any) {
                   rows={3}
                 />
               </div>
+
+              {/* Category */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="category" className="text-right">
                   Category
@@ -1191,6 +1298,8 @@ export function InventoryTable({user}: any) {
                   className="col-span-3"
                 />
               </div>
+
+              {/* Unit Price */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="unit_price" className="text-right">
                   Unit Price
@@ -1211,6 +1320,8 @@ export function InventoryTable({user}: any) {
                   className="col-span-3"
                 />
               </div>
+
+              {/* Reorder Level */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="reorder_level" className="text-right">
                   Reorder Level
@@ -1230,6 +1341,8 @@ export function InventoryTable({user}: any) {
                   className="col-span-3"
                 />
               </div>
+
+              {/* Location */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="location" className="text-right">
                   Location
@@ -1244,6 +1357,8 @@ export function InventoryTable({user}: any) {
                   className="col-span-3"
                 />
               </div>
+
+              {/* Origin Country */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="origin_country" className="text-right">
                   Origin Country
@@ -1258,12 +1373,179 @@ export function InventoryTable({user}: any) {
                   className="col-span-3"
                 />
               </div>
+
+              {/* Requires Shipping (optional – you can add a checkbox if needed) */}
+              {/* Add this if you want: <Checkbox ... /> */}
             </div>
             <DialogFooter>
               <Button
                 variant="outline"
                 onClick={() => {
                   setIsCreateDialogOpen(false);
+                  resetForm();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateItem}
+                disabled={isCreating}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {isCreating && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                Create Item
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Dialog – unchanged (title input remains as plain Input) */}
+        <Dialog
+          open={isEditDialogOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setIsEditDialogOpen(false);
+              setEditingItem(null);
+              resetForm();
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Edit Inventory Item
+              </DialogTitle>
+              <DialogDescription>
+                Update the details of this inventory item.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-sku" className="text-right">
+                  SKU <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="edit-sku"
+                  placeholder="SKU code"
+                  value={formData.sku}
+                  onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-title" className="text-right">
+                  Title
+                </Label>
+                <Input
+                  id="edit-title"
+                  placeholder="Item name"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-description" className="text-right">
+                  Description
+                </Label>
+                <Textarea
+                  id="edit-description"
+                  placeholder="Item description"
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  className="col-span-3"
+                  rows={3}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-category" className="text-right">
+                  Category
+                </Label>
+                <Input
+                  id="edit-category"
+                  placeholder="Category"
+                  value={formData.category}
+                  onChange={(e) =>
+                    setFormData({ ...formData, category: e.target.value })
+                  }
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-unit_price" className="text-right">
+                  Unit Price
+                </Label>
+                <Input
+                  id="edit-unit_price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={formData.unit_price || ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      unit_price: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-reorder_level" className="text-right">
+                  Reorder Level
+                </Label>
+                <Input
+                  id="edit-reorder_level"
+                  type="number"
+                  min="0"
+                  placeholder="10"
+                  value={formData.reorder_level || ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      reorder_level: parseInt(e.target.value) || 0,
+                    })
+                  }
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-location" className="text-right">
+                  Location
+                </Label>
+                <Input
+                  id="edit-location"
+                  placeholder="Location"
+                  value={formData.location}
+                  onChange={(e) =>
+                    setFormData({ ...formData, location: e.target.value })
+                  }
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-origin_country" className="text-right">
+                  Origin Country
+                </Label>
+                <Input
+                  id="edit-origin_country"
+                  placeholder="e.g., US"
+                  value={formData.origin_country}
+                  onChange={(e) =>
+                    setFormData({ ...formData, origin_country: e.target.value })
+                  }
+                  className="col-span-3"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
                   setIsEditDialogOpen(false);
                   setEditingItem(null);
                   resetForm();
@@ -1272,20 +1554,18 @@ export function InventoryTable({user}: any) {
                 Cancel
               </Button>
               <Button
-                onClick={editingItem ? handleEditItem : handleCreateItem}
-                disabled={isCreating || isUpdating}
+                onClick={handleEditItem}
+                disabled={isUpdating}
                 className="bg-blue-600 hover:bg-blue-700"
               >
-                {(isCreating || isUpdating) && (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                )}
-                {editingItem ? 'Update Item' : 'Create Item'}
+                {isUpdating && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                Update Item
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* Stock Management Dialog */}
+        {/* Stock Management Dialog (unchanged) */}
         <Dialog
           open={isStockDialogOpen}
           onOpenChange={(open) => {
@@ -1310,7 +1590,6 @@ export function InventoryTable({user}: any) {
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-              {/* Current stock display */}
               {stockManagingItem && stockFormData.location_id && (
                 <div className="bg-gray-50 rounded-lg p-4 space-y-2">
                   <h4 className="text-sm font-medium text-gray-700">Current Stock</h4>

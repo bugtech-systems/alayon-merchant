@@ -280,8 +280,8 @@ function getOrderColumns({
                 <div className="flex items-center gap-1">
                                   <DriverAssignment
                     order={row.original}
-                    currentDriver={row.original.delivery.driver_id}
-                    currentDriverId={row.original.delivery.driver_id}
+                    currentDriver={row.original?.delivery?.driver_id}
+                    currentDriverId={row.original?.delivery?.driver_id}
                     companyId={companyId}
                     onAssign={(driverId, driverName) => {
                       onAssignDriver?.(row.original.id, driverId, driverName);
@@ -401,8 +401,8 @@ function getOrderColumns({
       cell: ({ row }) => (
         <DriverAssignment
           order={row.original}
-          currentDriver={row.original.delivery.driver_id}
-          currentDriverId={row.original.delivery.driver_id}
+          currentDriver={row.original?.delivery?.driver_id}
+          currentDriverId={row.original?.delivery?.driver_id}
           companyId={companyId}
           onAssign={(driverId, driverName) => {
             onAssignDriver?.(row.original.id, driverId, driverName);
