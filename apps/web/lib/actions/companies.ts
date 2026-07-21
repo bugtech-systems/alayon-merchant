@@ -316,7 +316,7 @@ export interface CustomerStats {
 // Validation schemas
 const GetCustomersSchema = z.object({
   page: z.number().min(1).default(1),
-  limit: z.number().min(1).max(100).default(20),
+  limit: z.number().min(1).max(10000).default(20),
   search: z.string().optional(),
   status: z.string().optional(),
   group: z.string().optional(),

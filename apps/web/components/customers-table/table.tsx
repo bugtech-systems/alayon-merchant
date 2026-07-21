@@ -132,7 +132,7 @@ export function CustomerTable({
   refreshInterval,
   onError,
   onSuccess,
-  defaultPageSize = 10,
+  defaultPageSize = 10000,
   companyId,
   enableRealtime = false,
   staleTime = 5 * 60 * 1000, // 5 minutes default
