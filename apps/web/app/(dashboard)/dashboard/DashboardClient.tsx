@@ -10,6 +10,7 @@ import { assignDriverToOrder, unassignDriverToOrder } from "@/lib/data";
 import { PrintDialog } from "@/app/pos/_components/print-dialog";
 import { startOfDay, endOfDay, format } from 'date-fns';
 import { buildDateFilters } from "@/lib/utils/date-filters";
+import { fulfillOrder } from "@/lib/actions/orders";
 
 interface DashboardClientProps {
   user: any;
@@ -414,6 +415,14 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     console.log(order, 'ORDER');
   };
 
+  
+  const handleAcceptOrder = async (orderId:any, stock_location_id:any) => {
+    console.log(orderId, 'ORDER', stock_location_id);
+      await fulfillOrder(orderId, stock_location_id)
+      await refetch();
+
+  };
+
   // Update URL query params
   const updateQueryParams = (params: Record<string, string | number | undefined>) => {
     const current = new URLSearchParams(searchParams?.toString() || '');
@@ -432,11 +441,9 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     updateQueryParams({ search: query, page: 1 });
   };
 
-  // Toggle sound notification
-  const toggleSound = () => {
-    setIsSoundEnabled(prev => !prev);
-  };
 
+
+  console.log(data?.orders, 'ORDDSS')
 
 
   // Company role view
@@ -484,12 +491,14 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           onRefresh={handleManualRefresh}
           onRowClick={handleRowClick}
           companyId={company?.id}
+          defaultStockLocationId={company?.stock_location_id}
           searchQuery={search}
           onSearchChange={handleSearchChange}
           enableDragDrop={true}
           enableColumnVisibility={true}
           enableRowSelection={true}
           onPrint={handlePrint}
+          onAcceptOrder={(orderId, stock_location_id) => handleAcceptOrder(orderId, stock_location_id) as any}
         />
       </div>
     );

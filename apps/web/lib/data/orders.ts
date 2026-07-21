@@ -161,6 +161,7 @@ const transformOrderForDashboard = (order: any): DashboardOrder => {
     id: order.id,
     display_id: order.display_id,
     status: order.status,
+    delivery_status: order?.delivery?.delivery_status,
     status_display: getOrderStatusDisplay(order.status),
     payment_status: order.payment_status,
     payment_status_display: getPaymentStatusDisplay(order.payment_status),
@@ -514,7 +515,7 @@ export const listOrders = async (
     
     const totalPages = Math.ceil((filteredCount || 0) / limit);
     const currentPage = Math.floor(offset / limit) + 1;
-    
+      console.log(paginatedOrders, transformedOrders, 'ordersss')
     return {
       orders: transformedOrders,
       count: filteredCount || 0,
@@ -974,6 +975,9 @@ export async function listPosOrders(limit: number = 1000, offset: number = 0, fi
     const start = offset;
     const end = Math.min(offset + limit, filteredCount);
     const paginatedOrders = orders.slice(start, end);
+
+    
+
 
     return {
       orders: paginatedOrders || [],

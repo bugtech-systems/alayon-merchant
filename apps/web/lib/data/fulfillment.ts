@@ -52,3 +52,5 @@ export const listCartFreeShippingPrices = async (
     })
     .then((data) => data.prices)
 }
+
+

@@ -50,6 +50,8 @@ import {
   Ban,
   CircleCheckIcon,
   LoaderIcon,
+  LoaderCircle,
+  ChevronRight,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -131,11 +133,11 @@ export interface Order {
     eta?: string;
   };
   metadata?: Record<string, any>;
+  fulfillment_status?: string; // "fulfilled" or "not_fulfilled"
 }
 
 // ==================== Status Tab Configuration ====================
 
-// ✅ Define icon mapping separately to avoid undefined issues
 const STATUS_ICONS: Record<OrderStatus | "all", React.ComponentType<{ className?: string }>> = {
   all: Package,
   pending: Clock,
@@ -149,7 +151,6 @@ const STATUS_ICONS: Record<OrderStatus | "all", React.ComponentType<{ className?
   declined: XCircle,
 };
 
-// ✅ Define tabs with safe icon references
 const STATUS_TABS: Array<{
   value: OrderStatus | "all";
   label: string;
@@ -157,10 +158,6 @@ const STATUS_TABS: Array<{
 }> = [
   { value: "all", label: "All Orders", icon: Package },
   { value: "pending", label: "Pending", icon: Clock },
-  // { value: "preparing", label: "Preparing", icon: PackageCheck },
-  // { value: "ready_for_pickup", label: "Ready", icon: Package },
-  // { value: "in_transit", label: "In Transit", icon: Truck },
-  // { value: "delivered", label: "Delivered", icon: CheckCircle },
   { value: "completed", label: "Completed", icon: CheckCircle },
   { value: "declined", label: "Declined", icon: XCircle },
 ] as const;
@@ -208,32 +205,100 @@ function CustomerView({ customer }: { customer: Order["customer"] }) {
 // ==================== Columns Definition ====================
 
 function getOrderColumns({
-  onAssignDriver,
+  onAcceptOrder,
   onPrint,
   onRowClick,
   companyId,
   onStatusChange,
   onError,
   isMobile = false,
+  processingOrderIds = new Set<string>(),
+  getStockLocationId = (order: Order) => order.metadata?.stock_location_id,
+  defaultStockLocationId,
 }: {
-  onAssignDriver?: (orderId: string, driverId: string | null, driverName: string | null) => void;
+  onAcceptOrder?: (orderId: string, stockLocationId: string) => Promise<void>;
+  onPrint?: (order: Order) => void;
   onRowClick?: (order: Order) => void;
   companyId: string;
   onStatusChange?: (orderId: string, newStatus: string) => Promise<void>;
   onError?: (error: Error) => void;
   isMobile?: boolean;
-  onPrint?: (order: Order) => void;
+  processingOrderIds?: Set<string>;
+  getStockLocationId?: (order: Order) => string | undefined;
+  defaultStockLocationId?: string;
 }) {
-  // Mobile columns - compact card layout
+  // Helper to render Accept/Print cell for both views
+  const renderAcceptPrintCell = (order: any) => {
+    const isFulfilled = order.fulfillment_status === "fulfilled" || order?.delivery_status === "delivered";
+    const isProcessing = order?.delivery_status == "company_preparing";
+
+    if (isProcessing || isFulfilled) {
+      // Already accepted: show Print icon
+      return (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          onClick={(e) => {
+            e.stopPropagation();
+            onPrint?.(order);
+          }}
+        >
+          <Printer className="size-4" />
+          <span className="sr-only">Print</span>
+        </Button>
+      );
+    }
+
+    // Not fulfilled: show Accept button or spinner
+    const stockLocationId = getStockLocationId(order) || defaultStockLocationId;
+    const handleAccept = async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!onAcceptOrder) return;
+      if (!stockLocationId) {
+        onError?.(new Error("No stock location available for this order"));
+        return;
+      }
+      try {
+        await onAcceptOrder(order.id, stockLocationId);
+      } catch (err) {
+        onError?.(err as Error);
+      }
+    };
+
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8 gap-1"
+        onClick={handleAccept}
+        disabled={isProcessing || !stockLocationId}
+      >
+        {isProcessing ? (
+          <>
+            <LoaderCircle className="size-3 animate-spin" />
+            <span className="sr-only">Processing</span>
+          </>
+        ) : (
+          <>
+            <span>Accept</span>
+          </>
+        )}
+      </Button>
+    );
+  };
+
+  // Mobile columns – compact card layout
   if (isMobile) {
     return [
       {
         id: "mobile_card",
         header: () => null,
         cell: ({ row }: { row: any }) => {
-          const order = row.original as Order;
-          const config = ORDER_STATUS_CONFIG[order.status];
-            console.log(order, 'ORDDDS')
+          const order = row.original as any;
+          const isFulfilled = order.fulfillment_status === "fulfilled" || order?.delivery_status === "delivered";
+          const isProcessing = order?.delivery_status == "company_preparing";
+
           return (
             <div className="flex flex-col gap-2 p-3 w-full">
               {/* Header row */}
@@ -269,32 +334,19 @@ function getOrderColumns({
               {/* Actions */}
               <div className="flex items-center justify-between pt-1 border-t">
                 <Badge variant="outline" className="px-1.5 text-muted-foreground">
-                        {(row.original.status == "completed" || row.original.status == 'delivered') ? (
-                          <CircleCheckIcon className="fill-green-500 stroke-primary-foreground dark:fill-green-600" />
-                        ) : (
-                          <LoaderIcon />
-                        )}
-                        {row.original.status}
-                        {console.log(row.original.status, 'stattsss')}
-                      </Badge>
+                  {isFulfilled ? (
+                    <CheckCircle className="fill-green-500 stroke-primary-foreground dark:fill-green-600" />
+                  ) : isProcessing ? (
+                    <LoaderCircle className="size-3 animate-spin" />
+                  ) : (
+                    <span>Pending</span>
+                  )}
+                  {isFulfilled ? " Completed" : isProcessing ? " Processing" : ""}
+                </Badge>
                 <div className="flex items-center gap-1">
-                                  <DriverAssignment
-                    order={row.original}
-                    currentDriver={row.original?.delivery?.driver_id}
-                    currentDriverId={row.original?.delivery?.driver_id}
-                    companyId={companyId}
-                    onAssign={(driverId, driverName) => {
-                      onAssignDriver?.(row.original.id, driverId, driverName);
-                      row.original.assignedDriver = driverName;
-                      row.original.assignedDriverId = driverId;
-                    }}
-                    onError={onError}
-                  /> 
-                  <Button variant="ghost" size="icon" className="size-8" onClick={() => onPrint?.(order)}>
-                    <Printer className="size-4" />
-                  </Button>
+                  {renderAcceptPrintCell(order)}
                   <Button variant="ghost" size="icon" className="size-8" onClick={() => onRowClick?.(order)}>
-                    <ChevronRightIcon className="size-4" />
+                    <ChevronRight className="size-4" />
                   </Button>
                 </div>
               </div>
@@ -378,60 +430,32 @@ function getOrderColumns({
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }: { row: any }) => (
-              <Badge variant="outline" className="px-1.5 text-muted-foreground">
-         {(row.original.status == "completed" || row.original.status == 'delivered') ? (
-                          <CircleCheckIcon className="fill-green-500 stroke-primary-foreground dark:fill-green-600" />
-                        ) : (
-                          <LoaderIcon />
-                        )}
-        {row.original.status}
-      </Badge>
-        // <StatusDropdown
-        //   currentStatus={row.original.status}
-        //   onStatusChange={(status) => onStatusChange?.(row.original.id, status)}
-        //   paymentStatus={row.original.paymentStatus}
-        //   canCapturePayment={row.original.canCapturePayment}
-        // />
-      ),
+      cell: ({ row }: { row: any }) => {
+        const order = row.original;
+          const isFulfilled = order.fulfillment_status === "fulfilled" || order.delivery_status === "delivered";
+          const isProcessing = order?.delivery_status == "company_preparing";
+
+          console.log(isFulfilled, order, 'orddss')
+        return (
+          <Badge variant="outline" className="px-1.5 text-muted-foreground">
+            {isFulfilled ? (
+              <CheckCircle className="fill-green-500 stroke-primary-foreground dark:fill-green-600" />
+            ) : isProcessing ? (
+              <LoaderCircle className="size-3 animate-spin" />
+            ) : (
+              <span>Pending</span>
+            )}
+            {isFulfilled ? " Completed" : isProcessing ? " Processing" : ""}
+          </Badge>
+        );
+      },
     },
     {
-      accessorKey: "assignedDriver",
-      header: "Driver",
-      cell: ({ row }) => (
-        <DriverAssignment
-          order={row.original}
-          currentDriver={row.original?.delivery?.driver_id}
-          currentDriverId={row.original?.delivery?.driver_id}
-          companyId={companyId}
-          onAssign={(driverId, driverName) => {
-            onAssignDriver?.(row.original.id, driverId, driverName);
-            row.original.assignedDriver = driverId;
-            row.original.assignedDriverId = driverId;
-          }}
-          onError={onError}
-        />
-      ),
-    },
-    {
-      id: "actions",
-      header: () => <span className="sr-only">Actions</span>,
-      cell: ({ row }: { row: any }) => (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          onClick={(e) => {
-            e.stopPropagation();
-            onPrint?.(row.original);
-          }}
-        >
-          <Printer className="size-4" />
-          <span className="sr-only">Print</span>
-        </Button>
-      ),
+      id: "accept_actions",
+      header: "Accept / Print",
+      cell: ({ row }: { row: any }) => renderAcceptPrintCell(row.original),
       enableSorting: false,
-      size: 50,
+      size: 120,
     },
   ];
 }
@@ -450,6 +474,12 @@ interface OrdersTableProps {
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
   onPrint?: (order: Order) => void;
+  // New props for Accept/Print
+  onAcceptOrder?: (orderId: string, stockLocationId: string) => Promise<any>;
+  processingOrderIds?: Set<string>;
+  defaultStockLocationId?: string;
+  getStockLocationId?: (order: Order) => string | undefined;
+  onError?: (error: Error) => void;
 }
 
 export function CompanyOrdersTable({
@@ -464,6 +494,11 @@ export function CompanyOrdersTable({
   searchQuery = "",
   onSearchChange,
   onPrint,
+  onAcceptOrder,
+  processingOrderIds = new Set<string>(),
+  defaultStockLocationId,
+  getStockLocationId,
+  onError,
 }: OrdersTableProps) {
   const [activeTab, setActiveTab] = React.useState<StatusTabValue>("all");
   const [rowSelection, setRowSelection] = React.useState({});
@@ -509,16 +544,32 @@ export function CompanyOrdersTable({
   const columns = React.useMemo(
     () =>
       getOrderColumns({
-        onAssignDriver,
+        onAcceptOrder,
+        onPrint,
         onRowClick,
         companyId,
         onStatusChange,
+        onError,
         isMobile,
-        onPrint,
+        processingOrderIds,
+        getStockLocationId,
+        defaultStockLocationId,
       }),
-    [onAssignDriver, onRowClick, companyId, onStatusChange, isMobile, onPrint]
+    [
+      onAcceptOrder,
+      onPrint,
+      onRowClick,
+      companyId,
+      onStatusChange,
+      onError,
+      isMobile,
+      processingOrderIds,
+      getStockLocationId,
+      defaultStockLocationId,
+    ]
   );
 
+console.log(defaultStockLocationId, "STOCK LOC")
 
   const table = useReactTable({
     data: filteredByTab,
@@ -600,7 +651,7 @@ export function CompanyOrdersTable({
         {/* Desktop tab list */}
         <TabsList className="@4xl/main:flex hidden flex-wrap h-auto gap-1 bg-transparent p-0">
           {STATUS_TABS.map((tab) => {
-            const Icon = tab.icon; // ✅ Icon is always defined
+            const Icon = tab.icon;
             const count = statusCounts[tab.value] || 0;
             const isActive = activeTab === tab.value;
 
@@ -614,7 +665,6 @@ export function CompanyOrdersTable({
                   "rounded-md px-3 py-1.5"
                 )}
               >
-                {/* ✅ Icon is guaranteed to exist */}
                 <Icon className="size-4" />
                 <span>{tab.label}</span>
                 {count > 0 && (

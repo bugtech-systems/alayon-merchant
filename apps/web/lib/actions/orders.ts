@@ -38,7 +38,20 @@ export async function updateOrderShipping(id: string, shippingData: any) {
   }
 }
 
-
+export async function fulfillOrder(orderId: string, stock_location_id: string) {
+  try {
+    const response = await adminFetch(`/dashboard/company/orders/fulfill`, {
+      method: 'POST',
+      body: JSON.stringify({ orderId, stock_location_id }),
+    });
+    
+    revalidatePath('/dashboard');
+    return { success: true, data: response };
+  } catch (error) {
+    console.error('Error updating order status:', error);
+    return { success: false, error: 'Failed to update order status' };
+  }
+}
 
 export async function updatePosOrderStatus(orderId: string, status: string) {
   try {

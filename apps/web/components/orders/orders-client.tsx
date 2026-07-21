@@ -119,13 +119,25 @@ const ORDER_STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode
     variant: 'warning',
     priority: 1
   },
-  processing: { 
+  company_accepted: { 
+    label: 'Pending', 
+    icon: <Clock className="h-3 w-3" />,
+    variant: 'warning',
+    priority: 1
+  },
+  company_preparing: { 
     label: 'Processing', 
     icon: <RefreshCw className="h-3 w-3 animate-spin" />,
     variant: 'default',
     priority: 2
   },
   completed: { 
+    label: 'Completed', 
+    icon: <CheckCircle className="h-3 w-3" />,
+    variant: 'success',
+    priority: 3
+  },
+  delivered: { 
     label: 'Completed', 
     icon: <CheckCircle className="h-3 w-3" />,
     variant: 'success',
@@ -456,9 +468,9 @@ const StatusDropdown = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   
-  const statuses = ['pending', 'processing', 'completed'];
+  const statuses = ['pending', 'company_preparing', 'completed'];
   const currentConfig = ORDER_STATUS_CONFIG[currentStatus?.toLowerCase()];
-
+console.log(currentStatus, 'CURRE')
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
@@ -470,9 +482,9 @@ const StatusDropdown = ({
         >
           <div className="flex items-center gap-1.5">
             <OrderStatusBadge status={currentStatus} showLabel={!isOpen} />
-            {!isOpen && currentConfig?.icon && (
+            {/* {!isOpen && currentConfig?.icon && currentStatus != 'company_preparing' && (
               <span className="text-muted-foreground">{currentConfig.icon}</span>
-            )}
+            )} */}
             <ChevronDown className={cn(
               "h-3 w-3 text-muted-foreground transition-transform",
               isOpen && "rotate-180"
@@ -1819,7 +1831,7 @@ export function OrdersClient({
                         <div className="space-y-1.5">
                           {orderType === 'orders' ? (
                             <StatusDropdown
-                              currentStatus={order.status}
+                              currentStatus={order?.delivery?.delivery_status || order.status}
                               paymentStatus={order.payment_status}
                               onStatusChange={(status) => handleStatusUpdate(order.id, status)}
                               onCapturePayment={() => handleCaptureDialog(order)}
