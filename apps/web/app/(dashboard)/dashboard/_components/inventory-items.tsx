@@ -540,14 +540,20 @@ export function InventoryTable({ user }: any) {
         newQuantity = Math.max(0, (currentLevel?.stocked_quantity || 0) - stockFormData.adjustment_quantity);
       }
 
+
+
+      console.log(newQuantity, 'NEW QUANTITZY', currentLevel)
       const response = await updateInventoryLevel(
         stockManagingItem.id,
         stockFormData.location_id,
-        newQuantity
+        {stocked_quantity: newQuantity}
       );
 
+
+      console.log(response, 'RESSPSPSPS111')
       if (response.success) {
         await loadItemLevels(stockManagingItem.id);
+        await loadItems()
         toast.success('Stock updated successfully');
         setIsStockDialogOpen(false);
         setStockManagingItem(null);
@@ -563,7 +569,7 @@ export function InventoryTable({ user }: any) {
   };
 
   // ---------- Form handlers ----------
-  const openEditDialog = (item: InventoryItem) => {
+  const openEditDialog = (item: any) => {
     setEditingItem(item);
     setFormData({
       title: item.title || '',
@@ -579,14 +585,17 @@ export function InventoryTable({ user }: any) {
     setIsEditDialogOpen(true);
   };
 
-  const openStockDialog = async (item: InventoryItem) => {
+  const openStockDialog = async (item: any) => {
     if (!item.location_levels || item.location_levels.length === 0) {
       await loadItemLevels(item.id);
     }
+
+
+    console.log(item, 'ITEMMSS')
     setStockManagingItem(item);
     setStockFormData({
       location_id: item.location_levels?.[0]?.location_id || locations[0]?.id || 'default',
-      adjustment_quantity: 0,
+      adjustment_quantity: item.location_levels?.[0]?.available_quantity || item.location_levels?.[0]?.stocked_quantity,
       adjustment_type: 'set',
     });
     setIsStockDialogOpen(true);
@@ -743,7 +752,6 @@ export function InventoryTable({ user }: any) {
   }
 
 
-  console.log(items, 'ITEMSS')
   // ---------- Render ----------
   return (
     <TooltipProvider>
@@ -1060,7 +1068,7 @@ export function InventoryTable({ user }: any) {
                         {unitPrice > 0
                           ? new Intl.NumberFormat('en-US', {
                               style: 'currency',
-                              currency: 'USD',
+                              currency: 'PHP',
                             }).format(unitPrice)
                           : '-'}
                       </TableCell>
@@ -1565,7 +1573,7 @@ export function InventoryTable({ user }: any) {
                 </div>
               )}
 
-              <div className="grid grid-cols-4 items-center gap-4">
+              {/* <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="stock_location" className="text-right">
                   Location
                 </Label>
@@ -1607,7 +1615,7 @@ export function InventoryTable({ user }: any) {
                     <SelectItem value="subtract">Remove from stock</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
+              </div> */}
 
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="adjustment_quantity" className="text-right">

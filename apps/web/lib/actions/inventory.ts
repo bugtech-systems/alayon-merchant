@@ -545,7 +545,7 @@ export async function updateInventoryLevel(
     stocked_quantity?: number;
     reserved_quantity?: number;
     incoming_quantity?: number;
-  }
+  } 
 ): Promise<ApiResponse<InventoryLevel>> {
   try {
     if (!inventoryItemId || !locationId) {
@@ -564,31 +564,27 @@ export async function updateInventoryLevel(
     let response;
     
     try {
-      response = await sdk.client.fetch(
+      let {inventory_item} = await sdk.client.fetch(
         `/admin/inventory-items/${inventoryItemId}/location-levels/${locationId}`,
         {
           method: 'POST',
           body: payload,
         }
       );
+
+     response = inventory_item
     } catch (sdkError) {
-      const baseUrl = process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL || 'http://localhost:9000';
-      const fetchResponse = await fetch(
-        `${baseUrl}/admin/inventory-items/${inventoryItemId}/location-levels/${locationId}`,
-        {
+      const fetchResponse = await adminFetch(`/admin/inventory-items/${inventoryItemId}/location-levels/${locationId}`, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${process.env.MEDUSA_ADMIN_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
           body: JSON.stringify(payload),
-        }
-      );
-      response = await fetchResponse.json();
+        }) 
+      
+        console.log(sdkError, 'reer', fetchResponse)
+      response = fetchResponse;
     }
 
-    const level = response.location_level || response.inventory_level;
-
+    const level = response.location_levels || response.inventory_level;
+ console.log(response, 'RESPSPSPSP123')
     if (!level) {
       return { success: false, error: 'Failed to update inventory level' };
     }
