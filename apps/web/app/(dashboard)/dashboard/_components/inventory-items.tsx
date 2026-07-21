@@ -82,6 +82,7 @@ import {
   updateInventoryLevel,
   fetchInventoryItemsByLocation,
 } from '@/lib/actions/inventory';
+import { Autocomplete } from './inventory-item-autocomplete';
 
 // ---------- Types (unchanged) ----------
 interface InventoryItem {
@@ -741,6 +742,8 @@ export function InventoryTable({ user }: any) {
     );
   }
 
+
+  console.log(items, 'ITEMSS')
   // ---------- Render ----------
   return (
     <TooltipProvider>
@@ -1150,254 +1153,195 @@ export function InventoryTable({ user }: any) {
         </div>
 
         {/* Create Dialog with Autocomplete Combobox */}
-        <Dialog
-          open={isCreateDialogOpen}
-          onOpenChange={(open) => {
-            if (!open) {
-              setIsCreateDialogOpen(false);
-              resetForm();
-            }
-          }}
-        >
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                Add New Inventory Item
-              </DialogTitle>
-              <DialogDescription>
-                Enter the details of the new item to add to your inventory. You can also
-                select an existing item to pre‑fill the form.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              {/* Title with Combobox */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="title" className="text-right">
-                  Title
-                </Label>
-                <div className="col-span-3">
-                  <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={comboboxOpen}
-                        className="w-full justify-between font-normal"
-                      >
-                        {formData.title || 'Search or enter title...'}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                      <Command>
-                        <CommandInput
-                          placeholder="Search existing items..."
-                          value={formData.title}
-                          onValueChange={(value) =>
-                            setFormData((prev) => ({ ...prev, title: value }))
-                          }
-                        />
-                        <CommandList>
-                          <CommandEmpty>
-                            <Button
-                              variant="ghost"
-                              className="w-full justify-start text-blue-600"
-                              onClick={() => {
-                                const typedTitle = formData.title.trim();
-                                if (typedTitle) {
-                                  handleTitleSelect('create');
-                                } else {
-                                  toast.warning('Please type a title first');
-                                }
-                              }}
-                            >
-                              <Plus className="mr-2 h-4 w-4" />
-                              Create new "{formData.title || 'item'}"
-                            </Button>
-                          </CommandEmpty>
-                          <CommandGroup heading="Existing items">
-                            {items
-                              .filter((item) =>
-                                item.title
-                                  ?.toLowerCase()
-                                  .includes(formData.title.toLowerCase())
-                              )
-                              .slice(0, 10)
-                              .map((item) => (
-                                <CommandItem
-                                  key={item.id}
-                                  value={item.id}
-                                  onSelect={() => handleTitleSelect(item.id)}
-                                >
-                                  <Check
-                                    className={cn(
-                                      'mr-2 h-4 w-4',
-                                      formData.title === item.title
-                                        ? 'opacity-100'
-                                        : 'opacity-0'
-                                    )}
-                                  />
-                                  <span>{item.title}</span>
-                                  <span className="ml-2 text-xs text-muted-foreground">
-                                    {item.sku}
-                                  </span>
-                                </CommandItem>
-                              ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              </div>
+<Dialog
+  open={isCreateDialogOpen}
+  onOpenChange={(open) => {
+    if (!open) {
+      setIsCreateDialogOpen(false);
+      resetForm();
+    }
+  }}
+>
+  <DialogContent className="sm:max-w-[500px]">
+    <DialogHeader>
+      <DialogTitle className="flex items-center gap-2">
+        <Package className="h-5 w-5" />
+        Add New Inventory Item
+      </DialogTitle>
+      <DialogDescription>
+        Enter the details of the new item to add to your inventory. You can also
+        select an existing item to pre‑fill the form.
+      </DialogDescription>
+    </DialogHeader>
+    <div className="grid gap-4 py-4">
+      {/* Title with Autocomplete */}
+      <div className="grid grid-cols-4 items-start gap-4">
+        <Label htmlFor="title" className="text-right pt-2">
+          Title
+        </Label>
+        <div className="col-span-3">
+          <Autocomplete
+            value={formData.title}
+            onChange={(value) => setFormData((prev) => ({ ...prev, title: value }))}
+            items={items}
+            onSelect={(item) => {
+              if (item.isNew) {
+                // Handle create new
+                handleTitleSelect('create');
+              } else {
+                handleTitleSelect(item.id);
+              }
+            }}
+            placeholder="Search or enter title..."
+            emptyMessage="No existing items found"
+            createNewLabel="Create new item"
+          />
+        </div>
+      </div>
 
-              {/* SKU */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="sku" className="text-right">
-                  SKU <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="sku"
-                  placeholder="SKU code"
-                  value={formData.sku}
-                  onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
+      {/* SKU */}
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="sku" className="text-right">
+          SKU <span className="text-red-500">*</span>
+        </Label>
+        <Input
+          id="sku"
+          placeholder="SKU code"
+          value={formData.sku}
+          onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+          className="col-span-3"
+        />
+      </div>
 
-              {/* Description */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="description" className="text-right">
-                  Description
-                </Label>
-                <Textarea
-                  id="description"
-                  placeholder="Item description"
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  className="col-span-3"
-                  rows={3}
-                />
-              </div>
+      {/* Description */}
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="description" className="text-right">
+          Description
+        </Label>
+        <Textarea
+          id="description"
+          placeholder="Item description"
+          value={formData.description}
+          onChange={(e) =>
+            setFormData({ ...formData, description: e.target.value })
+          }
+          className="col-span-3"
+          rows={3}
+        />
+      </div>
 
-              {/* Category */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="category" className="text-right">
-                  Category
-                </Label>
-                <Input
-                  id="category"
-                  placeholder="Category"
-                  value={formData.category}
-                  onChange={(e) =>
-                    setFormData({ ...formData, category: e.target.value })
-                  }
-                  className="col-span-3"
-                />
-              </div>
+      {/* Category */}
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="category" className="text-right">
+          Category
+        </Label>
+        <Input
+          id="category"
+          placeholder="Category"
+          value={formData.category}
+          onChange={(e) =>
+            setFormData({ ...formData, category: e.target.value })
+          }
+          className="col-span-3"
+        />
+      </div>
 
-              {/* Unit Price */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="unit_price" className="text-right">
-                  Unit Price
-                </Label>
-                <Input
-                  id="unit_price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0.00"
-                  value={formData.unit_price || ''}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      unit_price: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                  className="col-span-3"
-                />
-              </div>
+      {/* Unit Price */}
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="unit_price" className="text-right">
+          Unit Price
+        </Label>
+        <Input
+          id="unit_price"
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="0.00"
+          value={formData.unit_price || ''}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              unit_price: parseFloat(e.target.value) || 0,
+            })
+          }
+          className="col-span-3"
+        />
+      </div>
 
-              {/* Reorder Level */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="reorder_level" className="text-right">
-                  Reorder Level
-                </Label>
-                <Input
-                  id="reorder_level"
-                  type="number"
-                  min="0"
-                  placeholder="10"
-                  value={formData.reorder_level || ''}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      reorder_level: parseInt(e.target.value) || 0,
-                    })
-                  }
-                  className="col-span-3"
-                />
-              </div>
+      {/* Reorder Level */}
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="reorder_level" className="text-right">
+          Reorder Level
+        </Label>
+        <Input
+          id="reorder_level"
+          type="number"
+          min="0"
+          placeholder="10"
+          value={formData.reorder_level || ''}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              reorder_level: parseInt(e.target.value) || 0,
+            })
+          }
+          className="col-span-3"
+        />
+      </div>
 
-              {/* Location */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="location" className="text-right">
-                  Location
-                </Label>
-                <Input
-                  id="location"
-                  placeholder="Location"
-                  value={formData.location}
-                  onChange={(e) =>
-                    setFormData({ ...formData, location: e.target.value })
-                  }
-                  className="col-span-3"
-                />
-              </div>
+      {/* Location */}
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="location" className="text-right">
+          Location
+        </Label>
+        <Input
+          id="location"
+          placeholder="Location"
+          value={formData.location}
+          onChange={(e) =>
+            setFormData({ ...formData, location: e.target.value })
+          }
+          className="col-span-3"
+        />
+      </div>
 
-              {/* Origin Country */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="origin_country" className="text-right">
-                  Origin Country
-                </Label>
-                <Input
-                  id="origin_country"
-                  placeholder="e.g., US"
-                  value={formData.origin_country}
-                  onChange={(e) =>
-                    setFormData({ ...formData, origin_country: e.target.value })
-                  }
-                  className="col-span-3"
-                />
-              </div>
-
-              {/* Requires Shipping (optional – you can add a checkbox if needed) */}
-              {/* Add this if you want: <Checkbox ... /> */}
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setIsCreateDialogOpen(false);
-                  resetForm();
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleCreateItem}
-                disabled={isCreating}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                {isCreating && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                Create Item
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+      {/* Origin Country */}
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="origin_country" className="text-right">
+          Origin Country
+        </Label>
+        <Input
+          id="origin_country"
+          placeholder="e.g., US"
+          value={formData.origin_country}
+          onChange={(e) =>
+            setFormData({ ...formData, origin_country: e.target.value })
+          }
+          className="col-span-3"
+        />
+      </div>
+    </div>
+    <DialogFooter>
+      <Button
+        variant="outline"
+        onClick={() => {
+          setIsCreateDialogOpen(false);
+          resetForm();
+        }}
+      >
+        Cancel
+      </Button>
+      <Button
+        onClick={handleCreateItem}
+        disabled={isCreating}
+        className="bg-blue-600 hover:bg-blue-700"
+      >
+        {isCreating && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+        Create Item
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
 
         {/* Edit Dialog – unchanged (title input remains as plain Input) */}
         <Dialog
