@@ -468,21 +468,22 @@ export function InventoryTable({ user }: any) {
         },
       });
 
-      if (response.success && response.inventoryItem) {
-        setItems((prev) =>
-          prev.map((item) =>
-            item.id === editingItem.id
-              ? { ...item, ...response.inventoryItem }
-              : item
-          )
-        );
+      // if (response.success && response.inventoryItem) {
+        // setItems((prev) =>
+        //   prev.map((item) =>
+        //     item.id === editingItem.id
+        //       ? { ...item, ...response.inventoryItem }
+        //       : item
+        //   )
+        // );
         toast.success('Inventory item updated successfully');
         setIsEditDialogOpen(false);
         setEditingItem(null);
         resetForm();
-      } else {
-        throw new Error(response.error || 'Failed to update item');
-      }
+        loadItems()
+      // } else {
+      //   throw new Error(response.error || 'Failed to update item');
+      // }
     } catch (err: any) {
       console.error('Failed to update item:', err);
       toast.error(err.message || 'Failed to update inventory item');
