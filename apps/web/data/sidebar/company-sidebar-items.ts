@@ -178,8 +178,15 @@ export const riderSidebarItems: NavGroup[] = [
         {
           title: "Purchases",
           url: "/dashboard/purchases",
+          comingSoon: true
         }
       ],
+      },
+             {
+        title: "Map",
+        url: "/map",
+        icon: Forklift,
+        comingSoon: false,
       },
       // {
       //   title: "Finance",

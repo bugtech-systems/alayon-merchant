@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { getProductPrice, listPriceListProducts } from "@/lib/data/products";
 import { listCategories } from "@/lib/data/categories";
-import { MedusaProduct, ProductCategory } from "../types";
+import { MedusaProduct } from "../types";
 
 interface UsePosProductsProps {
   countryCode?: string;
@@ -13,10 +13,11 @@ interface UsePosProductsProps {
   regionId?: string;
   includeCategoryTree?: boolean;
   categoryId?: string;
+  companyId?: string;
 }
 
 interface UsePosProductsReturn {
-  categories: ProductCategory[];
+  categories: any[];
   products: MedusaProduct[];
   isLoading: boolean;
   isCategoriesLoading: boolean;
@@ -28,7 +29,7 @@ interface UsePosProductsReturn {
   handleVariantChange: (productId: string, variantId: string) => void;
   getVariantPrice: (variant: any) => number;
   getProductsByCategory: (categoryId: string) => MedusaProduct[];
-  getCategoryTree: () => ProductCategory[];
+  getCategoryTree: () => any[];
 }
 
 export function usePosProducts({ 
@@ -36,14 +37,14 @@ export function usePosProducts({
   priceListId, 
   customerGroupId,
   customerId,
-  regionId,
   includeCategoryTree = true,
-  categoryId
+  categoryId,
+  companyId
 }: UsePosProductsProps): UsePosProductsReturn {
   const { toast } = useToast();
   
   // State
-  const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [products, setProducts] = useState<MedusaProduct[]>([]);
   const [isProductsLoading, setIsProductsLoading] = useState(false);
   const [isCategoriesLoading, setIsCategoriesLoading] = useState(false);
@@ -72,6 +73,7 @@ export function usePosProducts({
       const response = await listCategories({
         include_tree: includeCategoryTree,
         parent_category_id: categoryId,
+        company_id: companyId
       });
 
       if (isMountedRef.current) {
@@ -226,7 +228,7 @@ export function usePosProducts({
     if (!includeCategoryTree) return categories;
     
     // Build tree structure
-    const buildTree = (items: ProductCategory[], parentId: string | null = null): ProductCategory[] => {
+    const buildTree = (items: any[], parentId: string | null = null): any[] => {
       return items
         .filter(item => item.parent_category_id === parentId)
         .map(item => ({

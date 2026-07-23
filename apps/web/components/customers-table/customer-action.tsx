@@ -105,8 +105,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { Switch } from "../ui/switch";
 import { Checkbox } from "../ui/checkbox";
+import { CustomerLocationModal } from "./customer-location";
 
-const SMS_URL = process.env.SMS_URL || 'https://maretext.sharewin.pro';
+const SMS_URL = process.env.SMS_URL || 'http://localhost:3500';
 
 // Types
 interface CustomerRow {
@@ -674,13 +675,14 @@ export function SendSMSModal({ isOpen, onClose, customer }: SendSMSModalProps) {
     // Construct the payload according to the specified format
     const payload = {
       number: cleanNumber,
-      message: message
+      message: message,
+      phoneNumber: cleanNumber
     };
 
     // Select endpoint based on flash message toggle
     const endpoint = isFlash 
-      ? `${SMS_URL}/send-flash-sms`
-        : `${SMS_URL}/send-sms`;
+      ? `${SMS_URL}/api/sms/send-flash`
+        : `${SMS_URL}/api/sms/send`;
 
     try {
       const response = await fetch(endpoint, {
@@ -834,8 +836,8 @@ export function SendSMSModal({ isOpen, onClose, customer }: SendSMSModalProps) {
               <p className="text-xs text-blue-700 dark:text-blue-300">
                 <Globe className="size-3 inline mr-1" />
                 {smsData.isFlashMessage 
-                  ? 'Sending via: https://maretext.sharewin.pro/send-flash-sms'
-                  : 'Sending via: https://maretext.sharewin.pro/send-sms'}
+                  ? `Sending via: ${SMS_URL}/api/sms/send-flash`
+                  : `Sending via: ${SMS_URL}/api/sms/send`}
               </p>
             </div>
           </div>
@@ -872,68 +874,68 @@ export function SendSMSModal({ isOpen, onClose, customer }: SendSMSModalProps) {
   );
 }
 
-// 5. Customer Location Map Modal
-export function CustomerLocationModal({ isOpen, onClose, customer }: ActionModalProps) {
-  const location = customer.metadata?.city || "Manila, Philippines";
-  const lat = customer.metadata?.lat || 14.5995;
-  const lng = customer.metadata?.lng || 120.9842;
+// // 5. Customer Location Map Modal
+// export function CustomerLocationModal({ isOpen, onClose, customer }: ActionModalProps) {
+//   const location = customer.metadata?.city || "Manila, Philippines";
+//   const lat = customer.metadata?.lat || 14.5995;
+//   const lng = customer.metadata?.lng || 120.9842;
 
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>Customer Location</DialogTitle>
-          <DialogDescription>
-            Location of {getFullName(customer)}.
-          </DialogDescription>
-        </DialogHeader>
+//   return (
+//     <Dialog open={isOpen} onOpenChange={onClose}>
+//       <DialogContent className="max-w-4xl">
+//         <DialogHeader>
+//           <DialogTitle>Customer Location</DialogTitle>
+//           <DialogDescription>
+//             Location of {getFullName(customer)}.
+//           </DialogDescription>
+//         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-            <MapPin className="size-4 text-primary" />
-            <span className="font-medium">{location}</span>
-          </div>
+//         <div className="space-y-4">
+//           <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+//             <MapPin className="size-4 text-primary" />
+//             <span className="font-medium">{location}</span>
+//           </div>
 
-          <div className="relative aspect-video bg-muted rounded-lg overflow-hidden">
-            {/* Map placeholder - Replace with actual map component */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
-              <MapPin className="size-12 mb-2 text-primary/50" />
-              <p className="font-medium">Map View</p>
-              <p className="text-sm">Lat: {lat}, Lng: {lng}</p>
-              <Button variant="outline" className="mt-4" size="sm">
-                <ExternalLink className="size-4 mr-2" />
-                Open in Google Maps
-              </Button>
-            </div>
-          </div>
+//           <div className="relative aspect-video bg-muted rounded-lg overflow-hidden">
+//             {/* Map placeholder - Replace with actual map component */}
+//             <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
+//               <MapPin className="size-12 mb-2 text-primary/50" />
+//               <p className="font-medium">Map View</p>
+//               <p className="text-sm">Lat: {lat}, Lng: {lng}</p>
+//               <Button variant="outline" className="mt-4" size="sm">
+//                 <ExternalLink className="size-4 mr-2" />
+//                 Open in Google Maps
+//               </Button>
+//             </div>
+//           </div>
 
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <Card>
-              <CardHeader className="p-3">
-                <CardTitle className="text-xs text-muted-foreground">Latitude</CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 pt-0">
-                <p className="font-mono">{lat}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="p-3">
-                <CardTitle className="text-xs text-muted-foreground">Longitude</CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 pt-0">
-                <p className="font-mono">{lng}</p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+//           <div className="grid grid-cols-2 gap-4 text-sm">
+//             <Card>
+//               <CardHeader className="p-3">
+//                 <CardTitle className="text-xs text-muted-foreground">Latitude</CardTitle>
+//               </CardHeader>
+//               <CardContent className="p-3 pt-0">
+//                 <p className="font-mono">{lat}</p>
+//               </CardContent>
+//             </Card>
+//             <Card>
+//               <CardHeader className="p-3">
+//                 <CardTitle className="text-xs text-muted-foreground">Longitude</CardTitle>
+//               </CardHeader>
+//               <CardContent className="p-3 pt-0">
+//                 <p className="font-mono">{lng}</p>
+//               </CardContent>
+//             </Card>
+//           </div>
+//         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Close</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
+//         <DialogFooter>
+//           <Button variant="outline" onClick={onClose}>Close</Button>
+//         </DialogFooter>
+//       </DialogContent>
+//     </Dialog>
+//   );
+// }
 
 // Main Actions Cell Component
 export function ActionsCell({ customer, onAction }: { customer: CustomerRow; onAction?: (action: string, data: any) => void }) {

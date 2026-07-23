@@ -95,7 +95,11 @@ import {
   Percent,
   Info,
   Timer,
-  CalendarClock
+  CalendarClock,
+  ViewIcon,
+  View,
+  Goal,
+  AppWindow
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -107,6 +111,7 @@ import { sortOrders } from '@/lib/utils/helpers';
 import { usePosOrders } from '@/hooks/useMedusaOrders';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
+import Link from 'next/link';
 
 // ============================================
 // STATUS CONFIGURATIONS
@@ -301,6 +306,7 @@ const CapturePaymentDialog = ({
     }
 
     await onCapture(received, discountCode.trim() || undefined);
+    setAmountReceived('')
   };
 
   return (
@@ -470,7 +476,6 @@ const StatusDropdown = ({
   
   const statuses = ['pending', 'company_preparing', 'completed'];
   const currentConfig = ORDER_STATUS_CONFIG[currentStatus?.toLowerCase()];
-console.log(currentStatus, 'CURRE')
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
@@ -1488,7 +1493,6 @@ export function OrdersClient({
   // Use the hook with filters
   const { data, refetch, isLoading: isFetching } = usePosOrders({
     filters,
-    page,
     limit,
   }) as any;
 
@@ -1534,7 +1538,7 @@ export function OrdersClient({
   
 
 
-
+console.log(data, 'DATAA')
 
   // Check mobile
   const [isMobile, setIsMobile] = useState(false);
@@ -1873,6 +1877,7 @@ export function OrdersClient({
                         </Tooltip>
                       </TableCell>
                       <TableCell className="text-right">
+                        <div>
                         <Button 
                           variant="ghost" 
                           size="sm"
@@ -1880,8 +1885,18 @@ export function OrdersClient({
                           className="h-8 gap-2"
                         >
                           <Eye className="h-4 w-4" />
-                          View
                         </Button>
+                        <Link href={`/company/orders/${order?.id}`}   >
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="h-8 gap-2"
+                        >
+
+                          <AppWindow className="h-4 w-4"/>
+                          </Button>
+                        </Link>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

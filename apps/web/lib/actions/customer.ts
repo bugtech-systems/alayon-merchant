@@ -67,7 +67,7 @@ export interface CustomerStats {
 // Validation schemas
 const GetCustomersSchema = z.object({
   page: z.number().min(1).default(1),
-  limit: z.number().min(1).max(100).default(20),
+  limit: z.number().min(1).max(200).default(20),
   search: z.string().optional(),
   status: z.string().optional(),
   group: z.string().optional(),
@@ -97,7 +97,7 @@ export async function getCustomers(
     // Validate parameters
     const validatedParams = GetCustomersSchema.parse({
       page: params.page || 1,
-      limit: params.limit || 20,
+      limit: params.limit || 200,
       search: params.search,
       status: params.status,
       group: params.group,
@@ -957,5 +957,53 @@ export async function deleteCustomer(id: string) {
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
+  }
+}
+
+export async function updateCustomerLocation(
+  customerId: string,
+  locationData: {
+    municipality: string;
+    barangay: string;
+    address?: string;
+    lat: number;
+    lng: number;
+    mapAddress?: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const headers = await getAuthHeaders();
+
+    // Fetch current customer to preserve existing metadata
+    const customer = await sdk.store.customer.retrieve(customerId, {}, headers);
+    const existingMetadata = (customer.metadata || {}) as Record<string, any>;
+
+    // Merge location fields
+    const updatedMetadata = {
+      ...existingMetadata,
+      municipality: locationData.municipality,
+      barangay: locationData.barangay,
+      address: locationData.address || '',
+      lat: locationData.lat,
+      lng: locationData.lng,
+      mapAddress: locationData.mapAddress || '',
+      city: locationData.municipality, // optional: update legacy city field
+    };
+
+    await sdk.store.customer.update(
+      { metadata: updatedMetadata },
+      { id: customerId },
+      headers
+    );
+
+    revalidateTag(`customer-${customerId}`, "max");
+    revalidateTag("customers-list", "max");
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to update customer location",
+    };
   }
 }

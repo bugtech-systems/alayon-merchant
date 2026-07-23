@@ -52,6 +52,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     companyId: user?.metadata?.role === 'company' 
       ? user.employee?.company_id 
       : user?.driver?.company_id,
+    location_id: user?.metadata?.role == 'company' ? user.employee?.company?.stock_location_id :  user?.driver?.stock_location_id,
     pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
   }), [user]);
   
@@ -66,6 +67,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     companyId: pricingContext.companyId,
     customerGroupId: pricingContext.customerGroupId,
     userId: user?.id,
+    locationId: pricingContext.location_id,
     customerId: selectedCustomer?.id
   }) as any;
    
@@ -75,7 +77,8 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
       priceListId: pricingContext.priceListId,
       customerGroupId: pricingContext.customerGroupId,
       regionId: region?.id,
-      customerId: selectedCustomer?.id
+      customerId: selectedCustomer?.id,
+      companyId: pricingContext.companyId,
     });
   
   const { drafts, saveAsDraft, deleteDraft } = usePosDrafts();

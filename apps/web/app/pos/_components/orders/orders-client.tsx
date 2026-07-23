@@ -289,6 +289,7 @@ const CapturePaymentDialog = ({
     }
 
     await onCapture(received, discountCode.trim() || undefined);
+    setAmountReceived('')
   };
 
   return (

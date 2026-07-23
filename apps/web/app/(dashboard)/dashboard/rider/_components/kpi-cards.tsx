@@ -17,11 +17,11 @@ import { format } from "date-fns";
 
 // Mock data - in real app, this would come from API based on selected date
 interface RiderStats {
-  totalDeliveries: number;
-  completedDeliveries: number;
-  totalEarnings: number;
-  onTimeRate: number;
-  distanceTraveled: number;
+  totalDeliveries?: number;
+  completedDeliveries?: number;
+  totalEarnings?: number;
+  onTimeRate?: number;
+  distanceTraveled?: number;
 }
 
 export function KpiCards() {

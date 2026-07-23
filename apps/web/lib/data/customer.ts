@@ -572,9 +572,7 @@ export async function getCustomerWithOrders(customerId: string): Promise<Custome
   try {
     const headers = await getAuthHeaders();
     
-    const response = await sdk.client.fetch<{
-      customer: CustomerWithOrders;
-    }>(`/admin/customers-with-orders/${customerId}`, {
+    const response = await sdk.client.fetch(`/admin/customers-with-orders/${customerId}`, {
       method: "GET",
       headers,
     });

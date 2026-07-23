@@ -5,12 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import DriverDashboard from "./rider/page";
 import { CompanyOrdersTable } from "@/components/company-orders-table/table";
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useMedusaOrders, usePosOrders } from "@/hooks/useMedusaOrders";
+import { useMedusaOrders } from "@/hooks/useMedusaOrders";
 import { assignDriverToOrder, unassignDriverToOrder } from "@/lib/data";
 import { PrintDialog } from "@/app/pos/_components/print-dialog";
 import { startOfDay, endOfDay, format } from 'date-fns';
-import { buildDateFilters } from "@/lib/utils/date-filters";
-import { fulfillOrder } from "@/lib/actions/orders";
+import { completeOrder, fulfillOrder } from "@/lib/actions/orders";
+import { KpiCards } from "./rider/_components/kpi-cards";
+import { TaskReminders } from "./rider/_components/task-reminders";
 
 interface DashboardClientProps {
   user: any;
@@ -418,10 +419,27 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   
   const handleAcceptOrder = async (orderId:any, stock_location_id:any) => {
     console.log(orderId, 'ORDER', stock_location_id);
+      let order = data?.orders.find(a => a.id === orderId);
+
+      console.log(order, 'ORDEER')
+
+
       await fulfillOrder(orderId, stock_location_id)
       await refetch();
-
+      
   };
+
+    const handleConfirmOrder = async (order: any, stock_location_id:any) => {
+
+      console.log(order, 'ORDEERaaaaaa', stock_location_id)
+
+
+      await completeOrder(order, stock_location_id)
+      await refetch();
+      
+  };
+
+  
 
   // Update URL query params
   const updateQueryParams = (params: Record<string, string | number | undefined>) => {
@@ -490,8 +508,8 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           onStatusChange={handleUpdateStatus}
           onRefresh={handleManualRefresh}
           onRowClick={handleRowClick}
-          companyId={company?.id}
-          defaultStockLocationId={company?.stock_location_id}
+          companyId={pricingContext?.companyId}
+          defaultStockLocationId={pricingContext?.stockLocationId}
           searchQuery={search}
           onSearchChange={handleSearchChange}
           enableDragDrop={true}
@@ -499,6 +517,8 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           enableRowSelection={true}
           onPrint={handlePrint}
           onAcceptOrder={(orderId, stock_location_id) => handleAcceptOrder(orderId, stock_location_id) as any}
+          onCompleteOrder={(order, stock_location_id) => handleConfirmOrder(order, stock_location_id) as any}
+
         />
       </div>
     );
@@ -509,7 +529,19 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     return (
       <div className="@container/main flex flex-col gap-4 md:gap-6">
         {/* <DriverDashboard user={user}/> */}
-        <CompanyOrdersTable
+              {/* KPI Cards */}
+              <KpiCards
+                totalCustomers={0}
+                activeCustomers={0}
+                totalRevenue={0}
+                totalOrders={0}
+                isLoading={isLoading }
+              />
+        
+              {/* Task Reminders */}
+              <TaskReminders customerId={pricingContext.customerId} locationId={pricingContext.stockLocationId}/>
+        
+         <CompanyOrdersTable
           data={data?.orders || []}
           totalCount={data?.total || 0}
           isLoading={isLoading}
@@ -518,13 +550,18 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           onRefresh={handleManualRefresh}
           onRowClick={handleRowClick}
           companyId={pricingContext?.companyId}
+          defaultStockLocationId={pricingContext?.stockLocationId}
           searchQuery={search}
           onSearchChange={handleSearchChange}
           enableDragDrop={true}
           enableColumnVisibility={true}
           enableRowSelection={true}
           onPrint={handlePrint}
+          onAcceptOrder={(orderId, stock_location_id) => handleAcceptOrder(orderId, stock_location_id) as any}
+          onCompleteOrder={(order, stock_location_id) => handleConfirmOrder(order, stock_location_id) as any}
+
         />
+
       </div>
     );
   }

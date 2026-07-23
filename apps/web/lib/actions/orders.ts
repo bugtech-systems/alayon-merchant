@@ -1,7 +1,7 @@
 // lib/actions/order.ts
 'use server';
 
-import sdk from '@/lib/config';
+import {sdk} from '@/lib/config';
 import { revalidatePath } from 'next/cache';
 import { adminFetch } from '../apiClient';
 
@@ -38,8 +38,39 @@ export async function updateOrderShipping(id: string, shippingData: any) {
   }
 }
 
+
+export async function completeOrder(order: any, stock_location_id: string) {
+  try {
+
+
+
+
+    console.log(stock_location_id, 'STOCK LOC')
+    await updatePosOrderStatus(order?.id, 'completed')
+
+    const response = await adminFetch(`/admin/orders/${order?.id}/fulfillments`, {
+      method: 'POST',
+      body: JSON.stringify({ location_id: stock_location_id, items: order?.items }),
+    });
+
+     await adminFetch(`/dashboard/orders/${order?.id}/complete`, {
+      method: 'POST'
+    });
+    
+    revalidatePath('/dashboard');
+    return { success: true, data: response };
+  } catch (error) {
+    console.error('Error updating order status:', error);
+    return { success: false, error: 'Failed to update order status' };
+  }
+}
+
 export async function fulfillOrder(orderId: string, stock_location_id: string) {
   try {
+
+    
+
+    console.log(stock_location_id, 'STOCK LOC')
     const response = await adminFetch(`/dashboard/company/orders/fulfill`, {
       method: 'POST',
       body: JSON.stringify({ orderId, stock_location_id }),
@@ -53,10 +84,12 @@ export async function fulfillOrder(orderId: string, stock_location_id: string) {
   }
 }
 
+
+
 export async function updatePosOrderStatus(orderId: string, status: string) {
   try {
-    const response = await adminFetch(`/admin/orders/${orderId}`, {
-      method: 'POST',
+    const response = await adminFetch(`/dashboard/orders/${orderId}`, {
+      method: 'PUT',
       body: JSON.stringify({ status }),
     });
     

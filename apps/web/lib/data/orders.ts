@@ -515,7 +515,6 @@ export const listOrders = async (
     
     const totalPages = Math.ceil((filteredCount || 0) / limit);
     const currentPage = Math.floor(offset / limit) + 1;
-      console.log(paginatedOrders, transformedOrders, 'ordersss')
     return {
       orders: transformedOrders,
       count: filteredCount || 0,
@@ -547,7 +546,7 @@ export const retrieveOrder = async (id: string): Promise<DashboardOrder | null> 
   try {
     const headers = await getAuthHeaders();
     const next = await getCacheOptions("orders");
-
+    console.log(id, "IDD")
     const response = await sdk.client.fetch(
       `/store/orders/${id}`,
       {

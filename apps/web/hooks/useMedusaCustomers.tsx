@@ -1,6 +1,5 @@
 // hooks/useMedusaCustomers.ts
 import { useQuery } from "@tanstack/react-query";
-import { sdk } from "@/lib/config";
 import { getCustomers } from "@/lib/actions";
 
 interface UseMedusaCustomersParams {

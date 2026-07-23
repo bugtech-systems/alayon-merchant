@@ -206,6 +206,7 @@ function CustomerView({ customer }: { customer: Order["customer"] }) {
 
 function getOrderColumns({
   onAcceptOrder,
+  onCompleteOrder,
   onPrint,
   onRowClick,
   companyId,
@@ -216,6 +217,7 @@ function getOrderColumns({
   getStockLocationId = (order: Order) => order.metadata?.stock_location_id,
   defaultStockLocationId,
 }: {
+  onCompleteOrder?: any;
   onAcceptOrder?: (orderId: string, stockLocationId: string) => Promise<void>;
   onPrint?: (order: Order) => void;
   onRowClick?: (order: Order) => void;
@@ -231,10 +233,26 @@ function getOrderColumns({
   const renderAcceptPrintCell = (order: any) => {
     const isFulfilled = order.fulfillment_status === "fulfilled" || order?.delivery_status === "delivered";
     const isProcessing = order?.delivery_status == "company_preparing";
-
+    const stockLocationId = getStockLocationId(order) || defaultStockLocationId;
+    
     if (isProcessing || isFulfilled) {
       // Already accepted: show Print icon
       return (
+        <>
+         {!isFulfilled &&
+                <Button
+          variant="ghost"
+          size="icon"
+        className="h-8 gap-1"
+          onClick={(e) => {
+            console.log(e, 'CLL', order)
+            onCompleteOrder?.(order, stockLocationId);
+          }}
+        >
+
+          <span>Complete</span>
+        </Button>
+        }
         <Button
           variant="ghost"
           size="icon"
@@ -247,11 +265,14 @@ function getOrderColumns({
           <Printer className="size-4" />
           <span className="sr-only">Print</span>
         </Button>
+
+       
+        </>
+        
       );
     }
 
     // Not fulfilled: show Accept button or spinner
-    const stockLocationId = getStockLocationId(order) || defaultStockLocationId;
     const handleAccept = async (e: React.MouseEvent) => {
       e.stopPropagation();
       if (!onAcceptOrder) return;
@@ -476,6 +497,7 @@ interface OrdersTableProps {
   onPrint?: (order: Order) => void;
   // New props for Accept/Print
   onAcceptOrder?: (orderId: string, stockLocationId: string) => Promise<any>;
+  onCompleteOrder?: any;
   processingOrderIds?: Set<string>;
   defaultStockLocationId?: string;
   getStockLocationId?: (order: Order) => string | undefined;
@@ -495,6 +517,7 @@ export function CompanyOrdersTable({
   onSearchChange,
   onPrint,
   onAcceptOrder,
+  onCompleteOrder,
   processingOrderIds = new Set<string>(),
   defaultStockLocationId,
   getStockLocationId,
@@ -545,6 +568,7 @@ export function CompanyOrdersTable({
     () =>
       getOrderColumns({
         onAcceptOrder,
+        onCompleteOrder,
         onPrint,
         onRowClick,
         companyId,
@@ -557,6 +581,7 @@ export function CompanyOrdersTable({
       }),
     [
       onAcceptOrder,
+      onCompleteOrder,
       onPrint,
       onRowClick,
       companyId,

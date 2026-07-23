@@ -49,7 +49,6 @@ function formatToTenDigits(str: any) {
 export function sanitizePhoneNumber(phoneNumber: any) {
     // Remove any non-numeric characters from the phone number
     if(!phoneNumber) return null;
-console.log(phoneNumber, "PHOONE")
     const sanitized = String(phoneNumber).replace(/\D/g, '');
 
     if (sanitized.length > 12) throw Error('Invalid phone number format');

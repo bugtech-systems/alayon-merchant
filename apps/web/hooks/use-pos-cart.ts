@@ -3,7 +3,6 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { sdk } from "@/lib/config";
 import { useToast } from "@/hooks/use-toast";
 import { MedusaCart, MedusaCartItem, Customer, Region } from "../types";
-import { adminFetch } from "@/lib/apiClient";
 import { assignCart, removeCart, updateLineItemPrice } from "@/lib/actions";
 import { getFinalPrice } from "@/lib/utils";
 
@@ -14,6 +13,7 @@ interface UsePosCartProps {
   userId?: string;
   customerId?: any;
   companyId?: any;
+  locationId?: any;
 }
 
 interface CustomPriceMetadata {
@@ -24,7 +24,7 @@ interface CustomPriceMetadata {
   original_strategy?: string;
 }
 
-export function usePosCart({ region, priceListId, customerGroupId, userId, customerId, companyId }: UsePosCartProps) {
+export function usePosCart({ region, priceListId, customerGroupId, userId, customerId, companyId, locationId }: UsePosCartProps) {
   const { toast } = useToast();
   const [cart, setCart] = useState<MedusaCart | null>(null);
   const [cartItems, setCartItems] = useState<MedusaCartItem[]>([]);
@@ -170,6 +170,7 @@ const updateCartState = useCallback((cartData: MedusaCart | null) => {
           price_list_id: priceListId,
           customer_group_id: customerGroupId,
           customer_id: customerId,
+          stock_location_id: locationId,
           pricing_strategy: priceListId ? 'price_list' : (customerGroupId ? 'customer_group' : 'default')
         }
       });

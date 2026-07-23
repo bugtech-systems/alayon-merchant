@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 
 // Types
-interface CustomerWithOrders {
+export interface CustomerWithOrders {
   id: string;
   email: string;
   first_name: string;
@@ -124,7 +124,7 @@ export default function DashboardPage({user}: any) {
         offset: 0,
         sort_field: "created_at",
         sort_order: "DESC",
-        customer_group_id: pricingContext.customerGroupId
+        // customer_group_id: pricingContext.customerGroupId
       });
       return result;
     },

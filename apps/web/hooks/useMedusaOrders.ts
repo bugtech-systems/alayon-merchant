@@ -40,8 +40,8 @@ export function usePosOrders(params: UseMedusaOrdersParams) {
   return useQuery({
     queryKey: ["pos-orders", params],
     queryFn: async () => {
-        let { limit, offset, sort} = params;
-      const response = await listPosOrders(limit, offset, params.filters, sort);
+        let { limit, offset} = params;
+      const response = await listPosOrders(limit, offset, params.filters);
       return response;
     },
     staleTime: 30000, // 30 seconds
