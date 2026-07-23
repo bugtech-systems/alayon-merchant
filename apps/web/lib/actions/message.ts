@@ -6,7 +6,7 @@ import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { sanitizePhoneNumber } from '../utils/helpers';
 
-const API_URL = process.env.SMS_URL || 'http://localhost:3500';
+const API_URL = process.env.SMS_URL || 'http://192.168.1.120:3500';
 
 export async function getConversations(filters: {
   phoneNumber?: string;
