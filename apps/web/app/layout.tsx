@@ -63,7 +63,7 @@ export default function RootLayout({
           </ThemeProvider>
         </Providers>
         </MedusaAuthProvider>
-</LocationProvider>
+</LocationProvider> 
 </PreferencesStoreProvider>
         </TooltipProvider>
 
