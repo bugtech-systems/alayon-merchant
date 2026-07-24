@@ -518,7 +518,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           onPrint={handlePrint}
           onAcceptOrder={(orderId, stock_location_id) => handleAcceptOrder(orderId, stock_location_id) as any}
           onCompleteOrder={(order, stock_location_id) => handleConfirmOrder(order, stock_location_id) as any}
-
         />
       </div>
     );
@@ -540,7 +539,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
         
               {/* Task Reminders */}
               <TaskReminders customerId={pricingContext.customerId} locationId={pricingContext.stockLocationId}/>
-        
          <CompanyOrdersTable
           data={data?.orders || []}
           totalCount={data?.total || 0}
@@ -559,7 +557,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           onPrint={handlePrint}
           onAcceptOrder={(orderId, stock_location_id) => handleAcceptOrder(orderId, stock_location_id) as any}
           onCompleteOrder={(order, stock_location_id) => handleConfirmOrder(order, stock_location_id) as any}
-
         />
 
       </div>
