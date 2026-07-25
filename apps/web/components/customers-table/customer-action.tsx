@@ -107,7 +107,7 @@ import { Switch } from "../ui/switch";
 import { Checkbox } from "../ui/checkbox";
 import { CustomerLocationModal } from "./customer-location";
 
-const SMS_URL = process.env.SMS_URL || 'http://192.168.1.120:3500';
+const SMS_URL = process.env.SMS_URL || 'https://sms.sharewin.pro';
 
 // Types
 interface CustomerRow {
