@@ -511,7 +511,8 @@ const prepareCartForCheckout = useCallback(async () => {
             return sum + (discount > 0 ? discount * i.quantity : 0);
           }, 0),
           prepared_at: new Date().toISOString(),
-        }
+        },
+        created_by: userId
       }
     });
     

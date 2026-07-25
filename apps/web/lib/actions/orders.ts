@@ -45,17 +45,19 @@ export async function completeOrder(order: any, stock_location_id: string) {
 
 
 
-    console.log(stock_location_id, 'STOCK LOC')
+    console.log(stock_location_id, 'STOCK LOC', order?.id)
     await updatePosOrderStatus(order?.id, 'completed')
 
+
+    await adminFetch(`/dashboard/orders/${order?.id}/complete`, {
+      method: 'POST'
+    });
     const response = await adminFetch(`/admin/orders/${order?.id}/fulfillments`, {
       method: 'POST',
       body: JSON.stringify({ location_id: stock_location_id, items: order?.items }),
     });
 
-     await adminFetch(`/dashboard/orders/${order?.id}/complete`, {
-      method: 'POST'
-    });
+
     
     revalidatePath('/dashboard');
     return { success: true, data: response };

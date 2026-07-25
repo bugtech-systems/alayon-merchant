@@ -455,8 +455,8 @@ export async function createOrder(
 
 function filterOrdersByCapturedAt(
   orders: any[],
-  dateFrom?: string,
-  dateTo?: string
+  dateFrom?: any,
+  dateTo?: any
 ): any[] {
   return orders.filter(order => {
     // Check if order has pos_payment metadata
@@ -503,9 +503,7 @@ export async function getTodayOrdersSummary(user?: any): Promise<{
   pending_orders: number;
 }> {
   try {
-    const sellerId = user?.metadata?.role === 'company' 
-      ? user.employee?.company_id 
-      : user?.id;
+
 
     // Get today's date range with proper start/end of day
     const now = new Date();
@@ -535,7 +533,6 @@ export async function getTodayOrdersSummary(user?: any): Promise<{
     console.log(response, "RESPPOND")
     const orders = response.orders || [];
     const filtered = filterOrdersByCapturedAt(orders, from, to)
-    console.log(filtered, 'FILTT')
     // Calculate metrics
     const completedOrders = filtered.filter(o => 
       o.status === 'completed' || 
@@ -554,7 +551,6 @@ export async function getTodayOrdersSummary(user?: any): Promise<{
     const orderCount = completedOrders.length;
     const completedCount = completedOrders.length;
     const pendingCount = pendingOrders.length;
-    console.log(completedOrders, 'COMPLETEDD')
     // Count unique customers
     const uniqueCustomers = new Set(
       orders

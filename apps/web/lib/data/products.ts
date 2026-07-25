@@ -581,7 +581,6 @@ const productsResponse = await adminFetch("/admin/products", {
 });
     
 
-console.log(productsResponse, 'prddss')
     let products = productsResponse.products || [];
     console.log(`Fetched ${products.length} total products`, products, productsResponse);
     

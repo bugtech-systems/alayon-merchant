@@ -1,6 +1,6 @@
 // app/orders/page.tsx (Server Component)
 import { Suspense } from 'react';
-import { OrdersClient } from '../_components/orders/orders-client';
+import { OrdersClient } from '@/components/orders/orders-client';
 import { OrderTableSkeleton } from '@/components/ui/table-skeleton';
 import { retrieveUser } from '@/lib/data';
 import { listPosOrders } from '@/lib/data/orders';

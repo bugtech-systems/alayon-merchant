@@ -13,7 +13,6 @@ import {
 
 export function DashboardFiltersBar() {
   const { filters, setFilters } = useURLFilters()
-console.log(filters, 'FILTT')
   return (
     <div className="flex flex-wrap gap-4 px-4 lg:px-6">
       

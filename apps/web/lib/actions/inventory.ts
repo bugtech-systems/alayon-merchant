@@ -294,7 +294,7 @@ export async function fetchInventoryItemsByLocation(
   const { inventory_items } = await sdk.admin.inventoryItem.list(
     {
         location_levels: {
-          stock_location_id: locationId,
+          location_id: locationId,
         },
         limit,
         offset
@@ -306,7 +306,6 @@ export async function fetchInventoryItemsByLocation(
       fields, // tells the API which fields to return
     }
   );
-
   return inventory_items;
 }
 
@@ -319,6 +318,7 @@ export async function createInventoryItem(data: {
   description?: string;
   requires_shipping?: boolean;
   origin_country?: string;
+  stocked_level?: any;
   metadata?: Record<string, any>;
 }): Promise<ApiResponse<InventoryItem>> {
   try {
@@ -338,29 +338,42 @@ export async function createInventoryItem(data: {
     let response;
     
     try {
-      response = await sdk.client.fetch('/admin/inventory-items', {
+      response = await sdk.client.fetch(`/admin/inventory-items`, {
         method: 'POST',
         body: payload,
       });
+
+      console.log(response, 'RESPPPONS')
+
     } catch (sdkError) {
-      const baseUrl = process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL || 'http://localhost:9000';
-      const fetchResponse = await fetch(`${baseUrl}/admin/inventory-items`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.MEDUSA_ADMIN_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-      response = await fetchResponse.json();
+    
     }
 
-    const inventoryItem = response.inventory_item || response.item;
+    const inventoryItem = response?.inventory_item || response?.item;
 
     if (!inventoryItem) {
       return { success: false, error: 'Failed to create inventory item' };
     }
 
+
+
+
+
+     let itemResponse = await sdk.client.fetch(`/admin/inventory-items/${inventoryItem.id}/location-levels/batch`, {
+        method: 'POST',
+        body: {
+          create: [{location_id: data?.metadata?.location_id, stocked_quantity: data?.stocked_level}]
+        },
+      });
+
+      if(itemResponse?.created){
+          inventoryItem.location_levels = [{...itemResponse?.created[0], available_quantity: data?.stocked_level}]
+      }
+      console.log(inventoryItem, itemResponse, 'ivnvvit')
+
+
+
+    
     revalidateInventoryCache();
 
     return {

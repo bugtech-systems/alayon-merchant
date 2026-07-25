@@ -226,10 +226,9 @@ export function InventoryTable({ user }: any) {
     unit_price: 0,
     reorder_level: 10,
     category: 'General',
-    location: 'Default',
-    origin_country: '',
-    requires_shipping: false,
-  });
+    stocked_level: 0,
+    requires_shipping: false
+  } as any);
 
   const [stockFormData, setStockFormData] = useState({
     location_id: 'default',
@@ -253,6 +252,8 @@ export function InventoryTable({ user }: any) {
       setError(null);
 
       const result = await fetchInventoryItemsByLocation(user?.stockLocationId);
+
+      console.log(result, 'RESSUUL INV')
       if (result) {
         const transformedItems: InventoryItem[] = result.map((item: any) => ({
           id: item.id,
@@ -261,7 +262,6 @@ export function InventoryTable({ user }: any) {
           description: item.description || '',
           requires_shipping: item.requires_shipping || false,
           thumbnail: item.thumbnail,
-          origin_country: item.origin_country,
           metadata: item.metadata || {},
           location_levels: item.location_levels || [],
           created_at: item.created_at,
@@ -414,22 +414,24 @@ export function InventoryTable({ user }: any) {
         sku: formData.sku.trim(),
         title: formData.title.trim() || formData.sku.trim(),
         description: formData.description.trim(),
-        requires_shipping: formData.requires_shipping,
-        origin_country: formData.origin_country || undefined,
+        requires_shipping: formData.requires_shipping || false,
+        stocked_level: formData.stocked_level, 
         metadata: {
           unit_price: formData.unit_price,
           reorder_level: formData.reorder_level,
           category: formData.category,
-          location: formData.location,
           company_id: user?.companyId,
-          location_id: user?.stockLocationId,
+          location_id: user?.stockLocationId
         },
       });
 
+
+
+      console.log(response, 'RESPPOI I')
       if (response.success) {
         const newItem: any = {
           ...response.data,
-          location_levels: [],
+          // location_levels: [],
         };
 
         setItems((prev) => [newItem, ...prev]);
@@ -453,18 +455,16 @@ export function InventoryTable({ user }: any) {
 
     setIsUpdating(true);
     try {
-      const response = await updateInventoryItem(editingItem.id, {
+      await updateInventoryItem(editingItem.id, {
         sku: formData.sku.trim(),
         title: formData.title.trim() || formData.sku.trim(),
         description: formData.description.trim(),
         requires_shipping: formData.requires_shipping,
-        origin_country: formData.origin_country || undefined,
         metadata: {
           ...editingItem.metadata,
           unit_price: formData.unit_price,
           reorder_level: formData.reorder_level,
           category: formData.category,
-          location: formData.location,
         },
       });
 
@@ -571,6 +571,7 @@ export function InventoryTable({ user }: any) {
 
   // ---------- Form handlers ----------
   const openEditDialog = (item: any) => {
+    console.log(item, 'EDIT DIALOG')
     setEditingItem(item);
     setFormData({
       title: item.title || '',
@@ -579,8 +580,6 @@ export function InventoryTable({ user }: any) {
       unit_price: getUnitPrice(item),
       reorder_level: getReorderLevel(item),
       category: getCategory(item),
-      location: getLocation(item),
-      origin_country: item.origin_country || '',
       requires_shipping: item.requires_shipping || false,
     });
     setIsEditDialogOpen(true);
@@ -610,8 +609,7 @@ export function InventoryTable({ user }: any) {
       unit_price: 0,
       reorder_level: 10,
       category: 'General',
-      location: 'Default',
-      origin_country: '',
+      stocked_level: 0,
       requires_shipping: false,
     });
     setComboboxOpen(false);
@@ -1300,35 +1298,27 @@ export function InventoryTable({ user }: any) {
 
       {/* Location */}
       <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="location" className="text-right">
-          Location
+        <Label htmlFor="stocked_level" className="text-right">
+          Stock Level
         </Label>
         <Input
-          id="location"
-          placeholder="Location"
-          value={formData.location}
+          id="stocked_level"
+          type="number"
+          min="0"
+          placeholder="10"
+          value={formData.stocked_level || ''}
           onChange={(e) =>
-            setFormData({ ...formData, location: e.target.value })
+            setFormData({
+              ...formData,
+              stocked_level: parseInt(e.target.value) || 0,
+            })
           }
           className="col-span-3"
         />
       </div>
 
       {/* Origin Country */}
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="origin_country" className="text-right">
-          Origin Country
-        </Label>
-        <Input
-          id="origin_country"
-          placeholder="e.g., US"
-          value={formData.origin_country}
-          onChange={(e) =>
-            setFormData({ ...formData, origin_country: e.target.value })
-          }
-          className="col-span-3"
-        />
-      </div>
+
     </div>
     <DialogFooter>
       <Button
@@ -1466,34 +1456,7 @@ export function InventoryTable({ user }: any) {
                   className="col-span-3"
                 />
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-location" className="text-right">
-                  Location
-                </Label>
-                <Input
-                  id="edit-location"
-                  placeholder="Location"
-                  value={formData.location}
-                  onChange={(e) =>
-                    setFormData({ ...formData, location: e.target.value })
-                  }
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-origin_country" className="text-right">
-                  Origin Country
-                </Label>
-                <Input
-                  id="edit-origin_country"
-                  placeholder="e.g., US"
-                  value={formData.origin_country}
-                  onChange={(e) =>
-                    setFormData({ ...formData, origin_country: e.target.value })
-                  }
-                  className="col-span-3"
-                />
-              </div>
+
             </div>
             <DialogFooter>
               <Button

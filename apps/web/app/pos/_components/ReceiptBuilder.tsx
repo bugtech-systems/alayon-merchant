@@ -137,7 +137,7 @@ console.log(order.metadata, order, 'HOOORD')
       .bold(true)
       .text(this.fitText('ORDER DETAILS'))
       .bold(false)
-      .text(this.fitText(`Order #: ${order.display_id || order.id || 'N/A'} || ${order?.metadata?.table_ids?.[0] ? order?.metadata?.table_ids?.[0] : ''}`))
+      .text(this.fitText(`Order #: ${order.display_id || order.id || 'N/A'} || ${order?.metadata?.beeper_ids?.[0] ? order?.metadata?.beeper_ids?.[0] : ''}`))
       .text(this.fitText(`Date: ${this.formatDate(order.created_at)}`))
       .text(this.fitText(`Status: ${order.status?.toUpperCase() || 'COMPLETED'}`))
       .newline(2);

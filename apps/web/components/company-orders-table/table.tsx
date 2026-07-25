@@ -12,7 +12,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
-import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import {
   type ColumnFiltersState,
   flexRender,
@@ -79,11 +79,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { cn } from "@/lib/utils";
-import { ORDER_STATUS_CONFIG, OrderStatusBadge } from "./OrderStatusBadge";
+import { OrderStatusBadge } from "./OrderStatusBadge";
 import { OrderDetailsView } from "./OrderDetailsView";
 import { TimeFromNow } from "./time-from-now";
-import { StatusDropdown } from "./StatusDropdown";
-import { DriverAssignment } from "./driver-assignment";
 
 // ==================== Types ====================
 
@@ -238,14 +236,13 @@ function getOrderColumns({
     if (isProcessing || isFulfilled) {
       // Already accepted: show Print icon
       return (
-        <>
+        <div className="d-flex align-center w-full">
          {!isFulfilled &&
                 <Button
-          variant="ghost"
-          size="icon"
-        className="h-8 gap-1"
+        variant="outline"
+        size="sm"
+        className="h-8 gap-1 mr-5"
           onClick={(e) => {
-            console.log(e, 'CLL', order)
             onCompleteOrder?.(order, stockLocationId);
           }}
         >
@@ -267,7 +264,7 @@ function getOrderColumns({
         </Button>
 
        
-        </>
+        </div>
         
       );
     }
@@ -325,7 +322,17 @@ function getOrderColumns({
               {/* Header row */}
               <div className="flex items-center justify-between">
                 <OrderDetailsView order={order} />
-                <OrderStatusBadge status={order.status} />
+                {/* <OrderStatusBadge status={order.status} /> */}
+                            <Badge variant="outline" className="px-1.5 text-muted-foreground">
+                  {isFulfilled ? (
+                    <CheckCircle className="fill-green-500 stroke-primary-foreground dark:fill-green-600" />
+                  ) : isProcessing ? (
+                    <LoaderCircle className="size-3 animate-spin" />
+                  ) : (
+                    <span>Pending</span>
+                  )}
+                  {isFulfilled ? " Completed" : isProcessing ? " Processing" : ""}
+                </Badge>
               </div>
 
               {/* Details grid */}
@@ -354,22 +361,13 @@ function getOrderColumns({
 
               {/* Actions */}
               <div className="flex items-center justify-between pt-1 border-t">
-                <Badge variant="outline" className="px-1.5 text-muted-foreground">
-                  {isFulfilled ? (
-                    <CheckCircle className="fill-green-500 stroke-primary-foreground dark:fill-green-600" />
-                  ) : isProcessing ? (
-                    <LoaderCircle className="size-3 animate-spin" />
-                  ) : (
-                    <span>Pending</span>
-                  )}
-                  {isFulfilled ? " Completed" : isProcessing ? " Processing" : ""}
-                </Badge>
-                <div className="flex items-center gap-1">
                   {renderAcceptPrintCell(order)}
+
+                {/* <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" className="size-8" onClick={() => onRowClick?.(order)}>
                     <ChevronRight className="size-4" />
                   </Button>
-                </div>
+                </div> */}
               </div>
             </div>
           );
