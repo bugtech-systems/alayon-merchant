@@ -8,7 +8,7 @@ export default async function HomePage() {
 
   // Redirect to dashboard if authenticated, otherwise to login
   if (user) {
-    redirect("/dashboard");
+    redirect("/home");
   } else {
     redirect("/login"); 
   }

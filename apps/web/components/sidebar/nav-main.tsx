@@ -194,7 +194,7 @@ export function NavMain({ items, role }: NavMainProps) {
           <SidebarMenu>
             <SidebarMenuItem className="flex items-center gap-2">
               {/* <QuickCreateDropdown/> */}
-              <Link href={`/dashboard/pos`} className="w-full">
+              <Link href={`/home/pos`} className="w-full">
                <Button variant="default" className="w-full bg-green-600 hover:bg-green-700 flex-1">
             <Plus className="mr-2 h-4 w-4" />
             Quick Create
@@ -206,7 +206,7 @@ export function NavMain({ items, role }: NavMainProps) {
                 align="end"
                 side="bottom"
               /> */}
-                            <Link href={`/dashboard/messages`} >
+                            <Link href={`/home/messages`} >
               <Button>
                 <MailIcon />
                 <span className="sr-only">Inbox</span>

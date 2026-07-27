@@ -51,7 +51,7 @@ export const companySidebarItems: NavGroup[] = [
     items: [
       {
         title: "Dashboard",
-        url: "/dashboard",
+        url: "/home",
         icon: LayoutDashboard,
       },
       {
@@ -74,16 +74,16 @@ export const companySidebarItems: NavGroup[] = [
       // },
       {
         title: "Products",
-        url: "/dashboard/products",
+        url: "/home/products",
         icon: Banknote,
          subItems: [
           {
           title: "Products",
-          url: "/dashboard/products",
+          url: "/home/products",
         },
         {
           title: "Categories",
-          url: "/dashboard/products/categories",
+          url: "/home/products/categories",
           comingSoon: false
         },
 
@@ -92,17 +92,17 @@ export const companySidebarItems: NavGroup[] = [
       },
        {
         title: "Inventory",
-        url: "/dashboard/inventory",
+        url: "/home/inventory",
         icon: Banknote,
         // comingSoon: true
         subItems: [
         {
           title: "Inventory Items",
-          url: "/dashboard/inventory",
+          url: "/home/inventory",
         },
         {
           title: "Purchases",
-          url: "/dashboard/purchases",
+          url: "/home/purchases",
           comingSoon: true
         }
       ],
@@ -115,7 +115,7 @@ export const companySidebarItems: NavGroup[] = [
       // },
       {
         title: "Transactions",
-        url: "/dashboard/transactions",
+        url: "/home/transactions",
         icon: ListTodo,
         // comingSoon: true
 
@@ -150,7 +150,7 @@ export const riderSidebarItems: NavGroup[] = [
     items: [
       {
         title: "Dashboard",
-        url: "/dashboard",
+        url: "/home",
         icon: LayoutDashboard,
       },
       {
@@ -167,17 +167,17 @@ export const riderSidebarItems: NavGroup[] = [
       },
       {
         title: "Inventory",
-        url: "/dashboard/inventory",
+        url: "/home/inventory",
         icon: Banknote,
         // comingSoon: true
         subItems: [
         {
           title: "Inventory Items",
-          url: "/dashboard/inventory",
+          url: "/home/inventory",
         },
         {
           title: "Purchases",
-          url: "/dashboard/purchases",
+          url: "/home/purchases",
           comingSoon: true
         }
       ],

@@ -110,7 +110,7 @@ export function LoginForm({onSuccess }: LoginFormProps) {
     clearErrors();
 
     console.log('LOGGING')
-    let redirectUrl = watchedUserType == 'store' ? '/pos' : '/dashboard';
+    let redirectUrl = watchedUserType == 'store' ? '/pos' : '/home';
     startTransition(async () => {
       try {
         const formData = new FormData();
