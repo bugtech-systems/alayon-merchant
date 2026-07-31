@@ -162,8 +162,8 @@ export async function sendBulkMessage(data: {
   
 
     const result = await response.json();
-        console.log(result, 'RESSS BYKJ')
 
+    
     // Revalidate the messages page to show new message
     revalidatePath('/dashboard/messages');
     

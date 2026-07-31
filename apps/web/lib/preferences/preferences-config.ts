@@ -67,12 +67,12 @@ type PreferencePersistenceConfig = {
  */
 export const PREFERENCE_DEFAULTS: PreferenceValueMap = {
   theme_mode: "light",
-  theme_preset: "default",
+  theme_preset: "tangerine",
   font: "geist",
-  content_layout: "centered",
-  navbar_style: "sticky",
-  sidebar_variant: "inset",
-  sidebar_collapsible: "icon",
+  content_layout: "full-width",
+  navbar_style: "scroll",
+  sidebar_variant: "sidebar",
+  sidebar_collapsible: "offcanvas",
 };
 
 /**

@@ -484,7 +484,6 @@ function SpendingCell({ customer }: { customer: CustomerRow }) {
 
 // Orders Cell
 function OrdersCell({ customer }: { customer: any }) {
-  console.log(customer, 'CUSTOMER')
   const totalOrders = customer?.orderCount || customer.totalOrders || 0;
   
   return (
@@ -646,54 +645,31 @@ export const customerColumns: ColumnDef<CustomerRow>[] = [
     cell: ({ row }) => <OrdersCell customer={row.original} />,
     size: 100,
   },
-  {
-    accessorKey: "role",
-    header: "Role",
-    cell: ({ row }) => {
-      const role = row.original.metadata?.role || "customer";
-      const roleColors: Record<string, string> = {
-        company: "bg-purple-100 text-purple-800",
-        admin: "bg-red-100 text-red-800",
-        customer: "bg-blue-100 text-blue-800",
-      };
-      const roleLabels: Record<string, string> = {
-        company: "Company",
-        admin: "Admin",
-        customer: "Customer",
-      };
+  // {
+  //   accessorKey: "role",
+  //   header: "Role",
+  //   cell: ({ row }) => {
+  //     const role = row.original.metadata?.role || "customer";
+  //     const roleColors: Record<string, string> = {
+  //       company: "bg-purple-100 text-purple-800",
+  //       admin: "bg-red-100 text-red-800",
+  //       customer: "bg-blue-100 text-blue-800",
+  //     };
+  //     const roleLabels: Record<string, string> = {
+  //       company: "Company",
+  //       admin: "Admin",
+  //       customer: "Customer",
+  //     };
       
-      return (
-        <Badge className={roleColors[role] || "bg-gray-100 text-gray-800"} variant="outline">
-          {roleLabels[role] || role}
-        </Badge>
-      );
-    },
-    size: 100,
-  },
-  {
-    accessorKey: "created_at",
-    header: () => (
-      <div className="flex items-center gap-1">
-        <Calendar className="size-3.5" />
-        <span>Joined</span>
-      </div>
-    ),
-    cell: ({ row }) => (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="text-sm cursor-help">
-              {formatDate(row.original.created_at)}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>
-            {formatDateTime(row.original.created_at)}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    ),
-    size: 110,
-  },
+  //     return (
+  //       <Badge className={roleColors[role] || "bg-gray-100 text-gray-800"} variant="outline">
+  //         {roleLabels[role] || role}
+  //       </Badge>
+  //     );
+  //   },
+  //   size: 100,
+  // },
+
   {
     accessorKey: "lastOrder",
     header: () => (

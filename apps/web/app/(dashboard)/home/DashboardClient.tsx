@@ -558,6 +558,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           onAcceptOrder={(orderId, stock_location_id) => handleAcceptOrder(orderId, stock_location_id) as any}
           onCompleteOrder={(order, stock_location_id) => handleConfirmOrder(order, stock_location_id) as any}
         />
+        <DriverDashboard user={user}/>
 
       </div>
     );

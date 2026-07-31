@@ -170,8 +170,6 @@ export function CustomerTable({
 
 
 
-
-
   const sortableId = React.useId();
   const sensors = useSensors(
     useSensor(MouseSensor, {}), 
@@ -216,7 +214,6 @@ export function CustomerTable({
     queryFn: async () => {
       const params = buildQueryParams();
       const result = await getCompanyCustomers(params);
-      console.log(result, "RESSS")
       if (!result.success) {
         throw new Error(result.error || "Failed to fetch customers");
       }
@@ -501,163 +498,7 @@ export function CustomerTable({
               )}
             </div>
             
-            {/* <Sheet open={isFilterOpen} onOpenChange={setIsFilterOpen}>
-              <SheetTrigger asChild>
-                <Button variant="outline" size="sm" className="relative">
-                  <FilterIcon className="size-4 mr-2" />
-                  Filters
-                  {activeFilterCount > 0 && (
-                    <Badge variant="secondary" className="ml-2">
-                      {activeFilterCount}
-                    </Badge>
-                  )}
-                </Button>
-              </SheetTrigger>
-              <SheetContent className="w-[400px] sm:w-[540px]">
-                <SheetHeader>
-                  <SheetTitle>Filter Customers</SheetTitle>
-                  <SheetDescription>
-                    Apply filters to narrow down customer list
-                  </SheetDescription>
-                </SheetHeader>
-                <div className="flex-1 py-4 space-y-4 overflow-y-auto">
-                  <div className="space-y-2">
-                    <Label>Joined Date Range</Label>
-                    <div className="flex gap-2">
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button variant="outline" className="flex-1 justify-start">
-                            <CalendarIcon className="mr-2 size-4" />
-                            {filters.dateFrom ? format(filters.dateFrom, "PPP") : "From"}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={filters.dateFrom}
-                            onSelect={(date) => setFilters(prev => ({ ...prev, dateFrom: date }))}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button variant="outline" className="flex-1 justify-start">
-                            <CalendarIcon className="mr-2 size-4" />
-                            {filters.dateTo ? format(filters.dateTo, "PPP") : "To"}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={filters.dateTo}
-                            onSelect={(date) => setFilters(prev => ({ ...prev, dateTo: date }))}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Total Spent Range (₱)</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        type="number"
-                        placeholder="Min"
-                        value={filters.minSpent || ""}
-                        onChange={(e) => setFilters(prev => ({ ...prev, minSpent: e.target.value ? Number(e.target.value) : undefined }))}
-                      />
-                      <Input
-                        type="number"
-                        placeholder="Max"
-                        value={filters.maxSpent || ""}
-                        onChange={(e) => setFilters(prev => ({ ...prev, maxSpent: e.target.value ? Number(e.target.value) : undefined }))}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Order Count Range</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        type="number"
-                        placeholder="Min orders"
-                        value={filters.minOrders || ""}
-                        onChange={(e) => setFilters(prev => ({ ...prev, minOrders: e.target.value ? Number(e.target.value) : undefined }))}
-                      />
-                      <Input
-                        type="number"
-                        placeholder="Max orders"
-                        value={filters.maxOrders || ""}
-                        onChange={(e) => setFilters(prev => ({ ...prev, maxOrders: e.target.value ? Number(e.target.value) : undefined }))}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>City</Label>
-                    <Select
-                      value={filters.city || "all"}
-                      onValueChange={(value) => setFilters(prev => ({ ...prev, city: value === "all" ? undefined : value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="All cities" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All cities</SelectItem>
-                        {availableCities.map((city) => (
-                          <SelectItem key={city} value={city}>
-                            {city}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Sort By</Label>
-                    <Select
-                      value={filters.sortBy}
-                      onValueChange={(value) => setFilters(prev => ({ ...prev, sortBy: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="joined_date">Joined Date</SelectItem>
-                        <SelectItem value="total_spent">Total Spent</SelectItem>
-                        <SelectItem value="total_orders">Total Orders</SelectItem>
-                        <SelectItem value="customer_name">Customer Name</SelectItem>
-                        <SelectItem value="last_order_date">Last Order Date</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Sort Order</Label>
-                    <Select
-                      value={filters.sortOrder}
-                      onValueChange={(value) => setFilters(prev => ({ ...prev, sortOrder: value as "ASC" | "DESC" }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="DESC">Descending</SelectItem>
-                        <SelectItem value="ASC">Ascending</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <SheetFooter>
-                  <Button variant="outline" onClick={clearFilters}>
-                    Clear All
-                  </Button>
-                  <SheetClose asChild>
-                    <Button onClick={() => applyFilters({})}>Apply Filters</Button>
-                  </SheetClose>
-                </SheetFooter>
-              </SheetContent>
-            </Sheet> */}
+   
           </div>
           
           <div className="flex items-center gap-2">

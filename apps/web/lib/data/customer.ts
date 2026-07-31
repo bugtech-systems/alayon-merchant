@@ -420,7 +420,6 @@ export const updateCustomerAddress = async (
 
 export const saveCustomerToList = async (phone: any) => {
     let newCustomer = await n8nFetcher({endpoint: '/webhook/customer-phone', method: "POST", body: {phone}})
-    console.log(newCustomer, 'CUSTOMER')
     return newCustomer
 }
 

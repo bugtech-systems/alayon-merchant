@@ -111,15 +111,23 @@ export function OrderDetailsView({ order }: any) {
     }, 1500);
   };
 
+  console.log(order, "ORDER ")
+
   const OrderContent = () => (
     <div className="space-y-6">
       {/* Order Summary Card */}
       <Card>
         <CardHeader>
           <CardTitle>Order Summary</CardTitle>
-          <CardDescription>
+          <CardDescription className="flex justify-between">
+            <div>
             Order ID: {order?.delivery?.id.slice(-4) || order.display_id}
+            </div>
+             <div className="font-bold">
+            Beeper: {order?.metadata?.beeper_ids?.join(',')}
+            </div>
           </CardDescription>
+          
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

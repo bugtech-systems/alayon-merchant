@@ -247,17 +247,17 @@ export default function DashboardPage({user}: any) {
         </div>
       )}
 
-      {/* KPI Cards */}
-      <KpiCards 
+      KPI Cards
+      {/* <KpiCards 
         totalCustomers={kpiData.totalCustomers}
         activeCustomers={kpiData.activeCustomers}
         totalRevenue={kpiData.totalRevenue}
         totalOrders={kpiData.totalOrders}
         isLoading={isLoading || isFetching}
-      />
+      /> */}
 
       {/* Task Reminders */}
-      <TaskReminders customerId={pricingContext.customerId} locationId={pricingContext.stockLocationId}/>
+      {/* <TaskReminders customerId={pricingContext.customerId} locationId={pricingContext.stockLocationId}/> */}
 
       {/* Water Delivery Orders */}
       <WaterDeliveryOrdersSection 

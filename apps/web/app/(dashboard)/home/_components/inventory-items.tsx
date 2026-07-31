@@ -84,7 +84,7 @@ import {
 } from '@/lib/actions/inventory';
 import { Autocomplete } from './inventory-item-autocomplete';
 
-// ---------- Types (unchanged) ----------
+// ---------- Types ----------
 interface InventoryItem {
   id: string;
   sku: string;
@@ -115,7 +115,7 @@ interface Location {
   name: string;
 }
 
-// ---------- Stock level helpers (unchanged) ----------
+// ---------- Stock level helpers ----------
 type StockLevel = 'all' | 'in_stock' | 'low_stock' | 'out_of_stock';
 
 const getStockLevel = (
@@ -179,7 +179,7 @@ const STOCK_LEVEL_BADGE_COLORS: Record<StockLevel, string> = {
   out_of_stock: 'bg-red-100 text-red-800 hover:bg-red-200',
 };
 
-// ---------- Column configuration (unchanged) ----------
+// ---------- Column configuration ----------
 const COLUMNS = [
   { key: 'title', label: 'Inventory Name', sortable: true },
   { key: 'sku', label: 'SKU', sortable: true },
@@ -189,6 +189,94 @@ const COLUMNS = [
   { key: 'unit_price', label: 'Unit Price', sortable: true },
   { key: 'stock_level', label: 'Stock Level', sortable: false },
 ];
+
+// ---------- Category Combobox Component (NEW) ----------
+const CategoryCombobox = ({
+  value,
+  onChange,
+  categories,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  categories: string[];
+}) => {
+  const [open, setOpen] = useState(false);
+  const [inputValue, setInputValue] = useState(value);
+
+  // Sync inputValue when value changes from outside
+  useEffect(() => {
+    setInputValue(value);
+  }, [value]);
+
+  const handleSelect = (selected: string) => {
+    onChange(selected);
+    setOpen(false);
+  };
+
+  // Filter categories based on input
+  const filtered = categories.filter(cat =>
+    cat.toLowerCase().includes(inputValue.toLowerCase())
+  );
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between"
+        >
+          {value || 'Select category...'}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-full p-0">
+        <Command>
+          <CommandInput
+            placeholder="Search category..."
+            value={inputValue}
+            onValueChange={setInputValue}
+          />
+          <CommandList>
+            <CommandEmpty>
+              <button
+                type="button"
+                className="w-full text-left px-2 py-1.5 text-sm hover:bg-gray-100 rounded"
+                onClick={() => {
+                  if (inputValue.trim()) {
+                    const newCat = inputValue.trim();
+                    onChange(newCat);
+                    setOpen(false);
+                  }
+                }}
+              >
+                + Add "{inputValue}"
+              </button>
+            </CommandEmpty>
+            <CommandGroup>
+              {filtered.map(cat => (
+                <CommandItem
+                  key={cat}
+                  value={cat}
+                  onSelect={() => handleSelect(cat)}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === cat ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {cat}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 // ---------- Main Component ----------
 export function InventoryTable({ user }: any) {
@@ -225,9 +313,10 @@ export function InventoryTable({ user }: any) {
     description: '',
     unit_price: 0,
     reorder_level: 10,
-    category: 'General',
+    category: 'Uncategorized',
     stocked_level: 0,
-    requires_shipping: false
+    requires_shipping: false,
+    unit_of_measure: '', // NEW
   } as any);
 
   const [stockFormData, setStockFormData] = useState({
@@ -245,7 +334,10 @@ export function InventoryTable({ user }: any) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isAdjustingStock, setIsAdjustingStock] = useState(false);
 
-  // ---------- Data fetching (unchanged) ----------
+  // Category state (NEW)
+  const [categories, setCategories] = useState<string[]>(['Uncategorized']);
+
+  // ---------- Data fetching ----------
   const loadItems = useCallback(async () => {
     try {
       setLoading(true);
@@ -253,7 +345,6 @@ export function InventoryTable({ user }: any) {
 
       const result = await fetchInventoryItemsByLocation(user?.stockLocationId);
 
-      console.log(result, 'RESSUUL INV')
       if (result) {
         const transformedItems: InventoryItem[] = result.map((item: any) => ({
           id: item.id,
@@ -263,6 +354,7 @@ export function InventoryTable({ user }: any) {
           requires_shipping: item.requires_shipping || false,
           thumbnail: item.thumbnail,
           metadata: item.metadata || {},
+          category: item.metadata.category || {},
           location_levels: item.location_levels || [],
           created_at: item.created_at,
           updated_at: item.updated_at,
@@ -300,7 +392,18 @@ export function InventoryTable({ user }: any) {
     loadItems();
   }, [loadItems]);
 
-  // ---------- Load inventory levels for an item (unchanged) ----------
+  // Extract categories from items (NEW)
+  useEffect(() => {
+    const cats = new Set<string>();
+    items.forEach(item => {
+      const cat = item.metadata?.category;
+      if (cat && typeof cat === 'string') cats.add(cat);
+    });
+    cats.add('Uncategorized');
+    setCategories(Array.from(cats).sort());
+  }, [items]);
+
+  // ---------- Load inventory levels for an item ----------
   const loadItemLevels = async (itemId: string) => {
     try {
       const result = await listInventoryLevels(itemId);
@@ -318,7 +421,7 @@ export function InventoryTable({ user }: any) {
     }
   };
 
-  // ---------- Filtering and sorting (unchanged) ----------
+  // ---------- Filtering and sorting ----------
   const filteredAndSorted = useMemo(() => {
     let result = [...items];
 
@@ -385,7 +488,7 @@ export function InventoryTable({ user }: any) {
     return result;
   }, [items, searchQuery, stockLevelFilter, sortConfig]);
 
-  // ---------- Selection handlers (unchanged) ----------
+  // ---------- Selection handlers ----------
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredAndSorted.length) {
       setSelectedIds(new Set());
@@ -401,7 +504,7 @@ export function InventoryTable({ user }: any) {
     setSelectedIds(next);
   };
 
-  // ---------- CRUD Operations (unchanged) ----------
+  // ---------- CRUD Operations ----------
   const handleCreateItem = async () => {
     if (!formData.sku.trim()) {
       toast.error('SKU is required');
@@ -415,25 +518,21 @@ export function InventoryTable({ user }: any) {
         title: formData.title.trim() || formData.sku.trim(),
         description: formData.description.trim(),
         requires_shipping: formData.requires_shipping || false,
-        stocked_level: formData.stocked_level, 
+        stocked_level: formData.stocked_level,
         metadata: {
           unit_price: formData.unit_price,
           reorder_level: formData.reorder_level,
           category: formData.category,
+          unit_of_measure: formData.unit_of_measure, // NEW
           company_id: user?.companyId,
           location_id: user?.stockLocationId
         },
       });
 
-
-
-      console.log(response, 'RESPPOI I')
       if (response.success) {
         const newItem: any = {
           ...response.data,
-          // location_levels: [],
         };
-
         setItems((prev) => [newItem, ...prev]);
         setTotalCount((prev) => prev + 1);
         toast.success('Inventory item created successfully');
@@ -465,25 +564,15 @@ export function InventoryTable({ user }: any) {
           unit_price: formData.unit_price,
           reorder_level: formData.reorder_level,
           category: formData.category,
+          unit_of_measure: formData.unit_of_measure, // NEW
         },
       });
 
-      // if (response.success && response.inventoryItem) {
-        // setItems((prev) =>
-        //   prev.map((item) =>
-        //     item.id === editingItem.id
-        //       ? { ...item, ...response.inventoryItem }
-        //       : item
-        //   )
-        // );
-        toast.success('Inventory item updated successfully');
-        setIsEditDialogOpen(false);
-        setEditingItem(null);
-        resetForm();
-        loadItems()
-      // } else {
-      //   throw new Error(response.error || 'Failed to update item');
-      // }
+      toast.success('Inventory item updated successfully');
+      setIsEditDialogOpen(false);
+      setEditingItem(null);
+      resetForm();
+      loadItems();
     } catch (err: any) {
       console.error('Failed to update item:', err);
       toast.error(err.message || 'Failed to update inventory item');
@@ -541,20 +630,15 @@ export function InventoryTable({ user }: any) {
         newQuantity = Math.max(0, (currentLevel?.stocked_quantity || 0) - stockFormData.adjustment_quantity);
       }
 
-
-
-      console.log(newQuantity, 'NEW QUANTITZY', currentLevel)
       const response = await updateInventoryLevel(
         stockManagingItem.id,
         stockFormData.location_id,
-        {stocked_quantity: newQuantity}
+        { stocked_quantity: newQuantity }
       );
 
-
-      console.log(response, 'RESSPSPSPS111')
       if (response.success) {
         await loadItemLevels(stockManagingItem.id);
-        await loadItems()
+        await loadItems();
         toast.success('Stock updated successfully');
         setIsStockDialogOpen(false);
         setStockManagingItem(null);
@@ -571,7 +655,6 @@ export function InventoryTable({ user }: any) {
 
   // ---------- Form handlers ----------
   const openEditDialog = (item: any) => {
-    console.log(item, 'EDIT DIALOG')
     setEditingItem(item);
     setFormData({
       title: item.title || '',
@@ -581,6 +664,7 @@ export function InventoryTable({ user }: any) {
       reorder_level: getReorderLevel(item),
       category: getCategory(item),
       requires_shipping: item.requires_shipping || false,
+      unit_of_measure: item.metadata?.unit_of_measure || '', // NEW
     });
     setIsEditDialogOpen(true);
   };
@@ -590,8 +674,6 @@ export function InventoryTable({ user }: any) {
       await loadItemLevels(item.id);
     }
 
-
-    console.log(item, 'ITEMMSS')
     setStockManagingItem(item);
     setStockFormData({
       location_id: item.location_levels?.[0]?.location_id || locations[0]?.id || 'default',
@@ -608,9 +690,10 @@ export function InventoryTable({ user }: any) {
       description: '',
       unit_price: 0,
       reorder_level: 10,
-      category: 'General',
+      category: 'Uncategorized',
       stocked_level: 0,
       requires_shipping: false,
+      unit_of_measure: '', // NEW
     });
     setComboboxOpen(false);
   };
@@ -619,7 +702,6 @@ export function InventoryTable({ user }: any) {
   const handleTitleSelect = (selectedValue: string) => {
     setComboboxOpen(false);
     if (selectedValue === 'create') {
-      // Create new item: keep the title as typed, clear other fields
       const typedTitle = formData.title.trim();
       setFormData({
         title: typedTitle,
@@ -627,20 +709,18 @@ export function InventoryTable({ user }: any) {
         description: '',
         unit_price: 0,
         reorder_level: 10,
-        category: 'General',
+        category: 'Uncategorized',
         location: 'Default',
         origin_country: '',
         requires_shipping: false,
+        unit_of_measure: '', // NEW
       });
-      // Optionally focus SKU field
       return;
     }
 
-    // Find the selected item
     const selectedItem = items.find((item) => item.id === selectedValue);
     if (!selectedItem) return;
 
-    // Populate form with selected item's data
     setFormData({
       title: selectedItem.title || '',
       sku: selectedItem.sku,
@@ -651,10 +731,11 @@ export function InventoryTable({ user }: any) {
       location: getLocation(selectedItem),
       origin_country: selectedItem.origin_country || '',
       requires_shipping: selectedItem.requires_shipping || false,
+      unit_of_measure: selectedItem.metadata?.unit_of_measure || '', // NEW
     });
   };
 
-  // ---------- Export (unchanged) ----------
+  // ---------- Export ----------
   const exportCSV = () => {
     const headers = COLUMNS.map((c) => c.label).join(',');
     const rows = items.map((item) =>
@@ -690,7 +771,7 @@ export function InventoryTable({ user }: any) {
     URL.revokeObjectURL(url);
   };
 
-  // ---------- Stats (unchanged) ----------
+  // ---------- Stats ----------
   const stats = useMemo(() => {
     const totalItems = items.length;
     const totalStock = items.reduce((sum, item) => sum + getTotalStock(item), 0);
@@ -718,7 +799,7 @@ export function InventoryTable({ user }: any) {
     };
   }, [items]);
 
-  // ---------- Sorting handler (unchanged) ----------
+  // ---------- Sorting handler ----------
   const toggleSort = (key: string) => {
     setSortConfig((prev) =>
       prev?.key === key
@@ -727,7 +808,7 @@ export function InventoryTable({ user }: any) {
     );
   };
 
-  // ---------- Loading state (unchanged) ----------
+  // ---------- Loading state ----------
   if (loading) {
     return (
       <div className="space-y-4 p-4">
@@ -750,12 +831,11 @@ export function InventoryTable({ user }: any) {
     );
   }
 
-
   // ---------- Render ----------
   return (
     <TooltipProvider>
       <div className="space-y-4 p-4">
-        {/* Error banner (unchanged) */}
+        {/* Error banner */}
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center justify-between">
             <span className="flex items-center gap-2">
@@ -772,7 +852,7 @@ export function InventoryTable({ user }: any) {
           </div>
         )}
 
-        {/* Toolbar (unchanged) */}
+        {/* Toolbar */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white border rounded-lg px-4 py-3 shadow-sm">
           <div className="flex items-center gap-2">
             <Package className="h-5 w-5 text-gray-500" />
@@ -910,7 +990,7 @@ export function InventoryTable({ user }: any) {
           </div>
         </div>
 
-        {/* Stats (unchanged) */}
+        {/* Stats */}
         {showStats && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-white border rounded-lg px-4 py-3">
@@ -932,12 +1012,12 @@ export function InventoryTable({ user }: any) {
             </div>
             <div className="bg-white border rounded-lg px-4 py-3">
               <p className="text-xs text-gray-500 flex items-center gap-1">
-                <DollarSign className="h-3 w-3" /> Total Value
+                ₱ Total Value
               </p>
               <p className="text-lg font-semibold">
                 {new Intl.NumberFormat('en-US', {
                   style: 'currency',
-                  currency: 'USD',
+                  currency: 'PHP',
                   minimumFractionDigits: 0,
                 }).format(stats.totalValue)}
               </p>
@@ -965,7 +1045,7 @@ export function InventoryTable({ user }: any) {
           </div>
         )}
 
-        {/* Table (unchanged) */}
+        {/* Table */}
         <div className="border rounded-lg overflow-x-auto bg-white shadow-sm">
           <Table>
             <TableHeader className="bg-gray-100">
@@ -1147,7 +1227,7 @@ export function InventoryTable({ user }: any) {
           </Table>
         </div>
 
-        {/* Footer (unchanged) */}
+        {/* Footer */}
         <div className="flex justify-between text-sm text-gray-500">
           <span>
             Showing {filteredAndSorted.length} of {totalCount} items
@@ -1159,190 +1239,200 @@ export function InventoryTable({ user }: any) {
           )}
         </div>
 
-        {/* Create Dialog with Autocomplete Combobox */}
-<Dialog
-  open={isCreateDialogOpen}
-  onOpenChange={(open) => {
-    if (!open) {
-      setIsCreateDialogOpen(false);
-      resetForm();
-    }
-  }}
->
-  <DialogContent className="sm:max-w-[500px]">
-    <DialogHeader>
-      <DialogTitle className="flex items-center gap-2">
-        <Package className="h-5 w-5" />
-        Add New Inventory Item
-      </DialogTitle>
-      <DialogDescription>
-        Enter the details of the new item to add to your inventory. You can also
-        select an existing item to pre‑fill the form.
-      </DialogDescription>
-    </DialogHeader>
-    <div className="grid gap-4 py-4">
-      {/* Title with Autocomplete */}
-      <div className="grid grid-cols-4 items-start gap-4">
-        <Label htmlFor="title" className="text-right pt-2">
-          Title
-        </Label>
-        <div className="col-span-3">
-          <Autocomplete
-            value={formData.title}
-            onChange={(value) => setFormData((prev) => ({ ...prev, title: value }))}
-            items={items}
-            onSelect={(item) => {
-              if (item.isNew) {
-                // Handle create new
-                handleTitleSelect('create');
-              } else {
-                handleTitleSelect(item.id);
-              }
-            }}
-            placeholder="Search or enter title..."
-            emptyMessage="No existing items found"
-            createNewLabel="Create new item"
-          />
-        </div>
-      </div>
+        {/* ==================== CREATE DIALOG ==================== */}
+        <Dialog
+          open={isCreateDialogOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setIsCreateDialogOpen(false);
+              resetForm();
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Add New Inventory Item
+              </DialogTitle>
+              <DialogDescription>
+                Enter the details of the new item to add to your inventory. You can also
+                select an existing item to pre‑fill the form.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              {/* Title with Autocomplete */}
+              <div className="grid grid-cols-4 items-start gap-4">
+                <Label htmlFor="title" className="text-right pt-2">
+                  Title
+                </Label>
+                <div className="col-span-3">
+                  <Autocomplete
+                    value={formData.title}
+                    onChange={(value) => setFormData((prev) => ({ ...prev, title: value }))}
+                    items={items}
+                    onSelect={(item) => {
+                      if (item.isNew) {
+                        handleTitleSelect('create');
+                      } else {
+                        handleTitleSelect(item.id);
+                      }
+                    }}
+                    placeholder="Search or enter title..."
+                    emptyMessage="No existing items found"
+                    createNewLabel="Create new item"
+                  />
+                </div>
+              </div>
 
-      {/* SKU */}
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="sku" className="text-right">
-          SKU <span className="text-red-500">*</span>
-        </Label>
-        <Input
-          id="sku"
-          placeholder="SKU code"
-          value={formData.sku}
-          onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-          className="col-span-3"
-        />
-      </div>
+              {/* SKU */}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="sku" className="text-right">
+                  SKU <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="sku"
+                  placeholder="SKU code"
+                  value={formData.sku}
+                  onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
 
-      {/* Description */}
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="description" className="text-right">
-          Description
-        </Label>
-        <Textarea
-          id="description"
-          placeholder="Item description"
-          value={formData.description}
-          onChange={(e) =>
-            setFormData({ ...formData, description: e.target.value })
-          }
-          className="col-span-3"
-          rows={3}
-        />
-      </div>
+              {/* Description */}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="description" className="text-right">
+                  Description
+                </Label>
+                <Textarea
+                  id="description"
+                  placeholder="Item description"
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  className="col-span-3"
+                  rows={3}
+                />
+              </div>
 
-      {/* Category */}
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="category" className="text-right">
-          Category
-        </Label>
-        <Input
-          id="category"
-          placeholder="Category"
-          value={formData.category}
-          onChange={(e) =>
-            setFormData({ ...formData, category: e.target.value })
-          }
-          className="col-span-3"
-        />
-      </div>
+              {/* Category - NEW Combobox */}
+              <div className="grid grid-cols-4 items-start gap-4">
+                <Label htmlFor="category" className="text-right pt-2">
+                  Category
+                </Label>
+                <div className="col-span-3">
+                  <CategoryCombobox
+                    value={formData.category}
+                    onChange={(val) => setFormData({ ...formData, category: val })}
+                    categories={categories}
+                  />
+                </div>
+              </div>
 
-      {/* Unit Price */}
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="unit_price" className="text-right">
-          Unit Price
-        </Label>
-        <Input
-          id="unit_price"
-          type="number"
-          step="0.01"
-          min="0"
-          placeholder="0.00"
-          value={formData.unit_price || ''}
-          onChange={(e) =>
-            setFormData({
-              ...formData,
-              unit_price: parseFloat(e.target.value) || 0,
-            })
-          }
-          className="col-span-3"
-        />
-      </div>
+              {/* Unit of Measure - NEW */}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="unit_of_measure" className="text-right">
+                  Unit of Measure
+                </Label>
+                <Input
+                  id="unit_of_measure"
+                  placeholder="e.g. pcs, kg, m"
+                  value={formData.unit_of_measure}
+                  onChange={(e) =>
+                    setFormData({ ...formData, unit_of_measure: e.target.value })
+                  }
+                  className="col-span-3"
+                />
+              </div>
 
-      {/* Reorder Level */}
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="reorder_level" className="text-right">
-          Reorder Level
-        </Label>
-        <Input
-          id="reorder_level"
-          type="number"
-          min="0"
-          placeholder="10"
-          value={formData.reorder_level || ''}
-          onChange={(e) =>
-            setFormData({
-              ...formData,
-              reorder_level: parseInt(e.target.value) || 0,
-            })
-          }
-          className="col-span-3"
-        />
-      </div>
+              {/* Unit Price */}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="unit_price" className="text-right">
+                  Unit Price
+                </Label>
+                <Input
+                  id="unit_price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={formData.unit_price || ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      unit_price: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  className="col-span-3"
+                />
+              </div>
 
-      {/* Location */}
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="stocked_level" className="text-right">
-          Stock Level
-        </Label>
-        <Input
-          id="stocked_level"
-          type="number"
-          min="0"
-          placeholder="10"
-          value={formData.stocked_level || ''}
-          onChange={(e) =>
-            setFormData({
-              ...formData,
-              stocked_level: parseInt(e.target.value) || 0,
-            })
-          }
-          className="col-span-3"
-        />
-      </div>
+              {/* Reorder Level */}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="reorder_level" className="text-right">
+                  Reorder Level
+                </Label>
+                <Input
+                  id="reorder_level"
+                  type="number"
+                  min="0"
+                  placeholder="10"
+                  value={formData.reorder_level || ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      reorder_level: parseInt(e.target.value) || 0,
+                    })
+                  }
+                  className="col-span-3"
+                />
+              </div>
 
-      {/* Origin Country */}
+              {/* Initial Stock Level */}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="stocked_level" className="text-right">
+                  Initial Stock
+                </Label>
+                <Input
+                  id="stocked_level"
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  value={formData.stocked_level || ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      stocked_level: parseInt(e.target.value) || 0,
+                    })
+                  }
+                  className="col-span-3"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsCreateDialogOpen(false);
+                  resetForm();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateItem}
+                disabled={isCreating}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {isCreating && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                Create Item
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-    </div>
-    <DialogFooter>
-      <Button
-        variant="outline"
-        onClick={() => {
-          setIsCreateDialogOpen(false);
-          resetForm();
-        }}
-      >
-        Cancel
-      </Button>
-      <Button
-        onClick={handleCreateItem}
-        disabled={isCreating}
-        className="bg-blue-600 hover:bg-blue-700"
-      >
-        {isCreating && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-        Create Item
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
-
-        {/* Edit Dialog – unchanged (title input remains as plain Input) */}
+        {/* ==================== EDIT DIALOG ==================== */}
         <Dialog
           open={isEditDialogOpen}
           onOpenChange={(open) => {
@@ -1364,6 +1454,7 @@ export function InventoryTable({ user }: any) {
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
+              {/* SKU */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="edit-sku" className="text-right">
                   SKU <span className="text-red-500">*</span>
@@ -1376,6 +1467,8 @@ export function InventoryTable({ user }: any) {
                   className="col-span-3"
                 />
               </div>
+
+              {/* Title */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="edit-title" className="text-right">
                   Title
@@ -1388,6 +1481,8 @@ export function InventoryTable({ user }: any) {
                   className="col-span-3"
                 />
               </div>
+
+              {/* Description */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="edit-description" className="text-right">
                   Description
@@ -1403,20 +1498,38 @@ export function InventoryTable({ user }: any) {
                   rows={3}
                 />
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-category" className="text-right">
+
+              {/* Category - NEW Combobox */}
+              <div className="grid grid-cols-4 items-start gap-4">
+                <Label htmlFor="edit-category" className="text-right pt-2">
                   Category
                 </Label>
+                <div className="col-span-3">
+                  <CategoryCombobox
+                    value={formData.category}
+                    onChange={(val) => setFormData({ ...formData, category: val })}
+                    categories={categories}
+                  />
+                </div>
+              </div>
+
+              {/* Unit of Measure - NEW */}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-unit_of_measure" className="text-right">
+                  Unit of Measure
+                </Label>
                 <Input
-                  id="edit-category"
-                  placeholder="Category"
-                  value={formData.category}
+                  id="edit-unit_of_measure"
+                  placeholder="e.g. pcs, kg, m"
+                  value={formData.unit_of_measure}
                   onChange={(e) =>
-                    setFormData({ ...formData, category: e.target.value })
+                    setFormData({ ...formData, unit_of_measure: e.target.value })
                   }
                   className="col-span-3"
                 />
               </div>
+
+              {/* Unit Price */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="edit-unit_price" className="text-right">
                   Unit Price
@@ -1437,6 +1550,8 @@ export function InventoryTable({ user }: any) {
                   className="col-span-3"
                 />
               </div>
+
+              {/* Reorder Level */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="edit-reorder_level" className="text-right">
                   Reorder Level
@@ -1456,7 +1571,6 @@ export function InventoryTable({ user }: any) {
                   className="col-span-3"
                 />
               </div>
-
             </div>
             <DialogFooter>
               <Button
@@ -1481,7 +1595,7 @@ export function InventoryTable({ user }: any) {
           </DialogContent>
         </Dialog>
 
-        {/* Stock Management Dialog (unchanged) */}
+        {/* ==================== STOCK MANAGEMENT DIALOG ==================== */}
         <Dialog
           open={isStockDialogOpen}
           onOpenChange={(open) => {
@@ -1537,50 +1651,7 @@ export function InventoryTable({ user }: any) {
                 </div>
               )}
 
-              {/* <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="stock_location" className="text-right">
-                  Location
-                </Label>
-                <Select
-                  value={stockFormData.location_id}
-                  onValueChange={(value) =>
-                    setStockFormData({ ...stockFormData, location_id: value })
-                  }
-                >
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select location" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {locations.map((loc) => (
-                      <SelectItem key={loc.id} value={loc.id}>
-                        {loc.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="adjustment_type" className="text-right">
-                  Type
-                </Label>
-                <Select
-                  value={stockFormData.adjustment_type}
-                  onValueChange={(value: 'set' | 'add' | 'subtract') =>
-                    setStockFormData({ ...stockFormData, adjustment_type: value })
-                  }
-                >
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="set">Set exact quantity</SelectItem>
-                    <SelectItem value="add">Add to stock</SelectItem>
-                    <SelectItem value="subtract">Remove from stock</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div> */}
-
+              {/* Quantity */}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="adjustment_quantity" className="text-right">
                   Quantity

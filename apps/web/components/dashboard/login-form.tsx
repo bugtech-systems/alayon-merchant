@@ -123,7 +123,6 @@ export function LoginForm({onSuccess }: LoginFormProps) {
         await removeCartId()
         removeSession();
         const result = await login(data, formData);
-        console.log(result, 'RESSS')
         if (!result?.success) {
           setServerError(result.error ?? result);
           

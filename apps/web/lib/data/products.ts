@@ -572,7 +572,7 @@ const productsResponse = await adminFetch("/admin/products", {
     limit: 1000,
     region_id: region?.id,
     // currency_code: region?.currency_code, // or your desired currency
-    fields: "id,title,thumbnail,handle,status,*categories,*variants,variants.id,variants.title,variants.sku,variants.inventory_quantity,*variants.prices",
+    fields: "id,title,thumbnail,handle,status,*categories,*variants,variants.id,variants.title,variants.sku,variants.inventory_quantity,*variants.prices,*variants.inventory_items",
     price_list_id: [priceListId],  // Array of price list IDs
     // Optional: Add other filters
     // status: ["published"],
@@ -585,7 +585,7 @@ const productsResponse = await adminFetch("/admin/products", {
     console.log(`Fetched ${products.length} total products`, products, productsResponse);
     
 
-
+    console.log(products, 'PRDDDD')
 
         // Apply pricing based on priority: Price List > Customer Group > Customer Specific
     if (priceListId) {

@@ -372,7 +372,6 @@ export async function login(_currentState: unknown, formData: FormData) {
         const userData = await retrieveUser()
         const customer = await retrieveCustomer()
         const cart = await retrieveCart()
-        console.log(customer, cart, userData, 'ccssese')
         // if (customer?.employee?.company_id) {
         //   await updateCart({
         //     metadata: {
@@ -395,7 +394,6 @@ export async function login(_currentState: unknown, formData: FormData) {
             return {success: true, token}
       })
   } catch (error: any) {
-            console.log(error, 'errr ccssese')
     return error.toString()
   } 
 

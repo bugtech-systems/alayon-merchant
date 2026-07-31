@@ -371,6 +371,10 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
+
+
+  console.log(filteredProducts, 'FILTTERED')
+
   // Pricing info component for header
   const PricingInfoBadge = () => (
     <div className="flex items-center gap-2 flex-wrap">

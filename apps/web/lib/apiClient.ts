@@ -167,6 +167,7 @@ export const adminFetch = async (endpoint: string, options: RequestInit & { quer
   // Add authorization if API key exists
   if (apiKey) {
     headers["Authorization"] = `Basic ${apiKey}`;
+    headers["x-publishable-api-key"] = `${PUBLISHABLE_KEY}`;
   }
   
   console.log(`Admin fetch: ${url}`);

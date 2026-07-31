@@ -455,7 +455,7 @@ export async function getCompanyCustomers(
     const paginatedCustomers = customers.slice(start, end)
 
     const totalPages = Math.ceil(total / validatedParams.limit)
-    console.log(paginatedCustomers, 'PAGINATEDD')
+    console.log(paginatedCustomers, 'PAGINATEDD', response)
     return {
       success: true,
       data: {
