@@ -87,11 +87,12 @@ interface IncomingDelivery {
 }
 
 interface TaskRemindersProps {
-  customerId: string;
-  locationId: string;
+  customerId?: string;
+  locationId?: string;
+  priceListId?: string;
 }
 
-export function TaskReminders({ customerId, locationId }: TaskRemindersProps) {
+export function TaskReminders({ customerId, locationId,  priceListId}: TaskRemindersProps) {
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
   const [hoveredDelivery, setHoveredDelivery] = React.useState<string | null>(null);
   const [expandedDelivery, setExpandedDelivery] = React.useState<string | null>(null);
@@ -102,7 +103,8 @@ export function TaskReminders({ customerId, locationId }: TaskRemindersProps) {
   const { data: inventoryData, isLoading, error } = useQuery({
     queryKey: ['inventory', customerId, locationId],
     queryFn: async () => {
-      const response = await retrieveDriverStocks(customerId, locationId);
+      const response = await retrieveDriverStocks({customerId, locationId, priceListId});
+      console.log(response, "RESPPP")
       return response.data as InventoryProgressData;
     },
     enabled: !!customerId && !!locationId,

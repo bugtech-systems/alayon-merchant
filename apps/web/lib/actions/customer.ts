@@ -20,7 +20,7 @@ import { z } from "zod"
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL ||
-  "https://api.alayon.store";
+  "https://api.sharewin.pro";
 
 // Types
 export interface CustomerFilters {
@@ -210,7 +210,6 @@ export async function getCustomers(
     const paginatedCustomers = customers.slice(start, end)
 
     const totalPages = Math.ceil(total / validatedParams.limit)
-    console.log(paginatedCustomers, 'PAGINATEDD')
     return {
       success: true,
       data: {
@@ -580,14 +579,18 @@ export const retrieveCustomer = async (): Promise<B2BCustomer | null> => {
     .catch(() => null)
 }
 
-export const updateCustomer = async (body: HttpTypes.StoreUpdateCustomer) => {
+export const updateCustomer = async (id: any, body: any) => {
   const headers = {
     ...(await getAuthHeaders()),
   }
 
-  const updateRes = await sdk.store.customer
-    .update(body, {}, headers)
-    .then(({ customer }: any) => customer)
+  let { first_name, last_name, phone, status, ...metadata } = body;
+
+  const updateRes = await sdk.client.fetch(`/dashboard/customers/${id}`, {
+    method: 'PUT',
+    body: {first_name, last_name, phone, status, ...metadata},
+    headers
+  }).then(({ customer }: any) => customer)
     .catch(medusaError)
 
   const cacheTag = await getCacheTag("customers")
@@ -975,9 +978,9 @@ export async function updateCustomerLocation(
     const headers = await getAuthHeaders();
 
     // Fetch current customer to preserve existing metadata
-    const customer = await sdk.store.customer.retrieve(customerId, {}, headers);
+    const {customer} = await await sdk.client.fetch(`/dashboard/customers/${customerId}`);
     const existingMetadata = (customer.metadata || {}) as Record<string, any>;
-
+    console.log(customer, "CUSTTOM")
     // Merge location fields
     const updatedMetadata = {
       ...existingMetadata,
@@ -990,12 +993,28 @@ export async function updateCustomerLocation(
       city: locationData.municipality, // optional: update legacy city field
     };
 
-    await sdk.store.customer.update(
-      { metadata: updatedMetadata },
-      { id: customerId },
-      headers
-    );
+    
+      const response = await sdk.client.fetch(`/dashboard/customers/${customerId}`, {
+          method: "PUT",
+          body: {metadata: updatedMetadata},
+          headers: {
+            "Content-Type": "application/json",
+            ...(await getAuthHeaders()),
+          },
+        });
 
+    // const updateRes = await sdk.store.customer
+    // .update({ id: customerId, metadata: updatedMetadata }, {}, headers)
+    // .then(({ customer }: any) => customer)
+    // .catch(medusaError)
+
+      // const response = await sdk.client.fetch(`/dashboard/customers/${customerId}`, {
+      //     method: "PUT",
+      //     body: { ...customer, ...updatedMetadata, metadata: updatedMetadata },
+      //     headers
+      //   });
+
+    console.log(response, 'CUSTOMERR')
     revalidateTag(`customer-${customerId}`, "max");
     revalidateTag("customers-list", "max");
 

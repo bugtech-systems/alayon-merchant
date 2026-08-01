@@ -533,7 +533,7 @@ export interface ListCustomersWithOrdersResponse {
 }
 
 export async function listCustomersWithOrders(
-  params: ListCustomersWithOrdersParams = {}
+  params: any = {}
 ): Promise<ListCustomersWithOrdersResponse> {
   try {
     const headers = await getAuthHeaders();
@@ -546,6 +546,8 @@ export async function listCustomersWithOrders(
     // if (params.search) queryParams.append("search", params.search);
     if (params.company_id) queryParams.append("company_id", params.company_id);
     if (params.customer_group_id) queryParams.append("customer_group_id", params.customer_group_id);
+    if (params.stock_location_id) queryParams.append("stock_location_id", params.stock_location_id);
+    if (params.price_list_id) queryParams.append("price_list_id", params.price_list_id);
     // if (params.has_account) queryParams.append("has_account", params.has_account);
     if (params.sort_field) queryParams.append("sort_field", params.sort_field);
     if (params.sort_order) queryParams.append("sort_order", params.sort_order);

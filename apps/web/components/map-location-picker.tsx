@@ -426,28 +426,7 @@ export function MapLocationPicker({
   return (
     <div className="space-y-3">
       {/* Location Button - Always visible */}
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          size="default"
-          variant="default"
-          onClick={handleGetCurrentLocation}
-          disabled={disabled || isLocating}
-          className="flex-1 bg-primary hover:bg-primary/90"
-        >
-          {isLocating ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Getting your location...
-            </>
-          ) : (
-            <>
-              <Navigation className="h-4 w-4 mr-2" />
-              Use my current location
-            </>
-          )}
-        </Button>
-      </div>
+  
 
       {/* Map Container - Only shown after "Use my current location" is clicked OR if initial location exists */}
       {showMap && (

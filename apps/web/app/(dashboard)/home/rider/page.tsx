@@ -124,6 +124,7 @@ export default function DashboardPage({user}: any) {
         offset: 0,
         sort_field: "created_at",
         sort_order: "DESC",
+
         // customer_group_id: pricingContext.customerGroupId
       });
       return result;
@@ -133,6 +134,8 @@ export default function DashboardPage({user}: any) {
     refetchOnWindowFocus: false,
   });
 
+
+  console.log(data, 'RIDER DATAA')
   // Transform data when it changes
   const transformedData = React.useMemo(() => {
     if (!data) return { orders: [], kpiData: { totalCustomers: 0, activeCustomers: 0, totalRevenue: 0, totalOrders: 0 } };
@@ -247,7 +250,6 @@ export default function DashboardPage({user}: any) {
         </div>
       )}
 
-      KPI Cards
       {/* <KpiCards 
         totalCustomers={kpiData.totalCustomers}
         activeCustomers={kpiData.activeCustomers}

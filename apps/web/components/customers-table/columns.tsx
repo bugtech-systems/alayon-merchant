@@ -108,6 +108,23 @@ export interface CustomerRow {
   tags?: string[];
 }
 
+// Stock health bar slots
+const stockHealthSlots = Array.from({ length: 10 }, (_, index) => ({
+  id: `stock-slot-${index + 1}`,
+  threshold: index + 1,
+}));
+
+// Helper to convert remaining stock to health score (0-10)
+function getStockHealthScore(remainingStock: number, previousOrderQty: number) {
+  if (remainingStock <= 0) return 0;
+  const percentage = (remainingStock / previousOrderQty) * 100;
+  if (percentage >= 80) return 10;
+  if (percentage >= 60) return 8;
+  if (percentage >= 40) return 6;
+  if (percentage >= 20) return 4;
+  return 2;
+}
+
 // Helper functions
 const getFullName = (customer: CustomerRow): string => {
   const firstName = customer.first_name || "";
@@ -494,79 +511,6 @@ function OrdersCell({ customer }: { customer: any }) {
   );
 }
 
-// Actions Dropdown Menu
-// function ActionsCell({ customer, onAction }: { customer: CustomerRow; onAction?: (action: string, data: any) => void }) {
-//   const handleAction = (action: string) => {
-//     if (onAction) {
-//       onAction(action, { customerId: customer.id, customer });
-//     }
-//   };
-
-//   return (
-//     <DropdownMenu>
-//       <DropdownMenuTrigger asChild>
-//         <Button variant="ghost" className="flex size-8 text-muted-foreground data-[state=open]:bg-muted" size="icon">
-//           <MoreHorizontal className="size-4" />
-//           <span className="sr-only">Open menu</span>
-//         </Button>
-//       </DropdownMenuTrigger>
-//       <DropdownMenuContent align="end" className="w-48">
-//         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-//         <DropdownMenuSeparator />
-//         <DropdownMenuItem onClick={() => handleAction('view')}>
-//           <Eye className="size-4 mr-2" />
-//           View Details
-//         </DropdownMenuItem>
-//         <DropdownMenuItem onClick={() => handleAction('edit')}>
-//           <Edit className="size-4 mr-2" />
-//           Edit Customer
-//         </DropdownMenuItem>
-//         <DropdownMenuItem onClick={() => handleAction('sendEmail')}>
-//           <Send className="size-4 mr-2" />
-//           Send Email
-//         </DropdownMenuItem>
-//         <DropdownMenuItem onClick={() => handleAction('viewOrders')}>
-//           <ShoppingBag className="size-4 mr-2" />
-//           View Orders
-//         </DropdownMenuItem>
-//         <DropdownMenuSeparator />
-//         <DropdownMenuSub>
-//           <DropdownMenuSubTrigger>
-//             <Tag className="size-4 mr-2" />
-//             Change Status
-//           </DropdownMenuSubTrigger>
-//           <DropdownMenuSubContent>
-//             <DropdownMenuItem onClick={() => handleAction('setStatus', { status: 'active' })}>
-//               <CheckCircle2 className="size-4 mr-2 text-green-600" />
-//               Active
-//             </DropdownMenuItem>
-//             <DropdownMenuItem onClick={() => handleAction('setStatus', { status: 'vip' })}>
-//               <Star className="size-4 mr-2 text-amber-600" />
-//               VIP
-//             </DropdownMenuItem>
-//             <DropdownMenuItem onClick={() => handleAction('setStatus', { status: 'at_risk' })}>
-//               <AlertCircle className="size-4 mr-2 text-red-600" />
-//               At Risk
-//             </DropdownMenuItem>
-//             <DropdownMenuItem onClick={() => handleAction('setStatus', { status: 'inactive' })}>
-//               <XCircle className="size-4 mr-2 text-gray-600" />
-//               Inactive
-//             </DropdownMenuItem>
-//           </DropdownMenuSubContent>
-//         </DropdownMenuSub>
-//         <DropdownMenuSeparator />
-//         <DropdownMenuItem onClick={() => handleAction('copyEmail')} className="text-blue-600">
-//           <Copy className="size-4 mr-2" />
-//           Copy Email
-//         </DropdownMenuItem>
-//         <DropdownMenuItem variant="destructive" onClick={() => handleAction('deactivate')}>
-//           <Trash2 className="size-4 mr-2" />
-//           Deactivate Account
-//         </DropdownMenuItem>
-//       </DropdownMenuContent>
-//     </DropdownMenu>
-//   );
-// }
 
 // Column Definitions
 export const customerColumns: ColumnDef<CustomerRow>[] = [
@@ -669,7 +613,59 @@ export const customerColumns: ColumnDef<CustomerRow>[] = [
   //   },
   //   size: 100,
   // },
-
+  {
+    accessorKey: "stockHealth",
+    header: "Stock Bar",
+    cell: ({ row }: { row: any }) => {
+      console.log(row, "ROWWS")
+      const { remainingStock = 100, previousOrderQty = 200 } = row.original;
+      const healthScore = getStockHealthScore(previousOrderQty, previousOrderQty);
+      const percentage = Math.round((previousOrderQty / previousOrderQty) * 100);
+      
+      return (
+        <div className="flex items-center gap-3">
+          <div className="flex items-end gap-0.5" title={`${remainingStock} units remaining from previous order`}>
+            <span className="sr-only">
+              Stock health: {percentage}% remaining
+            </span>
+            {stockHealthSlots.map((slot) => (
+              <div
+                key={`${row.original.id}-${slot.id}`}
+                className={cn(
+                  "h-5 w-1.5 rounded-full transition-colors duration-300",
+                  slot.threshold <= healthScore 
+                    ? "bg-emerald-500" 
+                    : healthScore <= 2 
+                      ? "bg-red-500/20"
+                      : "bg-emerald-500/20"
+                )}
+              />
+            ))}
+          </div>
+          <span className="text-xs font-medium tabular-nums">
+            {percentage}%
+          </span>
+        </div>
+      );
+    },
+    filterFn: (row: any, _: any, filterValue: string) => {
+      const { remainingStock, previousOrderQty } = row.original;
+      console.log(row.original, 'flterr')
+      const percentage = (remainingStock / previousOrderQty) * 100;
+      
+      switch (filterValue) {
+        case "high":
+          return percentage >= 60;
+        case "medium":
+          return percentage >= 30 && percentage < 60;
+        case "low":
+          return percentage < 30;
+        default:
+          return true;
+      }
+    },
+    size: 160,
+  },
   {
     accessorKey: "lastOrder",
     header: () => (
@@ -680,6 +676,7 @@ export const customerColumns: ColumnDef<CustomerRow>[] = [
     ),
     cell: ({ row }) => {
       const lastOrder = row.original.lastOrder;
+      console.log(row.original, 'ORDER ORIG')
       if (!lastOrder) {
         return <span className="text-sm text-muted-foreground">—</span>;
       }

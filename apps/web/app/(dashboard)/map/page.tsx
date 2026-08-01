@@ -17,8 +17,8 @@ export default async function Home() {
         pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
       }
 
-  let customersData = await listCustomers();
-console.log(customersData?.customers, 'CUSTOMMSSS')
+  let customersData = await listCustomers({customer_group_id: pricingContext.customerGroupId});
+console.log(customersData?.customers, 'CUSTOMMSSS11')
   let customersRoutes = customersData?.customers?.length ? customersData?.customers?.filter((a: any) => {return (a.lat && a.lng)}) : [];
   return (
     <div className="container mx-auto">

@@ -461,7 +461,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
 
 
 
-  console.log(data?.orders, 'ORDDSS')
 
 
   // Company role view
@@ -538,8 +537,8 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
               />
         
               {/* Task Reminders */}
-              <TaskReminders customerId={pricingContext.customerId} locationId={pricingContext.stockLocationId}/>
-         <CompanyOrdersTable
+              {/* <TaskReminders customerId={pricingContext.customerId} locationId={pricingContext.stockLocationId} priceListId={pricingContext.priceListId}/> */}
+         {/* <CompanyOrdersTable
           data={data?.orders || []}
           totalCount={data?.total || 0}
           isLoading={isLoading}
@@ -557,7 +556,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           onPrint={handlePrint}
           onAcceptOrder={(orderId, stock_location_id) => handleAcceptOrder(orderId, stock_location_id) as any}
           onCompleteOrder={(order, stock_location_id) => handleConfirmOrder(order, stock_location_id) as any}
-        />
+        /> */}
         <DriverDashboard user={user}/>
 
       </div>

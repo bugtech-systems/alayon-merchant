@@ -47,12 +47,13 @@ export async function retrieveDriver(driverId: string): Promise<DriverDTO> {
 }
 
 
-export async function retrieveDriverStocks(customerId: any, locationId: string): Promise<any> {
+export async function retrieveDriverStocks({customerId, locationId, priceListId}: any): Promise<any> {
       const headers = await getAuthHeaders();
  
   const queryParams = new URLSearchParams();
     if (customerId) queryParams.append("customer_id", customerId);
     if (locationId) queryParams.append("stock_location_id", locationId);
+    // if (priceListId) queryParams.append("price_list_id", priceListId);
     const url = `/dashboard/drivers/stocks-progress?${queryParams.toString()}`;
     
     const response = await sdk.client.fetch(url, {

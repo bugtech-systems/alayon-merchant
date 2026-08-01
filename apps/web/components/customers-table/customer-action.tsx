@@ -106,6 +106,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { Switch } from "../ui/switch";
 import { Checkbox } from "../ui/checkbox";
 import { CustomerLocationModal } from "./customer-location";
+import { EditCustomerModal } from "./edit-customer-modal";
 
 const SMS_URL = process.env.SMS_URL || 'https://sms.sharewin.pro';
 
@@ -348,117 +349,117 @@ export function ViewCustomerModal({ isOpen, onClose, customer }: ActionModalProp
 }
 
 // 2. Edit Customer Modal
-export function EditCustomerModal({ isOpen, onClose, customer, onActionComplete }: ActionModalProps) {
-  const [formData, setFormData] = useState({
-    first_name: customer.first_name || "",
-    last_name: customer.last_name || "",
-    phone: customer.phone || "",
-    city: customer.metadata?.city || "",
-    role: customer.metadata?.role || "customer",
-    status: customer.status || "active",
-  });
-  const [isLoading, setIsLoading] = useState(false);
+// export function EditCustomerModal({ isOpen, onClose, customer, onActionComplete }: ActionModalProps) {
+//   const [formData, setFormData] = useState({
+//     first_name: customer.first_name || "",
+//     last_name: customer.last_name || "",
+//     phone: customer.phone || "",
+//     city: customer.metadata?.city || "",
+//     role: customer.metadata?.role || "customer",
+//     status: customer.status || "active",
+//   });
+//   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    try {
-      // API call to update customer
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      toast.success("Customer updated successfully");
-      onActionComplete?.();
-      onClose();
-    } catch (error) {
-      toast.error("Failed to update customer");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+//   const handleSubmit = async (e: React.FormEvent) => {
+//     e.preventDefault();
+//     setIsLoading(true);
+//     try {
+//       // API call to update customer
+//       await new Promise(resolve => setTimeout(resolve, 1000));
+//       toast.success("Customer updated successfully");
+//       onActionComplete?.();
+//       onClose();
+//     } catch (error) {
+//       toast.error("Failed to update customer");
+//     } finally {
+//       setIsLoading(false);
+//     }
+//   };
 
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Edit Customer</DialogTitle>
-          <DialogDescription>Update customer information.</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="first_name">First Name</Label>
-                <Input
-                  id="first_name"
-                  value={formData.first_name}
-                  onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="last_name">Last Name</Label>
-                <Input
-                  id="last_name"
-                  value={formData.last_name}
-                  onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="city">City</Label>
-              <Input
-                id="city"
-                value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="role">Role</Label>
-                <select
-                  id="role"
-                  className="w-full px-3 py-2 border rounded-md"
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                >
-                  <option value="customer">Customer</option>
-                  <option value="company">Company</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <select
-                  id="status"
-                  className="w-full px-3 py-2 border rounded-md"
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                >
-                  <option value="active">Active</option>
-                  <option value="vip">VIP</option>
-                  <option value="at_risk">At Risk</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" type="button" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? "Saving..." : "Save Changes"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
+//   return (
+//     <Dialog open={isOpen} onOpenChange={onClose}>
+//       <DialogContent className="max-w-2xl">
+//         <DialogHeader>
+//           <DialogTitle>Edit Customer</DialogTitle>
+//           <DialogDescription>Update customer information.</DialogDescription>
+//         </DialogHeader>
+//         <form onSubmit={handleSubmit}>
+//           <div className="grid gap-4 py-4">
+//             <div className="grid grid-cols-2 gap-4">
+//               <div className="space-y-2">
+//                 <Label htmlFor="first_name">First Name</Label>
+//                 <Input
+//                   id="first_name"
+//                   value={formData.first_name}
+//                   onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+//                 />
+//               </div>
+//               <div className="space-y-2">
+//                 <Label htmlFor="last_name">Last Name</Label>
+//                 <Input
+//                   id="last_name"
+//                   value={formData.last_name}
+//                   onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+//                 />
+//               </div>
+//             </div>
+//             <div className="space-y-2">
+//               <Label htmlFor="phone">Phone</Label>
+//               <Input
+//                 id="phone"
+//                 value={formData.phone}
+//                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+//               />
+//             </div>
+//             <div className="space-y-2">
+//               <Label htmlFor="city">City</Label>
+//               <Input
+//                 id="city"
+//                 value={formData.city}
+//                 onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+//               />
+//             </div>
+//             <div className="grid grid-cols-2 gap-4">
+//               <div className="space-y-2">
+//                 <Label htmlFor="role">Role</Label>
+//                 <select
+//                   id="role"
+//                   className="w-full px-3 py-2 border rounded-md"
+//                   value={formData.role}
+//                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+//                 >
+//                   <option value="customer">Customer</option>
+//                   <option value="company">Company</option>
+//                   <option value="admin">Admin</option>
+//                 </select>
+//               </div>
+//               <div className="space-y-2">
+//                 <Label htmlFor="status">Status</Label>
+//                 <select
+//                   id="status"
+//                   className="w-full px-3 py-2 border rounded-md"
+//                   value={formData.status}
+//                   onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+//                 >
+//                   <option value="active">Active</option>
+//                   <option value="vip">VIP</option>
+//                   <option value="at_risk">At Risk</option>
+//                   <option value="inactive">Inactive</option>
+//                 </select>
+//               </div>
+//             </div>
+//           </div>
+//           <DialogFooter>
+//             <Button variant="outline" type="button" onClick={onClose}>Cancel</Button>
+//             <Button type="submit" disabled={isLoading}>
+//               {isLoading ? "Saving..." : "Save Changes"}
+//             </Button>
+//           </DialogFooter>
+//         </form>
+//       </DialogContent>
+//     </Dialog>
+//   );
+// }
 
 // 3. View Order History Modal
 export function OrderHistoryModal({ isOpen, onClose, customer }: ActionModalProps) {
