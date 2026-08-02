@@ -48,8 +48,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { updateOrderStatus, convertDraftToOrder, deleteDraftOrder, deletePosOrder } from '@/lib/actions/orders';
-import { captureOrderPayment } from '@/lib/actions/capture-payments';
+import { updateOrderStatus, convertDraftToOrder, deleteDraftOrder, deletePosOrder, updatePosOrderStatus } from '@/lib/actions/orders';
+import { captureOrderPayment, markAsPaid } from '@/lib/actions/capture-payments';
 import { 
   Eye, 
   Trash2, 
@@ -463,7 +463,8 @@ const StatusDropdown = ({
   disabled = false,
   paymentStatus,
   canCapturePayment = false,
-  onCapturePayment
+  onCapturePayment,
+  onMarkAsPaid
 }: { 
   currentStatus: string;
   onStatusChange: (status: string) => void;
@@ -471,11 +472,14 @@ const StatusDropdown = ({
   paymentStatus?: string;
   canCapturePayment?: boolean;
   onCapturePayment?: () => void;
+  onMarkAsPaid?: () => void;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   
   const statuses = ['pending', 'company_preparing', 'completed'];
   const currentConfig = ORDER_STATUS_CONFIG[currentStatus?.toLowerCase()];
+
+  console.log(paymentStatus, 'PAYMENT STATSS')
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
@@ -529,6 +533,18 @@ const StatusDropdown = ({
             >
               <Banknote className="h-4 w-4" />
               Capture Payment
+            </DropdownMenuItem>
+          </>
+        )}
+        {canCapturePayment && paymentStatus === 'not_paid' && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={onMarkAsPaid}
+              className="gap-2 text-blue-600 cursor-pointer"
+            >
+              <Banknote className="h-4 w-4" />
+              Mark As Paid
             </DropdownMenuItem>
           </>
         )}
@@ -1602,7 +1618,7 @@ console.log(data, 'DATAA')
   const handleStatusUpdate = async (orderId: string, status: string) => {
     setIsLoading(true);
     try {
-      const result = await updateOrderStatus(orderId, status);
+      const result = await updatePosOrderStatus(orderId, status);
       if (result.success) {
         toast.success(`Order status updated to ${status}`);
         await refetch();
@@ -1719,8 +1735,13 @@ console.log(data, 'DATAA')
     setCaptureDialogOpen(true);
   };
 
+  const handleMarkAsPaid = async (orderData) => {
+    console.log(orderData, 'MARK AS PAID')
+   let response = await markAsPaid(orderData?.payment_collections[0].id, orderData?.id);
+    console.log(response, 'RES')
+  }
+
   const { total_pages, has_next, has_previous, count } = pagination;
-  
   return (
     <TooltipProvider>
       <div className="space-y-6">
@@ -1787,7 +1808,9 @@ console.log(data, 'DATAA')
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders.map((order) => (
+                  {orders.map((order) => {
+                    console.log(order, 'ORDER ID')
+                    return (
                     <TableRow key={order.id} className="hover:bg-muted/30 transition-colors">
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -1839,7 +1862,8 @@ console.log(data, 'DATAA')
                               paymentStatus={order.payment_status}
                               onStatusChange={(status) => handleStatusUpdate(order.id, status)}
                               onCapturePayment={() => handleCaptureDialog(order)}
-                              canCapturePayment={order.payment_status === 'authorized'}
+                              onMarkAsPaid={() => handleMarkAsPaid(order)}
+                              canCapturePayment={order.payment_status === 'authorized' || order.payment_status === 'not_paid'}
                               disabled={isLoading || captureLoading}
                             />
                           ) : (
@@ -1867,7 +1891,7 @@ console.log(data, 'DATAA')
                               </div>
                               <div className="text-xs text-muted-foreground flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
-                                {order.created_at ? format(new Date(order.created_at), 'h:mm a') : ''}
+                                                                {order?.delivery?.eta ? formatDistanceToNow(new Date(order?.delivery?.eta), { addSuffix: true }) : format(new Date(order.created_at), 'h:mm a')}
                               </div>
                             </div>
                           </TooltipTrigger>
@@ -1899,7 +1923,8 @@ console.log(data, 'DATAA')
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )
+                  })}
                 </TableBody>
               </Table>
             </div>

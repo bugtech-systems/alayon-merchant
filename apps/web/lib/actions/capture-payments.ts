@@ -7,6 +7,7 @@ import { createDelivery } from "./checkout";
 import { fetchAvailableDrivers, retrieveUser } from "../data";
 import { acceptDelivery } from "./deliveries";
 import { v4 as uuidv4 } from 'uuid';
+import { adminFetch } from "../apiClient";
 
 
 // ============================================================================
@@ -746,3 +747,23 @@ export function getPaymentRecords(): any[] {
     return [];
   }
 }
+
+export async function markAsPaid(pay_col_id: string, order_id: string): Promise<any> {
+  try {
+    // Implementation depends on your SDK/API
+ 
+ 
+    await adminFetch(`/dashboard/orders/${order_id}/complete`, {
+      method: 'POST'
+    });
+    const response = await adminFetch(`/admin/payment-collections/${pay_col_id}/mark-as-paid`, 
+      {method: "POST", body: JSON.stringify({ order_id: order_id})}
+    );
+  
+    return response;
+  } catch (error: any) {
+    console.error("Initiate payment session error:", error);
+    throw new Error(`Payment session initiation failed: ${error.message}`);
+  }
+}
+

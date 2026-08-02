@@ -7,6 +7,8 @@ import { adminFetch } from '../apiClient';
 
 export async function updateOrderStatus(id: string, status: string) {
   try {
+
+    
     const response = await sdk.admin.orders.update(id, { status });
     revalidatePath('/orders');
     return { success: true, order: response.order };
