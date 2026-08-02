@@ -105,7 +105,7 @@ export class ReceiptBuilder {
     return ' '.repeat(leftPad) + text + ' '.repeat(rightPad);
   }
 
-  build(order) {
+  build(order: any) {
     const encoder = new EscPosEncoder();
     const store = this.config;
     const totals = order.totals;
@@ -247,6 +247,14 @@ console.log(order.metadata, order, 'HOOORD')
       encoder.newline(2);
     }
 
+    if (order?.metadata?.notes) {
+      
+      encoder
+        .bold(true)
+        .text(this.fitText('NOTES'))
+        .bold(false)
+        .text(this.fitText(`${order?.metadata?.notes}`))
+    }
     // ============================================
     // SHIPPING SECTION - LEFT ALIGNED
     // ============================================

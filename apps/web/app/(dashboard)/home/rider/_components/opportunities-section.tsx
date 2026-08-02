@@ -770,6 +770,7 @@ export function WaterDeliveryOrdersSection({
         header: "Stock Bar",
         cell: ({ row }: { row: Row<WaterDeliveryOrder> }) => {
           const order = row.original;
+          
           const healthScore = getStockHealthScore(order.remainingStock, order.previousOrderQty);
           const pct = Math.round((order.remainingStock / order.previousOrderQty) * 100);
           return (

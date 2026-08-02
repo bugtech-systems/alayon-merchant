@@ -236,12 +236,12 @@ function getOrderColumns({
     if (isProcessing || isFulfilled) {
       // Already accepted: show Print icon
       return (
-        <div className="d-flex align-center w-full">
+        < >
          {!isFulfilled &&
                 <Button
         variant="outline"
         size="sm"
-        className="h-8 gap-1 mr-5"
+        className="h-8 gap-1"
           onClick={(e) => {
             onCompleteOrder?.(order, stockLocationId);
           }}
@@ -264,7 +264,7 @@ function getOrderColumns({
         </Button>
 
        
-        </div>
+        </>
         
       );
     }
@@ -285,6 +285,7 @@ function getOrderColumns({
     };
 
     return (
+      <>  
       <Button
         variant="outline"
         size="sm"
@@ -303,6 +304,21 @@ function getOrderColumns({
           </>
         )}
       </Button>
+      
+              <Button
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          onClick={(e) => {
+            e.stopPropagation();
+            onPrint?.(order);
+          }}
+        >
+          <Printer className="size-4" />
+          <span className="sr-only">Print</span>
+        </Button>
+      </>
+    
     );
   };
 
@@ -363,12 +379,14 @@ function getOrderColumns({
               <div className="flex items-center justify-between pt-1 border-t">
                   {renderAcceptPrintCell(order)}
 
-                {/* <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" className="size-8" onClick={() => onRowClick?.(order)}>
-                    <ChevronRight className="size-4" />
-                  </Button>
-                </div> */}
+
               </div>
+              {order?.metadata?.notes && 
+            <div className="flex items-center gap-1">
+                                  <span className="text-muted-foreground text-xs">NOTES:</span>
+                    <span className="text-muted-foreground text-xs">{order?.metadata?.notes}</span>
+                </div> 
+                }
             </div>
           );
         },

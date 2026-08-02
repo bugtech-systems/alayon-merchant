@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, Package, TrendingDown, TrendingUp, Truck, CalendarDays, Clock, MapPin } from "lucide-react";
+import { ArrowUpRight, Package, TrendingDown, TrendingUp, Truck, CalendarDays, Clock, MapPin, Map } from "lucide-react";
 import * as React from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import Link from "next/link";
 
 // Mock data - in real app, this would come from API based on selected date
 interface RiderStats {
@@ -50,29 +51,41 @@ export function KpiCards() {
           </p>
         </div>
 
+        <Link href={'/map'}>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full sm:w-auto justify-start text-left font-normal",
+                  !selectedDate && "text-muted-foreground"
+                )}
+              >
+                <Map className="mr-2 size-4" />
+               <span>Map Route</span>
+              </Button>
+              </Link>
         {/* Date Picker */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              className={cn(
-                "w-full sm:w-auto justify-start text-left font-normal",
-                !selectedDate && "text-muted-foreground"
-              )}
-            >
-              <CalendarDays className="mr-2 size-4" />
-              {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="end">
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={(date) => date && setSelectedDate(date)}
-              initialFocus
-            />
-          </PopoverContent>
-        </Popover>
+          {/* <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full sm:w-auto justify-start text-left font-normal",
+                  !selectedDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarDays className="mr-2 size-4" />
+                {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => date && setSelectedDate(date)}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover> */}
       </div>
 
       {/* KPI Cards Grid */}

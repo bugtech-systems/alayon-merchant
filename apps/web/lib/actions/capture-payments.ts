@@ -6,6 +6,8 @@ import { capturePayment, setIsTakeOut } from "../data/cart";
 import { createDelivery } from "./checkout";
 import { fetchAvailableDrivers, retrieveUser } from "../data";
 import { acceptDelivery } from "./deliveries";
+import { v4 as uuidv4 } from 'uuid';
+
 
 // ============================================================================
 // TYPES
@@ -140,20 +142,59 @@ export async function initiateCapturePaymentSession(
   headers?: any
 ): Promise<PaymentSessionResponse> {
   const headersAuth = await getAuthHeaders();
-  try {
-    const response = await sdk.store.payment.initiatePaymentSession(
+
+  // 1. Generate a cryptographically unique key for THIS specific attempt.
+  const idempotencyKey = uuidv4();
+
+  // Helper to execute the request with a given key
+  const makeRequest = async (key: string) => {
+    return await sdk.store.payment.initiatePaymentSession(
       cart,
       {
         provider_id: params?.provider_id || "pp_system_default",
         context: params?.context,
       },
-      {},
-      {...headersAuth, ...headers}
+      {}, // options
+      {
+        ...headersAuth,
+        ...headers,
+        // 2. Explicitly override the header with our unique key.
+        'Idempotency-Key': key,
+      }
     );
+  };
 
+  try {
+    const response = await makeRequest(idempotencyKey);
     return response?.payment_collection?.payment_sessions[0] || null;
-  } catch (error) {
-    console.error("Error initiating payment session:", error);
+  } catch (error: any) {
+    // 3. Handle the 409 Conflict specifically.
+    if (error?.response?.status === 409) {
+      console.warn(
+        'Idempotency conflict detected (likely double-click). Retrying with the correct key...'
+      );
+
+      // The error message suggests retrying with the "provided" key.
+      // If Medusa returns the specific key in the error body, use that.
+      // Otherwise, fallback to the original generated key (which is safe to retry).
+      const retryKey = error?.response?.data?.idempotency_key || idempotencyKey;
+
+      // Small delay to let the backend resolve any in-flight processing state.
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      try {
+        // Retry with the SAME key. Medusa's idempotency ensures it returns
+        // the previous result instead of creating a duplicate.
+        const retryResponse = await makeRequest(retryKey);
+        return retryResponse?.payment_collection?.payment_sessions[0] || null;
+      } catch (retryError) {
+        console.error('Idempotency retry failed:', retryError);
+        throw retryError;
+      }
+    }
+
+    // Re-throw any other errors (400, 500, etc.)
+    console.error('Error initiating payment session:', error);
     throw error;
   }
 }

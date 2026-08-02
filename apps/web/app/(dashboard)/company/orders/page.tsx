@@ -3,8 +3,7 @@ import { Suspense } from 'react';
 import { OrdersClient } from '@/components/orders/orders-client';
 import { OrderTableSkeleton } from '@/components/ui/table-skeleton';
 import { retrieveUser } from '@/lib/data';
-import { listOrders, listPosOrders } from '@/lib/data/orders';
-import { sortOrders } from '@/lib/utils/helpers';
+import { listOrders } from '@/lib/data/orders';
 import { buildDateFilters, getDateRangePreset } from '@/lib/utils/date-filters';
 
 interface PageProps {
@@ -99,7 +98,6 @@ export default async function OrdersPage({ searchParams }: PageProps) {
 
   // Fetch initial data based on order type
   let initialOrders = await listOrders(limit, offset, filters);
-  let initialData = sortOrders(initialOrders.orders, 'created_at', 'desc');
 
   return (
     <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8">

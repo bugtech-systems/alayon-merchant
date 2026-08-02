@@ -32,6 +32,7 @@ import {
   Check,
   CheckCircle,
   Truck,
+  Notebook,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -267,7 +268,18 @@ export function OrderDetailsView({ order }: any) {
           </div>
         </CardContent>
       </Card>
-
+     {order?.metadata?.notes &&    <Card>
+              <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Notebook className="size-4" />
+         Notes
+          </CardTitle>
+        </CardHeader>   
+            <CardContent>
+                {order?.metadata.notes}
+              </CardContent> 
+        </Card>
+        }
       {/* Shipping Address */}
       {order.shipping_address && (
         <Card>
