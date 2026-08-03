@@ -419,14 +419,14 @@ export function ProductCard({
           <div className="p-3 space-y-3">
             {/* Product Title */}
             <div>
-              <h3 className="font-semibold text-sm line-clamp-2 min-h-[40px]">
+              <h3 className="font-semibold text-sm line-clamp-2 min-h-[10px]">
                 {product.title}
               </h3>
-              {product.categories && product.categories.length > 0 && (
+              {/* {product.categories && product.categories.length > 0 && (
                 <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
                   {product.categories.map(c => c.name).join(", ")}
                 </p>
-              )}
+              )} */}
             </div>
             
             {/* Variant Selector */}
@@ -444,11 +444,7 @@ export function ProductCard({
                     </span>
                     <ChevronDown className="h-3 w-3 ml-2 opacity-50" />
                   </Button>
-                ) : (
-                  <div className="text-xs text-muted-foreground px-2 py-1.5 bg-muted/50 rounded-md text-center">
-                    {selectedVariant?.title || "Default"}
-                  </div>
-                )}
+                ) : ''}
               </div>
             )}
             
@@ -466,12 +462,12 @@ export function ProductCard({
               </div>
               
               {/* Stock Status */}
-              <div className={cn(
+              {/* <div className={cn(
                 "text-xs px-2 py-0.5 rounded-full inline-block",
                 stockStatus.className
               )}>
                 {stockStatus.text}
-              </div>
+              </div> */}
               
               {/* Quantity x Price Preview */}
    

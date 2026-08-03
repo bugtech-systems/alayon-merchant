@@ -125,7 +125,7 @@ export function PaymentDialog({
       
       setPaymentSuccess(true);
       await onComplete(completeResult.order);
-      
+      setIsTakeOut(false)
       setTimeout(() => {
         onOpenChange(false);
         setPaymentSuccess(false);

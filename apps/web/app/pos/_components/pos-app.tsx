@@ -243,6 +243,8 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
       // Prepare cart with pricing metadata before opening payment dialog
       await prepareCartForCheckout();
       setPaymentDialogOpen(true);
+
+      setSearchQuery('')
     } catch (error) {
       console.error("Error preparing cart:", error);
       toast({ 
@@ -465,6 +467,8 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
                 onChange={(e) => setSearchQuery(e.target.value)} 
                 className="pl-7 h-8 text-sm" 
               />
+                         <Button className="absolute right-4 top-1/2 h-3 w-5 -translate-y-1/2" onClick={() => setSearchQuery('')}>Clear</Button>
+
             </div>
             
             <div className="flex gap-1 overflow-x-auto">
@@ -604,6 +608,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
               onChange={(e) => setSearchQuery(e.target.value)} 
               className="pl-7 h-9" 
             />
+           <Button className="absolute right-4 top-1/2 h-3 w-5 -translate-y-1/2" onClick={() => setSearchQuery('')}>Clear</Button>
           </div>
           
           <div className="flex gap-1 overflow-x-auto">
