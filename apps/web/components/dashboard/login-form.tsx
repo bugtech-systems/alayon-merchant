@@ -65,8 +65,8 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 const userTypes = [
   // { value: "customer", label: "Customer", icon: User, color: "blue", description: "Shop as a customer" },
   { value: "store", label: "Cashier", icon: Store, color: "green", description: "Manage your store", email: "cashier_sam@gmail.com", password: "" },
-  { value: "store", label: "Cashier", icon: Truck, color: "orange", description: "Fullfilment operations", email: "cashier_shiela@example.com", password: "" },
-  { value: "company", label: "Admin", icon: Building2, color: "purple", description: "Platform management", email: "bellyme@example.com", password: "" },
+  { value: "cashier", label: "Cashier", icon: Truck, color: "orange", description: "Fullfilment operations", email: "cashier_shiela@gmail.com", password: "" },
+  { value: "company", label: "Admin", icon: Building2, color: "purple", description: "Platform management", email: "bellyme@gmail.com", password: "" },
 ];
 
 interface LoginFormProps {

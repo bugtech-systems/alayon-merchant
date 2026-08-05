@@ -152,7 +152,7 @@ console.log(company, data?.customers, 'CURRNET')
       }
 
       const offset = refresh ? 0 : messageOffset;
-      const data = await getConversation(phoneNumber, {
+      const {data} = await getConversation(phoneNumber, {
         limit: 50,
         offset: offset,
       });

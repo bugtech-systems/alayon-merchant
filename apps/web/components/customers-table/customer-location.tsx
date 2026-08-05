@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -25,7 +25,7 @@ import {
   LocateFixed,
 } from 'lucide-react';
 import { listBarangays, listMunicipalities } from '@/lib/actions/regions';
-import {  updateCustomerLocation } from '@/lib/actions/customer';
+import { updateCustomerLocation } from '@/lib/actions/customer';
 import { MapLocationPicker } from '@/components/map-location-picker';
 
 // --- Types ---
@@ -55,13 +55,13 @@ interface CustomerLocationModalProps {
       lng?: number;
       mapAddress?: string;
     };
-  };
+  } | any;
   onSuccess?: () => void;
 }
 
 // --- Helpers ---
 const getFullName = (customer: CustomerLocationModalProps['customer']) =>
-  `${customer.first_name} ${customer.last_name}`.trim();
+  `${customer?.first_name} ${customer?.last_name}`.trim();
 
 const DEFAULT_COORDS = { lat: 14.5995, lng: 120.9842 }; // Manila
 
@@ -78,11 +78,11 @@ export function CustomerLocationModal({
   customer,
   onSuccess,
 }: CustomerLocationModalProps) {
-  const initialMeta = customer.metadata || {};
+  const initialMeta = customer?.metadata || {};
   const hasExisting = hasCompleteLocation(initialMeta);
 
   // --- UI state ---
-  const [editMode, setEditMode] = useState(!hasExisting); // auto‑edit if incomplete
+  const [editMode, setEditMode] = useState(!hasExisting);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -103,6 +103,11 @@ export function CustomerLocationModal({
   const [loadingMunicipalities, setLoadingMunicipalities] = useState(false);
   const [loadingBarangays, setLoadingBarangays] = useState(false);
 
+  // --- Refs to prevent infinite loops ---
+  const isInitialMount = useRef(true);
+  const previousCustomerId = useRef(customer?.id);
+  const previousIsOpen = useRef(isOpen);
+
   // --- Derived selections ---
   const selectedMunicipality = useMemo(
     () => municipalities.find((m) => m.citymun_desc === form.municipality) || null,
@@ -113,25 +118,63 @@ export function CustomerLocationModal({
     [barangays, form.barangay]
   );
 
+  const customerId = customer?.id;
 
-  console.log(customer, 'CUTOMSS')
-  // --- Load municipalities on open ---
+  // --- Reset form function (memoized to prevent recreation) ---
+  const resetForm = useCallback(() => {
+    const meta = customer?.metadata || {};
+    setForm({
+      address: meta.address || '',
+      municipality: meta.municipality || '',
+      barangay: meta.barangay || '',
+      lat: meta.lat ?? null,
+      lng: meta.lng ?? null,
+      mapAddress: meta.mapAddress || '',
+    });
+    setError('');
+    setSuccess(false);
+    setSaving(false);
+    const hasExisting = !!(meta?.municipality && meta?.barangay && meta?.lat != null && meta?.lng != null);
+    setEditMode(!hasExisting);
+  }, [customer?.metadata]); // Only depends on customer metadata
+
+  // --- Reset form when modal opens or customer changes ---
   useEffect(() => {
-    if (!isOpen) return;
-    const load = async () => {
-      setLoadingMunicipalities(true);
-      try {
-        const response = await listMunicipalities();
-        const data = Array.isArray(response) ? response : response?.data || [];
-        setMunicipalities(data);
-      } catch {
-        setError('Failed to load municipalities.');
-      } finally {
-        setLoadingMunicipalities(false);
-      }
-    };
-    load();
-  }, [isOpen]);
+    // Skip on initial mount
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    const customerChanged = previousCustomerId.current !== customerId;
+    const dialogOpened = !previousIsOpen.current && isOpen;
+
+    if (isOpen && (customerChanged || dialogOpened)) {
+      resetForm();
+    }
+
+    previousCustomerId.current = customerId;
+    previousIsOpen.current = isOpen;
+  }, [isOpen, customerId, resetForm]);
+
+  // --- Load municipalities only when modal opens ---
+  useEffect(() => {
+    if (isOpen && municipalities.length === 0) {
+      const load = async () => {
+        setLoadingMunicipalities(true);
+        try {
+          const response = await listMunicipalities();
+          const data = Array.isArray(response) ? response : response?.data || [];
+          setMunicipalities(data);
+        } catch {
+          setError('Failed to load municipalities.');
+        } finally {
+          setLoadingMunicipalities(false);
+        }
+      };
+      load();
+    }
+  }, [isOpen, municipalities.length]);
 
   // --- Load barangays when municipality changes ---
   useEffect(() => {
@@ -139,42 +182,32 @@ export function CustomerLocationModal({
       setBarangays([]);
       return;
     }
+    
+    let isMounted = true;
     const load = async () => {
       setLoadingBarangays(true);
       try {
         const response = await listBarangays(selectedMunicipality.citymun_code);
-        const data = Array.isArray(response) ? response : response?.data || [];
-        setBarangays(data);
+        if (isMounted) {
+          const data = Array.isArray(response) ? response : response?.data || [];
+          setBarangays(data);
+        }
       } catch {
-        setError('Failed to load barangays.');
+        if (isMounted) {
+          setError('Failed to load barangays.');
+        }
       } finally {
-        setLoadingBarangays(false);
+        if (isMounted) {
+          setLoadingBarangays(false);
+        }
       }
     };
     load();
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedMunicipality]);
-
-  // --- Reset form when dialog closes ---
-  const resetForm = useCallback(() => {
-    setForm({
-      address: initialMeta.address || '',
-      municipality: initialMeta.municipality || '',
-      barangay: initialMeta.barangay || '',
-      lat: initialMeta.lat ?? null,
-      lng: initialMeta.lng ?? null,
-      mapAddress: initialMeta.mapAddress || '',
-    });
-    setError('');
-    setSuccess(false);
-    setSaving(false);
-    setEditMode(!hasExisting); // reset to auto‑edit if incomplete
-  }, [initialMeta, hasExisting]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      resetForm();
-    }
-  }, [isOpen, resetForm]);
 
   // --- Handlers ---
   const handleMunicipalityChange = (id: string) => {
@@ -246,22 +279,14 @@ export function CustomerLocationModal({
     setError('');
 
     try {
-
-
-
-  let response =  await updateCustomerLocation(customer.id, {
+      await updateCustomerLocation(customer.id, {
         municipality: form.municipality,
         barangay: form.barangay,
         address: form.address,
         lat: form.lat,
         lng: form.lng,
         mapAddress: form.mapAddress,
-
       });
-
-
-
-      console.log(response, 'RESPPP')
 
       setSuccess(true);
       onSuccess?.();

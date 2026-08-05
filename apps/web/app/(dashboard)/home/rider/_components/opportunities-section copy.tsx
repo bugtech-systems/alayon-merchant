@@ -18,12 +18,12 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
 import {
-  type ColumnFiltersState,
+  type ColumnDef,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
-  type PaginationState,
+  getSortedRowModel,
   useReactTable,
   type VisibilityState,
   type Row,
@@ -33,23 +33,28 @@ import {
   ListFilter,
   XIcon,
   PackageIcon,
-  TruckIcon,
   UserIcon,
   PhoneIcon,
   MapPinIcon,
   CalendarIcon,
   TrendingUpIcon,
   GripVerticalIcon,
-  MoreHorizontalIcon,
   EditIcon,
   UserPlusIcon,
   Trash2Icon,
+  LayoutGridIcon,
+  AlertCircleIcon,
+  MoreHorizontalIcon,
+  EyeIcon,
+  CopyIcon,
   CheckCircleIcon,
   XCircleIcon,
-  AlertCircleIcon,
-  InfoIcon,
+  ClockIcon,
+  TruckIcon,
+  HomeIcon,
 } from "lucide-react";
 import { formatDistanceToNow, parseISO, format } from "date-fns";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -65,28 +70,20 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-  DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuLabel,
+  DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Pagination,
   PaginationContent,
-  PaginationEllipsis,
   PaginationItem,
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import {
   Dialog,
   DialogContent,
@@ -120,7 +117,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { CustomerLocationModal } from "@/components/customers-table/customer-location";
-import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 
 // ============================================================
 // 1. TYPES & CONFIG
@@ -136,10 +133,6 @@ export const STOCK_STATUS_CONFIG = {
   medium: { color: "bg-amber-500", label: "Medium", textColor: "text-amber-700" },
   low: { color: "bg-rose-500", label: "Low", textColor: "text-rose-700" },
 } as any;
-
-// ============================================================
-// 1. Types & Config
-// ============================================================
 
 export interface CustomerDetails {
   id: string;
@@ -184,9 +177,9 @@ export interface OrderDetails {
 export interface WaterDeliveryOrder {
   id: string;
   orderNumber: string;
-  customer: string; // display name
+  customer: string;
   customerPhone: string;
-  location: string; // display location name
+  location: string;
   address: string;
   quantity: number;
   total: number;
@@ -196,7 +189,6 @@ export interface WaterDeliveryOrder {
   assignedDriverId: string | null;
   remainingStock: number;
   previousOrderQty: number;
-  // Expanded details
   customerDetails: CustomerDetails;
   locationDetails: LocationDetails;
   orderDetails: OrderDetails;
@@ -206,22 +198,21 @@ export interface WaterDeliveryOrder {
     phone: string;
     vehicle: string;
   };
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  metadata?: any;
+  last_order_at?: string;
+  latest_order?: any;
+  stock_health?: {
+    remainingStock: number;
+    previousOrderQty: number;
+    stockHealthScore: number;
+    stockHealthPercentage: number;
+    stockHealthStatus: "all" | "high" | "medium" | "low";
+  };
 }
 
-// Status configurations
-const statusConfig = {
-  pending: { label: "Pending", variant: "secondary" },
-  company_declined: { label: "Company Declined", variant: "destructive" },
-  company_accepted: { label: "Accepted", variant: "default" },
-  pickup_claimed: { label: "Pickup Claimed", variant: "outline" },
-  company_preparing: { label: "Company Preparing", variant: "outline" },
-  ready_for_pickup: { label: "Ready for Pickup", variant: "default" },
-  in_transit: { label: "In Transit", variant: "default" },
-  delivered: { label: "Delivered", variant: "success" },
-  completed: { label: "Completed", variant: "success" },
-} as const;
-
-// Status options for filtering
 const statusOptions = [
   "all",
   "pending",
@@ -235,20 +226,7 @@ const statusOptions = [
   "completed",
 ] as const;
 
-const stockHealthSlots = Array.from({ length: 10 }, (_, index) => ({
-  id: `slot-${index + 1}`,
-  threshold: index + 1,
-}));
-
-function getStockHealthScore(remaining: number, previousQty: number) {
-  if (remaining <= 0) return 0;
-  const pct = (remaining / previousQty) * 100;
-  if (pct >= 80) return 10;
-  if (pct >= 60) return 8;
-  if (pct >= 40) return 6;
-  if (pct >= 20) return 4;
-  return 2;
-}
+const stockHealthOptions = ["all", "high", "medium", "low"] as const;
 
 function getStatusColor(status: string) {
   const colors: Record<string, string> = {
@@ -280,8 +258,23 @@ function getStatusLabel(status: string) {
   return labels[status] || status;
 }
 
+function getStatusIcon(status: string) {
+  const icons: Record<string, React.ReactNode> = {
+    pending: <ClockIcon className="size-3.5" />,
+    company_declined: <XCircleIcon className="size-3.5" />,
+    company_accepted: <CheckCircleIcon className="size-3.5" />,
+    pickup_claimed: <UserIcon className="size-3.5" />,
+    company_preparing: <ClockIcon className="size-3.5" />,
+    ready_for_pickup: <PackageIcon className="size-3.5" />,
+    in_transit: <TruckIcon className="size-3.5" />,
+    delivered: <HomeIcon className="size-3.5" />,
+    completed: <CheckCircleIcon className="size-3.5" />,
+  };
+  return icons[status] || <ClockIcon className="size-3.5" />;
+}
+
 // ============================================================
-// 2. Helper: Sortable Row Component
+// 2. SORTABLE ROW - FIXED WITH PROPER DRAG HANDLE
 // ============================================================
 
 interface SortableRowProps {
@@ -289,8 +282,6 @@ interface SortableRowProps {
   children: React.ReactNode;
   onClick: () => void;
 }
-
-
 
 function SortableRow({ row, children, onClick }: SortableRowProps) {
   const {
@@ -300,7 +291,13 @@ function SortableRow({ row, children, onClick }: SortableRowProps) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: row.id });
+  } = useSortable({ 
+    id: row.id,
+    data: {
+      type: "row",
+      row,
+    },
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -313,17 +310,169 @@ function SortableRow({ row, children, onClick }: SortableRowProps) {
       ref={setNodeRef}
       style={style}
       {...attributes}
-      {...listeners}
-      className="cursor-grab active:cursor-grabbing hover:bg-muted/50 transition-colors"
+      className={cn(
+        "hover:bg-muted/50 transition-colors",
+        isDragging && "shadow-lg ring-2 ring-primary/20 z-50 bg-background"
+      )}
       onClick={onClick}
+      data-id={row.id}
     >
+      {/* Drag Handle - Always first */}
+      <TableCell className="w-10 px-2">
+        <div
+          {...listeners}
+          className="flex items-center justify-center hover:bg-muted/80 rounded p-1 transition-colors cursor-grab active:cursor-grabbing"
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+          onMouseDown={(e) => {
+            // Prevent row click when dragging
+            e.stopPropagation();
+          }}
+        >
+          <GripVerticalIcon className="size-4 text-muted-foreground" />
+        </div>
+      </TableCell>
+      
+      {/* Render all other cells */}
       {children}
     </TableRow>
   );
 }
 
 // ============================================================
-// 3. DETAIL MODALS (unchanged)
+// 3. ACTION POPOVER COMPONENT
+// ============================================================
+
+interface RowActionPopoverProps {
+  order: WaterDeliveryOrder;
+  onAction: (action: string, order: WaterDeliveryOrder) => void;
+  onUpdateStatus?: (orderId: string, status: WaterDeliveryOrder["status"]) => void;
+}
+
+function RowActionPopover({ order, onAction, onUpdateStatus }: RowActionPopoverProps) {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [showStatusMenu, setShowStatusMenu] = React.useState(false);
+
+  const handleAction = (action: string) => {
+    onAction(action, order);
+    setIsOpen(false);
+  };
+
+  const handleStatusUpdate = (status: WaterDeliveryOrder["status"]) => {
+    if (onUpdateStatus) {
+      onUpdateStatus(order.id, status);
+      toast.success(`Order status updated to ${getStatusLabel(status)}`);
+    }
+    setIsOpen(false);
+    setShowStatusMenu(false);
+  };
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MoreHorizontalIcon className="size-4" />
+          <span className="sr-only">Open actions</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-56 p-1" onClick={(e) => e.stopPropagation()}>
+        <div className="space-y-0.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2 h-9"
+            onClick={() => handleAction("view")}
+          >
+            <EyeIcon className="size-4" />
+            View Details
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2 h-9"
+            onClick={() => handleAction("customer")}
+          >
+            <UserIcon className="size-4" />
+            View Customer
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2 h-9"
+            onClick={() => handleAction("location")}
+          >
+            <MapPinIcon className="size-4" />
+            View Location
+          </Button>
+          <Separator className="my-1" />
+          <Popover open={showStatusMenu} onOpenChange={setShowStatusMenu}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start gap-2 h-9"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowStatusMenu(true);
+                }}
+              >
+                <EditIcon className="size-4" />
+                Update Status
+                <ChevronDownIcon className="size-3 ml-auto" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-48 p-1" side="right">
+              {statusOptions.filter(s => s !== "all").map((status) => (
+                <Button
+                  key={status}
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start gap-2 h-8 text-xs"
+                  onClick={() => handleStatusUpdate(status as WaterDeliveryOrder["status"])}
+                >
+                  {getStatusIcon(status)}
+                  {getStatusLabel(status)}
+                </Button>
+              ))}
+            </PopoverContent>
+          </Popover>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2 h-9"
+            onClick={() => {
+              navigator.clipboard.writeText(order.orderNumber);
+              toast.success("Order number copied to clipboard");
+              setIsOpen(false);
+            }}
+          >
+            <CopyIcon className="size-4" />
+            Copy Order #
+          </Button>
+          <Separator className="my-1" />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2 h-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={() => handleAction("delete")}
+          >
+            <Trash2Icon className="size-4" />
+            Delete Order
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ============================================================
+// 4. DETAIL MODALS
 // ============================================================
 
 function OrderDetailModal({ open, onOpenChange, order }: { open: boolean; onOpenChange: (open: boolean) => void; order: WaterDeliveryOrder | null }) {
@@ -576,20 +725,6 @@ function StockDetailModal({ open, onOpenChange, order }: { open: boolean; onOpen
   );
 }
 
-
-
-
-// ============================================================
-// 3. Detail Modals
-// ============================================================
-
-interface OrderDetailModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  order: WaterDeliveryOrder | null;
-}
-
-
 function StatusUpdateModal({ open, onOpenChange, order, onUpdate }: { open: boolean; onOpenChange: (open: boolean) => void; order: WaterDeliveryOrder | null; onUpdate?: (status: WaterDeliveryOrder["status"]) => void }) {
   const [newStatus, setNewStatus] = React.useState<WaterDeliveryOrder["status"] | null>(null);
   if (!order) return null;
@@ -632,10 +767,7 @@ function StatusUpdateModal({ open, onOpenChange, order, onUpdate }: { open: bool
 }
 
 // ============================================================
-// 4. Main Component
-// ============================================================
-// ============================================================
-// 4. DEBOUNCE HOOK
+// 5. DEBOUNCE HOOK
 // ============================================================
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -648,7 +780,7 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 // ============================================================
-// 5. QUERY PARAMS HELPERS
+// 6. QUERY PARAMS HELPERS
 // ============================================================
 
 interface QueryParams {
@@ -687,76 +819,93 @@ function buildQueryString(params: QueryParams): string {
 }
 
 // ============================================================
-// 6. MAIN COMPONENT
+// 7. MAIN COMPONENT
 // ============================================================
 
-
-
-
 interface WaterDeliveryOrdersSectionProps {
-  data?: WaterDeliveryOrder[];
+  fetchOrders: (params: QueryParams) => Promise<{ data: WaterDeliveryOrder[]; total: number }>;
   onOrderClick?: (order: WaterDeliveryOrder) => void;
   onAssignDriver?: (orderId: string, driverName: string) => void;
   onUpdateStatus?: (orderId: string, status: WaterDeliveryOrder["status"]) => void;
   onBulkAction?: (action: string, selectedIds: string[]) => void;
+  onPriorityUpdate?: (orderedIds: string[]) => Promise<void> | void;
 }
 
 export function WaterDeliveryOrdersSection({
-  data: initialData = [],
+  fetchOrders,
   onOrderClick,
   onAssignDriver,
   onUpdateStatus,
   onBulkAction,
+  onPriorityUpdate,
 }: WaterDeliveryOrdersSectionProps) {
-
-
-    const router = useRouter();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const initialParams = React.useMemo(() => parseQueryParams(searchParams), [searchParams]);
 
-  // --- State ---
   const [orders, setOrders] = React.useState<WaterDeliveryOrder[]>([]);
   const [total, setTotal] = React.useState(0);
+  const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<Error | null>(null);
 
+  const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({});
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [density, setDensity] = React.useState<"compact" | "normal">("normal");
-  const [data, setData] = React.useState<WaterDeliveryOrder[]>(initialData);
-  const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({});
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [globalFilter, setGlobalFilter] = React.useState("");
-  const [pagination, setPagination] = React.useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: 10,
-  });
   const [isDetailOpen, setIsDetailOpen] = React.useState(false);
   const [selectedOrder, setSelectedOrder] = React.useState<WaterDeliveryOrder | null>(null);
   const [detailType, setDetailType] = React.useState<"order" | "customer" | "location" | "stock" | "status">("order");
-  const [isLoading, setIsLoading] = React.useState(true);
 
-  const sortableId = React.useId();
+  const debouncedSearch = useDebounce(initialParams.search, 300);
+  const currentParams: QueryParams = React.useMemo(() => ({
+    ...initialParams,
+    search: debouncedSearch,
+  }), [initialParams, debouncedSearch]);
 
   const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+    useSensor(MouseSensor, { 
+      activationConstraint: { 
+        distance: 5,
+      } 
+    }),
+    useSensor(TouchSensor, { 
+      activationConstraint: { 
+        delay: 200, 
+        tolerance: 5,
+      } 
+    }),
     useSensor(KeyboardSensor, {})
   );
 
-  // -- Table --
- const columns = React.useMemo<ColumnDef<WaterDeliveryOrder>[]>(() => {
+  const fetchData = React.useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const result = await fetchOrders(currentParams);
+      setOrders(result.data);
+      setTotal(result.total);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error("Failed to fetch orders"));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchOrders, currentParams]);
+
+  React.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const updateUrl = React.useCallback((newParams: Partial<QueryParams>) => {
+    const merged = { ...currentParams, ...newParams };
+    if (newParams.page === undefined && (newParams.sortBy || newParams.status || newParams.stockHealth || newParams.search !== undefined)) {
+      merged.page = 1;
+    }
+    const queryString = buildQueryString(merged);
+    router.push(`${queryString}`, { scroll: false });
+  }, [router, currentParams]);
+
+  // --- Table columns ---
+  const columns = React.useMemo<ColumnDef<WaterDeliveryOrder>[]>(() => {
     return [
-      {
-        id: "dragHandle",
-        header: () => <span className="sr-only">Drag</span>,
-        cell: () => (
-          <div className="flex items-center justify-center">
-            <GripVerticalIcon className="size-4 text-muted-foreground cursor-grab" />
-          </div>
-        ),
-        size: 40,
-        enableSorting: false,
-        enableHiding: false,
-      },
       {
         id: "select",
         header: ({ table }) => (
@@ -797,7 +946,7 @@ export function WaterDeliveryOrdersSection({
           const initials = name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
           return (
             <div
-              className="flex items-center gap-3 cursor-pointer hover:text-primary"
+              className="flex items-center gap-3 cursor-pointer hover:text-primary group"
               onClick={(e) => { e.stopPropagation(); setSelectedOrder(order); setDetailType("customer"); setIsDetailOpen(true); }}
             >
               <Avatar className="h-8 w-8">
@@ -806,7 +955,7 @@ export function WaterDeliveryOrdersSection({
                 </AvatarFallback>
               </Avatar>
               <div className="flex flex-col">
-                <span className="font-medium text-sm">{name}</span>
+                <span className="font-medium text-sm group-hover:underline">{name}</span>
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <PhoneIcon className="size-3" />
                   {order.phone || order.customerPhone || "N/A"}
@@ -827,12 +976,12 @@ export function WaterDeliveryOrdersSection({
           const meta = order.metadata || {};
           return (
             <div
-              className="flex flex-row justify-start items-center gap-3 cursor-pointer hover:text-primary"
+              className="flex flex-row justify-start items-center gap-3 cursor-pointer hover:text-primary group"
               onClick={(e) => { e.stopPropagation(); setSelectedOrder(order); setDetailType("location"); setIsDetailOpen(true); }}
             >
               <MapPinIcon className="size-5 text-muted-foreground" />
               <div className="flex flex-col justify-start items-start gap-0.5">
-                <span className="font-medium text-sm">{meta.city || "N/A"}</span>
+                <span className="font-medium text-sm group-hover:underline">{meta.city || "N/A"}</span>
                 <span className="text-xs text-muted-foreground">{meta.barangay || "N/A"}</span>
               </div>
             </div>
@@ -850,9 +999,10 @@ export function WaterDeliveryOrdersSection({
           const status = order.status || order.latest_order?.status || "pending";
           return (
             <div
-              className="cursor-pointer hover:opacity-80"
+              className="cursor-pointer hover:opacity-80 flex items-center gap-1.5"
               onClick={(e) => { e.stopPropagation(); setSelectedOrder(order); setDetailType("status"); setIsDetailOpen(true); }}
             >
+              {getStatusIcon(status)}
               <Badge className={`${getStatusColor(status)} border`}>
                 {getStatusLabel(status)}
               </Badge>
@@ -865,9 +1015,9 @@ export function WaterDeliveryOrdersSection({
       },
       {
         accessorKey: "quantity",
-        header: () => <div className="">Qty</div>,
+        header: () => <div className="text-right">Qty</div>,
         cell: ({ row }) => (
-          <div className="tabular-nums">{row.original.latest_order?.total_items || row.original.quantity || 0}</div>
+          <div className="text-right tabular-nums">{row.original.latest_order?.total_items || row.original.quantity || 0}</div>
         ),
         size: 80,
         enableSorting: true,
@@ -875,9 +1025,9 @@ export function WaterDeliveryOrdersSection({
       },
       {
         accessorKey: "total",
-        header: () => <div className="">Total</div>,
+        header: () => <div className="text-right">Total</div>,
         cell: ({ row }) => (
-          <div className=" font-medium tabular-nums">₱{(row.original.latest_order?.total || row.original.total || 0).toFixed(2)}</div>
+          <div className="text-right font-medium tabular-nums">₱{(row.original.latest_order?.total || row.original.total || 0).toFixed(2)}</div>
         ),
         size: 120,
         enableSorting: true,
@@ -898,121 +1048,112 @@ export function WaterDeliveryOrdersSection({
         enableSorting: true,
         sortingFn: "datetime",
       },
-{
-  accessorKey: "stockHealth",
-  header: () => <span className="hidden sm:inline">Stock Health</span>,
-  cell: ({ row }) => {
-    const order = row.original;
-    const stock = order.stock_health || {
-      remainingStock: 0,
-      previousOrderQty: 0,
-      stockHealthScore: 0,
-      stockHealthPercentage: 0,
-      stockHealthStatus: "low",
-    };
+      {
+        accessorKey: "stockHealth",
+        header: () => <span className="hidden sm:inline">Stock Health</span>,
+        cell: ({ row }) => {
+          const order = row.original;
+          const stock = order.stock_health || {
+            remainingStock: 0,
+            previousOrderQty: 0,
+            stockHealthScore: 0,
+            stockHealthPercentage: 0,
+            stockHealthStatus: "low",
+          };
 
-    const pct = Math.min(100, Math.max(0, stock.stockHealthPercentage ?? 0));
-    const status = stock.stockHealthStatus ?? "low" as any;
-    const remaining = stock.remainingStock ?? 0;
-    const prevQty = stock.previousOrderQty ?? 0;
+          const pct = Math.min(100, Math.max(0, stock.stockHealthPercentage ?? 0));
+          const status = stock.stockHealthStatus ?? "low" as any;
+          const remaining = stock.remainingStock ?? 0;
+          const prevQty = stock.previousOrderQty ?? 0;
 
-    const statusConfig = STOCK_STATUS_CONFIG[status] || STOCK_STATUS_CONFIG.low;
-    const barColor = statusConfig.color;
-    const showBars = prevQty > 0;
+          const statusConfig = STOCK_STATUS_CONFIG[status] || STOCK_STATUS_CONFIG.low;
+          const showBars = prevQty > 0;
+          const filledSlots = Math.min(10, Math.round(pct / 10));
 
-    // Number of filled slots (each slot = 10%)
-    const filledSlots = Math.min(10, Math.round(pct / 10));
-
-    return (
-      <TooltipProvider>
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <div
-              className="flex items-center gap-1.5 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity px-1 py-0.5 rounded-md hover:bg-muted/50"
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedOrder(order);
-                setDetailType("stock");
-                setIsDetailOpen(true);
-              }}
-            >
-              {/* Bar chart – 10 slots */}
-              <div
-                className="flex items-end gap-[2px] sm:gap-[3px]"
-                aria-label={`Stock health: ${pct}% remaining`}
-              >
-                {STOCK_HEALTH_SLOTS.map((slot) => {
-                  const isFilled = slot.threshold <= filledSlots;
-                  return (
+          return (
+            <TooltipProvider>
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <div
+                    className="flex items-center gap-1.5 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity px-1 py-0.5 rounded-md hover:bg-muted/50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedOrder(order);
+                      setDetailType("stock");
+                      setIsDetailOpen(true);
+                    }}
+                  >
                     <div
-                      key={slot.id}
+                      className="flex items-end gap-[2px] sm:gap-[3px]"
+                      aria-label={`Stock health: ${pct}% remaining`}
+                    >
+                      {STOCK_HEALTH_SLOTS.map((slot) => {
+                        const isFilled = slot.threshold <= filledSlots;
+                        return (
+                          <div
+                            key={slot.id}
+                            className={cn(
+                              "h-4 w-1.5 sm:h-5 sm:w-2 rounded-full transition-all duration-300",
+                              isFilled && showBars ? statusConfig.color : "bg-muted-foreground/20",
+                              !showBars && "bg-muted-foreground/10"
+                            )}
+                            style={{
+                              opacity: isFilled && showBars ? 0.7 + (slot.threshold / 10) * 0.3 : 1,
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                    <span
                       className={cn(
-                        "h-4 w-1.5 sm:h-5 sm:w-2 rounded-full transition-all duration-300",
-                        isFilled && showBars ? barColor : "bg-muted-foreground/20",
-                        !showBars && "bg-muted-foreground/10"
+                        "text-[10px] sm:text-xs font-medium tabular-nums transition-colors",
+                        showBars ? statusConfig.textColor : "text-muted-foreground",
+                        "hidden xs:inline"
                       )}
-                      style={{
-                        // Slight gradient opacity for filled bars
-                        opacity: isFilled && showBars ? 0.7 + (slot.threshold / 10) * 0.3 : 1,
-                      }}
-                    />
-                  );
-                })}
-              </div>
-
-              {/* Percentage label */}
-              <span
-                className={cn(
-                  "text-[10px] sm:text-xs font-medium tabular-nums transition-colors",
-                  showBars ? statusConfig.textColor : "text-muted-foreground",
-                  "hidden xs:inline"
-                )}
-              >
-                {showBars ? `${pct}%` : "—"}
-              </span>
-            </div>
-          </TooltipTrigger>
-
-          <TooltipContent side="top" align="center" className="max-w-xs p-3 space-y-1.5">
-            <div className="flex items-center justify-between gap-4">
-              <span className="font-medium">Stock Health</span>
-              <span
-                className={cn(
-                  "px-2 py-0.5 rounded-full text-xs font-semibold",
-                  status === "high" && "bg-emerald-100 text-emerald-800",
-                  status === "medium" && "bg-amber-100 text-amber-800",
-                  status === "low" && "bg-rose-100 text-rose-800"
-                )}
-              >
-                {statusConfig.label}
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-sm">
-              <span className="text-muted-foreground">Remaining</span>
-              <span className="font-mono font-medium text-right">{remaining} units</span>
-              <span className="text-muted-foreground">Last order</span>
-              <span className="font-mono font-medium text-right">{prevQty} units</span>
-              <span className="text-muted-foreground">Percentage</span>
-              <span className="font-mono font-medium text-right">{pct}%</span>
-            </div>
-            {!showBars && (
-              <p className="text-xs text-muted-foreground italic mt-1">No prior order data.</p>
-            )}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
-  },
-  size: 160,
-  minSize: 120,
-  enableSorting: true,
-  // Sort by percentage (descending)
-  sortingFn: (rowA, rowB) => {
-    const a = rowA.original.stock_health?.stockHealthPercentage ?? 0;
-    const b = rowB.original.stock_health?.stockHealthPercentage ?? 0;
-    return b - a; // higher percentage first
-  },
-},
+                    >
+                      {showBars ? `${pct}%` : "—"}
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" className="max-w-xs p-3 space-y-1.5">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="font-medium">Stock Health</span>
+                    <span
+                      className={cn(
+                        "px-2 py-0.5 rounded-full text-xs font-semibold",
+                        status === "high" && "bg-emerald-100 text-emerald-800",
+                        status === "medium" && "bg-amber-100 text-amber-800",
+                        status === "low" && "bg-rose-100 text-rose-800"
+                      )}
+                    >
+                      {statusConfig.label}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-sm">
+                    <span className="text-muted-foreground">Remaining</span>
+                    <span className="font-mono font-medium text-right">{remaining} units</span>
+                    <span className="text-muted-foreground">Last order</span>
+                    <span className="font-mono font-medium text-right">{prevQty} units</span>
+                    <span className="text-muted-foreground">Percentage</span>
+                    <span className="font-mono font-medium text-right">{pct}%</span>
+                  </div>
+                  {!showBars && (
+                    <p className="text-xs text-muted-foreground italic mt-1">No prior order data.</p>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          );
+        },
+        size: 160,
+        minSize: 120,
+        enableSorting: true,
+        sortingFn: (rowA, rowB) => {
+          const a = rowA.original.stock_health?.stockHealthPercentage ?? 0;
+          const b = rowB.original.stock_health?.stockHealthPercentage ?? 0;
+          return b - a;
+        },
+      },
       {
         accessorKey: "orderNumber",
         header: "Order #",
@@ -1020,19 +1161,11 @@ export function WaterDeliveryOrdersSection({
           const order = row.original;
           return (
             <div
-              className="flex items-center gap-2 cursor-pointer hover:text-primary"
+              className="flex items-center gap-2 cursor-pointer hover:text-primary group"
               onClick={(e) => { e.stopPropagation(); setSelectedOrder(order); setDetailType("order"); setIsDetailOpen(true); }}
             >
               <PackageIcon className="size-3.5 text-muted-foreground" />
-              <span className="font-mono text-sm font-medium">#{order.orderNumber || order.latest_order?.orderNumber || "N/A"}</span>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <InfoIcon className="size-3 text-muted-foreground hover:text-primary" />
-                  </TooltipTrigger>
-                  <TooltipContent>Click for order details</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <span className="font-mono text-sm font-medium group-hover:underline">#{order.orderNumber || order.latest_order?.orderNumber || "N/A"}</span>
             </div>
           );
         },
@@ -1040,101 +1173,197 @@ export function WaterDeliveryOrdersSection({
         enableSorting: true,
         sortingFn: "alphanumeric",
       },
+      {
+        id: "actions",
+        header: () => <span className="sr-only">Actions</span>,
+        cell: ({ row }) => (
+          <RowActionPopover
+            order={row.original}
+            onAction={(action, order) => {
+              switch (action) {
+                case "view":
+                  setSelectedOrder(order);
+                  setDetailType("order");
+                  setIsDetailOpen(true);
+                  break;
+                case "customer":
+                  setSelectedOrder(order);
+                  setDetailType("customer");
+                  setIsDetailOpen(true);
+                  break;
+                case "location":
+                  setSelectedOrder(order);
+                  setDetailType("location");
+                  setIsDetailOpen(true);
+                  break;
+                case "delete":
+                  if (confirm(`Delete order #${order.orderNumber}?`)) {
+                    setOrders(prev => prev.filter(o => o.id !== order.id));
+                    toast.success(`Order #${order.orderNumber} deleted`);
+                  }
+                  break;
+                default:
+                  break;
+              }
+            }}
+            onUpdateStatus={onUpdateStatus}
+          />
+        ),
+        size: 50,
+        enableSorting: false,
+        enableHiding: false,
+      },
     ];
-  }, []);
+  }, [onUpdateStatus]);
 
+  // --- Table instance ---
   const table = useReactTable({
-    data,
+    data: orders,
     columns,
-    state: { rowSelection, columnFilters, globalFilter, pagination },
-    getRowId: (row) => row.id,
-    enableRowSelection: true,
+    state: {
+      rowSelection,
+      columnVisibility,
+      pagination: {
+        pageIndex: currentParams.page - 1,
+        pageSize: currentParams.pageSize,
+      },
+      sorting: currentParams.sortBy ? [{ id: currentParams.sortBy, desc: currentParams.sortOrder === "desc" }] : [],
+      globalFilter: currentParams.search,
+      columnFilters: [
+        { id: "status", value: currentParams.status !== "all" ? currentParams.status : undefined },
+        { id: "stockHealth", value: currentParams.stockHealth !== "all" ? currentParams.stockHealth : undefined },
+      ],
+    },
+    pageCount: Math.ceil(total / currentParams.pageSize),
+    manualPagination: true,
+    manualSorting: true,
+    manualFiltering: true,
     onRowSelectionChange: setRowSelection,
-    onColumnFiltersChange: setColumnFilters,
-    onGlobalFilterChange: setGlobalFilter,
-    onPaginationChange: setPagination,
+    onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    globalFilterFn: "includesString",
+    getSortedRowModel: getSortedRowModel(),
   });
 
-  // Simulate loading
-  React.useEffect(() => {
-    if (initialData.length > 0) {
-      setIsLoading(false);
-    } else {
-      const timer = setTimeout(() => setIsLoading(false), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [initialData]);
+  // --- Event handlers ---
+  const handlePageChange = (newPage: number) => {
+    updateUrl({ page: newPage });
+  };
 
-  // Drag handlers
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handlePageSizeChange = (newSize: number) => {
+    updateUrl({ pageSize: newSize, page: 1 });
+  };
+
+  const handleSortingChange = (sortBy: string, sortOrder: "asc" | "desc") => {
+    updateUrl({ sortBy, sortOrder, page: 1 });
+  };
+
+  const handleStatusChange = (status: string) => {
+    updateUrl({ status: status === "all" ? "all" : status, page: 1 });
+  };
+
+  const handleStockHealthChange = (stockHealth: string) => {
+    updateUrl({ stockHealth: stockHealth === "all" ? "all" : stockHealth, page: 1 });
+  };
+
+  const [rawSearch, setRawSearch] = React.useState(currentParams.search);
+  const debouncedSearchForUrl = useDebounce(rawSearch, 300);
+
+  React.useEffect(() => {
+    if (debouncedSearchForUrl !== currentParams.search) {
+      updateUrl({ search: debouncedSearchForUrl || "", page: 1 });
+    }
+  }, [debouncedSearchForUrl, updateUrl, currentParams.search]);
+
+  React.useEffect(() => {
+    setRawSearch(currentParams.search);
+  }, [currentParams.search]);
+
+  // ============================================================
+  // DRAG END HANDLER - FIXED
+  // ============================================================
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    if (active && over && active.id !== over.id) {
-      setData((prev) => {
-        const oldIndex = prev.findIndex((item) => item.id === active.id);
-        const newIndex = prev.findIndex((item) => item.id === over.id);
-        return arrayMove(prev, oldIndex, newIndex);
-      });
+    
+    if (!active || !over) return;
+    
+    if (active.id !== over.id) {
+      const oldIndex = orders.findIndex((item) => item.id === active.id);
+      const newIndex = orders.findIndex((item) => item.id === over.id);
+      
+      if (oldIndex === -1 || newIndex === -1) return;
+      
+      const newData = arrayMove(orders, oldIndex, newIndex);
+      setOrders(newData);
+      
+      if (onPriorityUpdate) {
+        const orderedIds = newData.map(item => item.id);
+        try {
+          await onPriorityUpdate(orderedIds);
+          toast.success("Order priority updated successfully");
+        } catch (error) {
+          console.error("Failed to update priorities:", error);
+          toast.error("Failed to update order priorities");
+          // Revert on error
+          setOrders(orders);
+        }
+      } else {
+        toast.success("Order priority updated");
+      }
     }
   };
 
-  // Bulk action handler
   const handleBulkAction = (action: string) => {
     const selectedIds = Object.keys(rowSelection).filter(id => rowSelection[id]);
     if (selectedIds.length === 0) return;
     if (onBulkAction) {
       onBulkAction(action, selectedIds);
     } else {
-      // Default actions
-      switch (action) {
-        case "delete":
-          if (confirm(`Delete ${selectedIds.length} orders?`)) {
-            setData(prev => prev.filter(order => !selectedIds.includes(order.id)));
-            setRowSelection({});
-          }
-          break;
-        case "status":
-          // open a dialog to update status for all selected
-          const newStatus = prompt("Enter new status (pending, delivered, etc.)") as WaterDeliveryOrder["status"] | null;
-          if (newStatus && statusOptions.includes(newStatus)) {
-            setData(prev => prev.map(order => 
-              selectedIds.includes(order.id) ? { ...order, status: newStatus } : order
-            ));
-            setRowSelection({});
-          }
-          break;
-        default:
-          break;
+      if (action === "delete") {
+        if (confirm(`Delete ${selectedIds.length} orders?`)) {
+          setOrders(prev => prev.filter(order => !selectedIds.includes(order.id)));
+          setRowSelection({});
+          toast.success(`${selectedIds.length} orders deleted`);
+        }
+      } else if (action === "status") {
+        const newStatus = prompt("Enter new status (pending, delivered, etc.)") as WaterDeliveryOrder["status"] | null;
+        if (newStatus && statusOptions.includes(newStatus)) {
+          setOrders(prev => prev.map(order =>
+            selectedIds.includes(order.id) ? { ...order, status: newStatus } : order
+          ));
+          setRowSelection({});
+          toast.success(`Status updated for ${selectedIds.length} orders`);
+        }
       }
     }
   };
 
-  // Selected count
+  // --- UI state ---
   const selectedCount = Object.values(rowSelection).filter(Boolean).length;
-
-  // Filter state
-  const searchQuery = table.getState().globalFilter ?? "";
-  const statusFilter = (table.getColumn("status")?.getFilterValue() as string) ?? "all";
   const currentPage = table.getState().pagination.pageIndex + 1;
   const pageCount = table.getPageCount();
-  const filteredOrderCount = table.getFilteredRowModel().rows.length;
-  const visibleOrderCount = table.getRowModel().rows.length;
+  const filteredOrderCount = total;
 
   const pageNumbers = React.useMemo(() => {
-    if (pageCount <= 3) return Array.from({ length: pageCount }, (_, i) => i + 1);
-    if (currentPage <= 2) return [1, 2, 3];
-    if (currentPage >= pageCount - 1) return [pageCount - 2, pageCount - 1, pageCount];
-    return [currentPage - 1, currentPage, currentPage + 1];
+    const pages = [];
+    const totalPages = pageCount;
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (currentPage <= 3) {
+        pages.push(1, 2, 3, 4, 5);
+      } else if (currentPage >= totalPages - 2) {
+        for (let i = totalPages - 4; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(currentPage - 2, currentPage - 1, currentPage, currentPage + 1, currentPage + 2);
+      }
+    }
+    return pages;
   }, [currentPage, pageCount]);
 
-  // Prevent pagination link navigation
-  const preventNav = (e: React.MouseEvent<HTMLAnchorElement>) => e.preventDefault();
-
-  // Render
-  if (isLoading) {
+  // --- Loading / error states ---
+  if (isLoading && orders.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -1161,9 +1390,25 @@ export function WaterDeliveryOrdersSection({
     );
   }
 
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Water Delivery Orders</CardTitle>
+          <CardDescription>Error loading orders</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <AlertCircleIcon className="size-12 text-destructive mb-4" />
+            <p className="text-lg font-medium">Something went wrong</p>
+            <p className="text-sm text-muted-foreground">{error.message}</p>
+            <Button onClick={fetchData} className="mt-4">Retry</Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
-
-  console.log(selectedOrder, 'SELELEC', isDetailOpen, detailType)
   // ----- Render -----
   return (
     <section className="space-y-4">
@@ -1184,17 +1429,14 @@ export function WaterDeliveryOrdersSection({
                 <Input
                   className="h-9 w-full sm:w-44 md:w-52 pr-8"
                   placeholder="Search orders..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    table.setGlobalFilter(e.target.value || undefined);
-                    table.setPageIndex(0);
-                  }}
+                  value={rawSearch}
+                  onChange={(e) => setRawSearch(e.target.value)}
                 />
-                {searchQuery && (
+                {rawSearch && (
                   <button
                     onClick={() => {
-                      table.setGlobalFilter(undefined);
-                      table.setPageIndex(0);
+                      setRawSearch("");
+                      updateUrl({ search: "", page: 1 });
                     }}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
@@ -1213,11 +1455,8 @@ export function WaterDeliveryOrdersSection({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
                   <DropdownMenuRadioGroup
-                    value={statusFilter}
-                    onValueChange={(value) => {
-                      table.getColumn("status")?.setFilterValue(value === "all" ? undefined : value);
-                      table.setPageIndex(0);
-                    }}
+                    value={currentParams.status}
+                    onValueChange={handleStatusChange}
                   >
                     {statusOptions.map((opt) => (
                       <DropdownMenuRadioItem key={opt} value={opt}>
@@ -1227,12 +1466,64 @@ export function WaterDeliveryOrdersSection({
                   </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9">
+                    <TrendingUpIcon className="size-4 mr-1" />
+                    Stock Health
+                    <ChevronDownIcon className="size-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuRadioGroup
+                    value={currentParams.stockHealth}
+                    onValueChange={handleStockHealthChange}
+                  >
+                    {stockHealthOptions.map((opt) => (
+                      <DropdownMenuRadioItem key={opt} value={opt}>
+                        {opt === "all" ? "All stock levels" : opt.charAt(0).toUpperCase() + opt.slice(1)}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9">
+                    <LayoutGridIcon className="size-4 mr-1" />
+                    View
+                    <ChevronDownIcon className="size-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+                  {table.getAllLeafColumns().filter(col => col.id !== "select" && col.id !== "actions").map((column) => (
+                    <DropdownMenuCheckboxItem
+                      key={column.id}
+                      checked={column.getIsVisible()}
+                      onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                    >
+                      {column.columnDef.header?.toString() || column.id}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Density</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={density}
+                    onValueChange={(v) => setDensity(v as "compact" | "normal")}
+                  >
+                    <DropdownMenuRadioItem value="compact">Compact</DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="normal">Normal</DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </CardAction>
         </CardHeader>
 
         <CardContent className="flex flex-col gap-4 px-0">
-          {/* Bulk Action Bar */}
           {selectedCount > 0 && (
             <div className="flex items-center gap-2 px-4 py-2 bg-primary/5 border-y border-primary/10">
               <span className="text-sm font-medium">{selectedCount} selected</span>
@@ -1261,48 +1552,72 @@ export function WaterDeliveryOrdersSection({
             </div>
           )}
 
-          {/* Table */}
           <div className="overflow-x-auto">
             <DndContext
               collisionDetection={closestCenter}
               modifiers={[restrictToVerticalAxis]}
               onDragEnd={handleDragEnd}
               sensors={sensors}
-              id={sortableId}
             >
-              <Table className="min-w-[800px]">
+              <Table className={`min-w-[900px] ${density === "compact" ? "text-sm" : ""}`}>
                 <TableHeader className="border-t">
                   {table.getHeaderGroups().map((headerGroup) => (
                     <TableRow key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => (
-                        <TableHead key={header.id} colSpan={header.colSpan}>
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(header.column.columnDef.header, header.getContext())}
-                        </TableHead>
-                      ))}
+                      {/* Drag handle header */}
+                      <TableHead className="w-10" />
+                      {headerGroup.headers.map((header) => {
+                        const canSort = header.column.getCanSort();
+                        const sortHandler = canSort ? () => {
+                          const currentSort = header.column.getIsSorted();
+                          const newOrder = currentSort === "asc" ? "desc" : "asc";
+                          const sortKey = header.column.id;
+                          handleSortingChange(sortKey, newOrder);
+                        } : undefined;
+                        return (
+                          <TableHead key={header.id} colSpan={header.colSpan}>
+                            {header.isPlaceholder ? null : (
+                              <div
+                                className={cn(
+                                  "flex items-center gap-1",
+                                  canSort && "cursor-pointer select-none hover:text-foreground"
+                                )}
+                                onClick={sortHandler}
+                              >
+                                {flexRender(header.column.columnDef.header, header.getContext())}
+                                {canSort && (
+                                  <span className="ml-1">
+                                    {header.column.getIsSorted() === "asc" && <ChevronDownIcon className="size-3 rotate-180" />}
+                                    {header.column.getIsSorted() === "desc" && <ChevronDownIcon className="size-3" />}
+                                    {!header.column.getIsSorted() && <ChevronDownIcon className="size-3 opacity-30" />}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </TableHead>
+                        );
+                      })}
                     </TableRow>
                   ))}
                 </TableHeader>
                 <TableBody>
-                  {table.getRowModel().rows.length ? (
+                  {orders.length ? (
                     <SortableContext
-                      items={data.map((d) => d.id)}
+                      items={orders.map((d) => d.id)}
                       strategy={verticalListSortingStrategy}
                     >
                       {table.getRowModel().rows.map((row) => (
                         <SortableRow
                           key={row.id}
                           row={row}
-                          onClick={(e) => {
-                            // setSelectedOrder(row.original);
-                            // setDetailType("order");
-                            // setIsDetailOpen(true);
+                          onClick={() => {
+                            setSelectedOrder(row.original);
+                            setDetailType("order");
+                            setIsDetailOpen(true);
                             onOrderClick?.(row.original);
                           }}
                         >
                           {row.getVisibleCells().map((cell) => (
-                            <TableCell key={cell.id}>
+                            <TableCell key={cell.id} className="py-2">
                               {flexRender(cell.column.columnDef.cell, cell.getContext())}
                             </TableCell>
                           ))}
@@ -1311,17 +1626,20 @@ export function WaterDeliveryOrdersSection({
                     </SortableContext>
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={columns.length} className="h-24 text-center">
+                      <TableCell colSpan={columns.length + 1} className="h-24 text-center">
                         <div className="flex flex-col items-center gap-2">
                           <PackageIcon className="size-8 text-muted-foreground/50" />
-                          <p className="text-muted-foreground">No orders found.</p>
-                          {(statusFilter !== "all" || searchQuery) && (
-                            <Button variant="outline" size="sm" onClick={() => {
-                              table.getColumn("status")?.setFilterValue(undefined);
-                              table.setGlobalFilter(undefined);
-                              table.setPageIndex(0);
-                            }}>
-                              Clear filters
+                          <p className="text-muted-foreground">No orders match the current filters.</p>
+                          {(currentParams.status !== "all" || currentParams.stockHealth !== "all" || currentParams.search) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                updateUrl({ status: "all", stockHealth: "all", search: "", page: 1 });
+                                setRawSearch("");
+                              }}
+                            >
+                              Clear all filters
                             </Button>
                           )}
                         </div>
@@ -1333,28 +1651,49 @@ export function WaterDeliveryOrdersSection({
             </DndContext>
           </div>
 
-          {/* Pagination */}
-          {filteredOrderCount > 0 && (
+          {total > 0 && (
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 pb-1">
-              <p className="text-muted-foreground text-sm">
-                Showing {visibleOrderCount} of {filteredOrderCount} orders
-              </p>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>Rows per page:</span>
+                <Select
+                  value={String(currentParams.pageSize)}
+                  onValueChange={(val) => handlePageSizeChange(Number(val))}
+                >
+                  <SelectTrigger className="h-8 w-16">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[5, 10, 20, 50].map(size => (
+                      <SelectItem key={size} value={String(size)}>{size}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span>
+                  {currentParams.pageSize * (currentParams.page - 1) + 1}–
+                  {Math.min(currentParams.pageSize * currentParams.page, total)} of {total}
+                </span>
+              </div>
               <Pagination className="mx-0 w-auto">
                 <PaginationContent className="gap-1.5">
                   <PaginationItem>
                     <PaginationPrevious
                       href="#"
-                      className={!table.getCanPreviousPage() ? "pointer-events-none opacity-50" : undefined}
-                      onClick={preventNav}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); table.previousPage(); } }}
+                      className={currentPage <= 1 ? "pointer-events-none opacity-50" : undefined}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (currentPage > 1) handlePageChange(currentPage - 1);
+                      }}
                     />
                   </PaginationItem>
                   {pageNumbers.map((page) => (
                     <PaginationItem key={page}>
                       <PaginationLink
                         href="#"
-                        isActive={table.getState().pagination.pageIndex === page - 1}
-                        onClick={(e) => { preventNav(e); table.setPageIndex(page - 1); }}
+                        isActive={currentPage === page}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handlePageChange(page);
+                        }}
                       >
                         {page}
                       </PaginationLink>
@@ -1363,9 +1702,11 @@ export function WaterDeliveryOrdersSection({
                   <PaginationItem>
                     <PaginationNext
                       href="#"
-                      className={!table.getCanNextPage() ? "pointer-events-none opacity-50" : undefined}
-                      onClick={preventNav}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); table.nextPage(); } }}
+                      className={currentPage >= pageCount ? "pointer-events-none opacity-50" : undefined}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (currentPage < pageCount) handlePageChange(currentPage + 1);
+                      }}
                     />
                   </PaginationItem>
                 </PaginationContent>
@@ -1386,17 +1727,14 @@ export function WaterDeliveryOrdersSection({
         onOpenChange={(open) => { if (!open) setIsDetailOpen(false); }}
         customer={selectedOrder || null}
       />
-      
+
       <CustomerLocationModal
         isOpen={(isDetailOpen && detailType === "location")}
         onClose={() => { if (isDetailOpen) { setIsDetailOpen(false); setDetailType('order'); } }}
         customer={selectedOrder}
+        onSuccess={() => fetchData()}
       />
-      {/* <LocationDetailModal
-        open={isDetailOpen && detailType === "location"}
-        onOpenChange={(open) => { if (!open) setIsDetailOpen(false); }}
-        location={selectedOrder?.metadata || null}
-      /> */}
+
       <StockDetailModal
         open={isDetailOpen && detailType === "stock"}
         onOpenChange={(open) => { if (!open) setIsDetailOpen(false); }}
@@ -1409,7 +1747,7 @@ export function WaterDeliveryOrdersSection({
         onUpdate={(status) => {
           if (selectedOrder && onUpdateStatus) {
             onUpdateStatus(selectedOrder.id, status);
-            setData(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, status } : o));
+            fetchData();
           }
           setIsDetailOpen(false);
         }}

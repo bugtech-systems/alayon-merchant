@@ -560,7 +560,6 @@ export async function listCustomersWithOrders(
     });
 
     
-    console.log(response, "RESSPP", url)
     return response;
   } catch (error) {
     console.error("Error fetching customers with orders:", error);

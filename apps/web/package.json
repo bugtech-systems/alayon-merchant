@@ -79,6 +79,7 @@
     "react-markdown": "^10.1.0",
     "react-thermal-printer": "^0.22.0",
     "recharts": "3.8.0",
+    "socket.io-client": "^4.8.3",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "uuid": "^14.0.1",

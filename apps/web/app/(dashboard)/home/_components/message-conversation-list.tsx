@@ -87,7 +87,7 @@ export function ConversationList({
       conv.lastMessage.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [conversations, searchQuery]);
-
+  console.log(conversations, filteredConversations, 'CONVOOSS')
   // Filter customers based on search
   const filteredCustomers = useMemo(() => {
     return customers.filter(customer =>
@@ -239,7 +239,8 @@ export function ConversationList({
   const characterCount = messageText.length;
   const isNearLimit = characterCount > 650;
   const isOverLimit = characterCount > 700;
-console.log(filteredConversations, 'CIFFFs')
+
+
   return (
     <div className="flex h-[90vh] w-full flex-col bg-white">
       {/* Fixed Header */}

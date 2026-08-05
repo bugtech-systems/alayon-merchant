@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Search, RefreshCw, History, ShoppingCart, Save, Tag, Users, Star, Radio } from "lucide-react";
+import { Search, RefreshCw, History, ShoppingCart, Save, Tag, Users, Star, Radio, MessageCircle, Bell, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { CartSidebar } from "./cart-sidebar";
@@ -16,10 +16,15 @@ import { PrintDialog } from "./print-dialog";
 import { usePosCart } from "@/hooks/use-pos-cart";
 import { usePosProducts } from "@/hooks/use-pos-products";
 import { usePosDrafts } from "@/hooks/use-pos-drafts";
-import { usePosBeepers } from "@/hooks/use-pos-beepers"; // New hook for beepers
+import { usePosBeepers } from "@/hooks/use-pos-beepers";
+import { useSocket } from "@/hooks/useSocket";
+import { ChatWidget } from "@/components/chat/ChatWidget";
+import { NotificationBell } from "@/components/notification/NotificationBell";
 import { Region, Customer } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { Toaster } from "sonner";
+import { toast } from "sonner";
 
 interface PosAppProps {
   region?: Region;
@@ -38,7 +43,27 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [draftsDialogOpen, setDraftsDialogOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
-  const { toast } = useToast();
+  const [showChat, setShowChat] = useState(false);
+  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
+  const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+  const [unreadOrderCount, setUnreadOrderCount] = useState(0);
+  const { toast: toastShadcn } = useToast();
+
+  // Socket connection for real-time features
+  const { 
+    socket, 
+    isConnected, 
+    notifications, 
+    messages,
+    sendMessage,
+    markNotificationRead,
+    clearNotifications,
+    getUnreadCount,
+  } = useSocket({
+    userId: user?.id,
+    role: 'cashier',
+    customerId: user?.id
+  });
 
   // Pricing strategy from user context
   const pricingContext = useMemo(() => ({
@@ -118,11 +143,133 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     }
   }, [pricingContext, cart?.id, updateMetadata]);
 
+  // Handle socket notifications for new orders
+  useEffect(() => {
+    if (!socket) return;
+
+    // Listen for new orders from kitchen
+    socket.on('order_received', (data) => {
+      console.log('New order notification received:', data);
+      
+      // Show toast notification
+      toast.info(`📦 New Order #${data.order?.display_id || 'Unknown'}`, {
+        description: `Items: ${data.order?.items?.length || 0} | Total: ₱${data.order?.total || 0}`,
+        duration: 8000,
+        action: {
+          label: 'View Order',
+          onClick: () => {
+            // Open order details or highlight the order
+            console.log('View order:', data.order);
+          }
+        }
+      });
+
+      // Play notification sound
+      if (isSoundEnabled) {
+        playNotificationSound();
+      }
+
+      // Update unread count
+      setUnreadOrderCount(prev => prev + 1);
+
+      // Send acknowledgment back to kitchen
+      socket.emit('order_acknowledged', {
+        orderId: data.order?.id,
+        acknowledgedBy: user?.id,
+        acknowledgedAt: new Date()
+      });
+    });
+
+    // Listen for order status updates
+    socket.on('order_updated', (data) => {
+      console.log('Order status update:', data);
+      
+      toast.info(`📋 Order #${data.order?.display_id} Updated`, {
+        description: `Status: ${data.status}`,
+        duration: 5000,
+        action: {
+          label: 'View',
+          onClick: () => console.log('View order:', data.order)
+        }
+      });
+
+      if (isSoundEnabled) {
+        playNotificationSound();
+      }
+    });
+
+    // Listen for messages from kitchen
+    socket.on('message_received', (data) => {
+      console.log('Message from kitchen:', data);
+      
+      toast.info(`💬 ${data.senderName || 'Kitchen'}`, {
+        description: data.text,
+        duration: 6000,
+        action: {
+          label: 'Reply',
+          onClick: () => setShowChat(true)
+        }
+      });
+
+      if (isSoundEnabled) {
+        playNotificationSound();
+      }
+    });
+
+    // Listen for customer messages
+    socket.on('customer_message', (data) => {
+      console.log('Customer message:', data);
+      
+      toast.info(`👤 Customer: ${data.customerName || 'Customer'}`, {
+        description: data.text,
+        duration: 6000,
+        action: {
+          label: 'Reply',
+          onClick: () => setShowChat(true)
+        }
+      });
+
+      if (isSoundEnabled) {
+        playNotificationSound();
+      }
+    });
+
+    // Listen for kitchen status updates
+    socket.on('kitchen_status', (data) => {
+      console.log('Kitchen status update:', data);
+      
+      toast.info(`🍳 Kitchen ${data.status}`, {
+        description: data.message || 'Kitchen status updated',
+        duration: 3000
+      });
+    });
+
+    return () => {
+      socket.off('order_received');
+      socket.off('order_updated');
+      socket.off('message_received');
+      socket.off('customer_message');
+      socket.off('kitchen_status');
+    };
+  }, [socket, isSoundEnabled, user?.id]);
+
+  // Play notification sound
+  const playNotificationSound = useCallback(() => {
+    if (!isSoundEnabled) return;
+
+    try {
+      const audio = new Audio('/notification.mp3');
+      audio.volume = 1.0;
+      audio.play().catch(err => console.log('Audio play error:', err));
+    } catch (error) {
+      console.log('Sound playback failed:', error);
+    }
+  }, [isSoundEnabled]);
+
   // Handle beeper attachment/detachment for current order
   const handleAttachOrderToBeeper = useCallback(async (beeperId: string, orderId: string) => {
     try {
       await attachOrderToBeeper(beeperId, orderId);
-      // Update cart metadata to track beeper assignments
       await updateMetadata({
         beeper_ids: [...selectedBeeperIds, beeperId],
         beeper_assignments: {
@@ -135,24 +282,23 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
         }
       });
       
-      toast({
+      toastShadcn({
         title: "Success",
         description: "Order attached to beeper successfully"
       });
     } catch (error) {
       console.error("Error attaching order to beeper:", error);
-      toast({
+      toastShadcn({
         title: "Error",
         description: "Failed to attach order to beeper",
         variant: "destructive"
       });
     }
-  }, [attachOrderToBeeper, updateMetadata, selectedBeeperIds, cart, user, toast]);
+  }, [attachOrderToBeeper, updateMetadata, selectedBeeperIds, cart, user, toastShadcn]);
 
   const handleDetachOrderFromBeeper = useCallback(async (beeperId: string, orderId: string) => {
     try {
       await detachOrderFromBeeper(beeperId, orderId);
-      // Update cart metadata
       const updatedBeeperIds = selectedBeeperIds.filter(id => id !== beeperId);
       await updateMetadata({
         beeper_ids: updatedBeeperIds,
@@ -162,19 +308,19 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
         }
       });
       
-      toast({
+      toastShadcn({
         title: "Success",
         description: "Order detached from beeper successfully"
       });
     } catch (error) {
       console.error("Error detaching order from beeper:", error);
-      toast({
+      toastShadcn({
         title: "Error",
         description: "Failed to detach order from beeper",
         variant: "destructive"
       });
     }
-  }, [detachOrderFromBeeper, updateMetadata, selectedBeeperIds, cart, toast]);
+  }, [detachOrderFromBeeper, updateMetadata, selectedBeeperIds, cart, toastShadcn]);
 
   // Handle customer change
   const handleCustomerChange = useCallback(async (customer: Customer | null) => {
@@ -185,7 +331,6 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     }
     await attachCustomer(customer);
     
-    // Update pricing context for customer-specific pricing
     if (customer?.customer_group_id) {
       await updateMetadata({
         customer_group_id: customer.customer_group_id,
@@ -219,7 +364,6 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
   const handleBeepersChange = useCallback((beeperIds: string[]) => {
     setSelectedBeeperIds(beeperIds);
     
-    // Auto-attach current order to newly selected beepers
     const newBeepers = beeperIds.filter(id => !selectedBeeperIds.includes(id));
     newBeepers.forEach(async (beeperId) => {
       if (cart?.id) {
@@ -227,7 +371,6 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
       }
     });
     
-    // Auto-detach from removed beepers
     const removedBeepers = selectedBeeperIds.filter(id => !beeperIds.includes(id));
     removedBeepers.forEach(async (beeperId) => {
       if (cart?.id) {
@@ -240,20 +383,18 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     if (!cart?.id) return;
     
     try {
-      // Prepare cart with pricing metadata before opening payment dialog
       await prepareCartForCheckout();
       setPaymentDialogOpen(true);
-
-      setSearchQuery('')
+      setSearchQuery('');
     } catch (error) {
       console.error("Error preparing cart:", error);
-      toast({ 
+      toastShadcn({ 
         title: "Error", 
         description: "Failed to prepare order. Please try again.", 
         variant: "destructive" 
       });
     }
-  }, [cart, prepareCartForCheckout, toast]);
+  }, [cart, prepareCartForCheckout, toastShadcn]);
 
   // Handle add to cart with pricing strategy tracking
   const handleAddToCart = useCallback(async (params: {
@@ -330,10 +471,8 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     localStorage.setItem("pos_cart_id", draft.cart_id);
     await refreshCart(draft.cart_id);
     
-    // Restore draft state
     if (draft.beeper_ids) {
       setSelectedBeeperIds(draft.beeper_ids);
-      // Re-attach orders to beepers
       draft.beeper_ids.forEach(async (beeperId: string) => {
         if (draft.cart_id) {
           await attachOrderToBeeper(beeperId, draft.cart_id);
@@ -345,7 +484,6 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     }
     if (draft.notes) setOrderNotes(draft.notes);
     
-    // Restore pricing context if available
     if (draft.saved_price_list_id) {
       await updateMetadata({
         price_list_id: draft.saved_price_list_id,
@@ -373,35 +511,37 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-
-
-  console.log(filteredProducts, 'FILTTERED')
-
   // Pricing info component for header
   const PricingInfoBadge = () => (
     <div className="flex items-center gap-2 flex-wrap">
       {pricingContext.pricingStrategy === 'price_list' && pricingContext.priceListId && (
         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
           <Tag className="h-3 w-3 mr-1" />
-          Promo Pricing Active
+          Promo Pricing
         </Badge>
       )}
       {pricingContext.pricingStrategy === 'customer_group' && pricingContext.customerGroupId && (
         <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
           <Users className="h-3 w-3 mr-1" />
-          Group Pricing Active
+          Group Pricing
         </Badge>
       )}
       {selectedCustomer && (
         <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
           <Star className="h-3 w-3 mr-1" />
-          Customer: {selectedCustomer.first_name}
+          {selectedCustomer.first_name}
         </Badge>
       )}
       {selectedBeeperIds.length > 0 && (
         <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
           <Radio className="h-3 w-3 mr-1" />
-          {selectedBeeperIds.length} Beeper{selectedBeeperIds.length !== 1 ? 's' : ''} Assigned
+          {selectedBeeperIds.length} Beeper{selectedBeeperIds.length !== 1 ? 's' : ''}
+        </Badge>
+      )}
+      {unreadOrderCount > 0 && (
+        <Badge variant="destructive" className="animate-pulse">
+          <Bell className="h-3 w-3 mr-1" />
+          {unreadOrderCount} New Order{unreadOrderCount !== 1 ? 's' : ''}
         </Badge>
       )}
     </div>
@@ -444,18 +584,29 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
   if (isMobile) {
     return (
       <>
+        <Toaster position="top-right" richColors />
         <div className="flex flex-col h-[90vh] pb-14">
           {/* Header */}
           <div className="sticky top-0 z-10 bg-background border-b p-2">
             <div className="flex justify-between items-center mb-2">
               <PricingInfoBadge />
               <div className="flex gap-1">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="h-7 px-2 relative"
+                  onClick={() => setShowChat(!showChat)}
+                >
+                  <MessageCircle className="h-3 w-3" />
+                  {messages.filter(m => !m.read).length > 0 && (
+                    <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center">
+                      {messages.filter(m => !m.read).length}
+                    </span>
+                  )}
+                </Button>
                 <Button size="sm" variant="outline" className="h-7 px-2" onClick={refreshProducts}>
                   <RefreshCw className="h-3 w-3" />
                 </Button>
-                {/* <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setDraftsDialogOpen(true)}>
-                  <History className="h-3 w-3" />
-                </Button> */}
               </div>
             </div>
             
@@ -467,8 +618,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
                 onChange={(e) => setSearchQuery(e.target.value)} 
                 className="pl-7 h-8 text-sm" 
               />
-                         <Button className="absolute right-4 top-1/2 h-3 w-5 -translate-y-1/2" onClick={() => setSearchQuery('')}>Clear</Button>
-
+              <Button className="absolute right-4 top-1/2 h-3 w-5 -translate-y-1/2" onClick={() => setSearchQuery('')}>Clear</Button>
             </div>
             
             <div className="flex gap-1 overflow-x-auto">
@@ -519,7 +669,25 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
             <div className="flex gap-2">
               <Button variant="default" className="flex-1" onClick={() => setMobileCartOpen(true)}>
                 <ShoppingCart className="h-3 w-3 mr-1" />
-                Cart • {cartTotal.toFixed(2)}
+                Cart • ₱{cartTotal.toFixed(2)}
+                {cartItems.length > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {cartItems.length}
+                  </Badge>
+                )}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="icon"
+                className="relative"
+                onClick={() => setShowNotificationPanel(!showNotificationPanel)}
+              >
+                <Bell className="h-4 w-4" />
+                {unreadOrderCount > 0 && (
+                  <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center">
+                    {unreadOrderCount}
+                  </span>
+                )}
               </Button>
             </div>
           </div>
@@ -534,6 +702,47 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
             </SheetContent>
           </Sheet>
         </div>
+        
+        {/* Chat Widget for Mobile */}
+        <ChatWidget
+          isOpen={showChat}
+          onClose={() => setShowChat(false)}
+          messages={messages}
+          onSendMessage={sendMessage}
+          userRole="cashier"
+          userName={user?.first_name || 'Cashier'}
+          userId={user?.id}
+          position="bottom-left"
+        />
+
+        {/* Notification Panel for Mobile */}
+        {showNotificationPanel && (
+          <div className="fixed bottom-16 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t max-h-96 overflow-y-auto">
+            <div className="p-3 border-b flex justify-between items-center">
+              <h3 className="font-semibold">Notifications</h3>
+              <Button variant="ghost" size="sm" onClick={() => setShowNotificationPanel(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="divide-y">
+              {notifications.length === 0 ? (
+                <div className="p-4 text-center text-muted-foreground">
+                  No notifications
+                </div>
+              ) : (
+                notifications.slice(0, 10).map((notification) => (
+                  <div key={notification.id} className="p-3 hover:bg-muted/50">
+                    <p className="text-sm font-medium">{notification.title}</p>
+                    <p className="text-sm text-muted-foreground">{notification.message}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {new Date(notification.timestamp).toLocaleTimeString()}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
         
         <DraftsDialog 
           open={draftsDialogOpen} 
@@ -553,13 +762,11 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
           region={region} 
           onComplete={async (order) => {
             console.log("Order completed:", order);
-            // Release all beepers associated with this order
             if (selectedBeeperIds.length > 0) {
               for (const beeperId of selectedBeeperIds) {
                 await releaseBeeper(beeperId);
               }
             }
-            // Reset POS state
             handleCustomerChange(null);
             await createCart();
             setSelectedBeeperIds([]);
@@ -567,7 +774,18 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
             setOrderNotes("");
             setPaymentDialogOpen(false);
             setMobileCartOpen(false);
-            toast({ 
+            setUnreadOrderCount(0);
+            
+            // Notify kitchen about completed order
+            if (socket) {
+              socket.emit('order_completed', {
+                orderId: order.id,
+                completedBy: user?.id,
+                timestamp: new Date()
+              });
+            }
+            
+            toastShadcn({ 
               title: "Success", 
               description: `Order #${order.display_id} completed successfully` 
             });
@@ -586,17 +804,47 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
   // Desktop Layout
   return (
     <div className="flex h-[90vh] overflow-hidden">
+      <Toaster position="top-right" richColors />
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <div className="sticky top-0 z-10 bg-background border-b p-3">
           <div className="flex justify-between items-center mb-3">
             <PricingInfoBadge />
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className={`inline-block w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+                {isConnected ? 'Online' : 'Offline'}
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="relative"
+                onClick={() => setShowChat(!showChat)}
+              >
+                <MessageCircle className="h-3 w-3 mr-1" />
+                Chat
+                {messages.filter(m => !m.read).length > 0 && (
+                  <Badge variant="destructive" className="ml-1 px-1.5 py-0.5 text-xs">
+                    {messages.filter(m => !m.read).length}
+                  </Badge>
+                )}
+              </Button>
+              <NotificationBell 
+                notifications={notifications}
+                onMarkRead={markNotificationRead}
+                onClearAll={clearNotifications}
+              />
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setIsSoundEnabled(!isSoundEnabled)}
+              >
+                {isSoundEnabled ? '🔊' : '🔇'}
+              </Button>
               <Button variant="outline" size="sm" onClick={refreshProducts}>
                 <RefreshCw className="h-3 w-3 mr-1" /> Refresh
               </Button>
-
             </div>
           </div>
           
@@ -608,7 +856,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
               onChange={(e) => setSearchQuery(e.target.value)} 
               className="pl-7 h-9" 
             />
-           <Button className="absolute right-4 top-1/2 h-3 w-5 -translate-y-1/2" onClick={() => setSearchQuery('')}>Clear</Button>
+            <Button className="absolute right-4 top-1/2 h-3 w-5 -translate-y-1/2" onClick={() => setSearchQuery('')}>Clear</Button>
           </div>
           
           <div className="flex gap-1 overflow-x-auto">
@@ -659,6 +907,18 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
         <CartSidebar {...cartSidebarProps} />
       </aside>
       
+      {/* Chat Widget */}
+      <ChatWidget
+        isOpen={showChat}
+        onClose={() => setShowChat(false)}
+        messages={messages}
+        onSendMessage={sendMessage}
+        userRole="cashier"
+        userName={user?.first_name || 'Cashier'}
+        userId={user?.id}
+        position="bottom-right"
+      />
+      
       {/* Dialogs */}
       <DraftsDialog 
         open={draftsDialogOpen} 
@@ -677,13 +937,11 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
         region={region} 
         onComplete={async (order) => {
           console.log("Order completed:", order);
-          // Release all beepers associated with this order
           if (selectedBeeperIds.length > 0) {
             for (const beeperId of selectedBeeperIds) {
               await releaseBeeper(beeperId);
             }
           }
-          // Reset POS state
           handleCustomerChange(null);
           await createCart();
           setSelectedBeeperIds([]);
@@ -691,8 +949,17 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
           setOrderNotes("");
           setPaymentDialogOpen(false);
           setMobileCartOpen(false);
+          setUnreadOrderCount(0);
           
-          toast({ 
+          if (socket) {
+            socket.emit('order_completed', {
+              orderId: order.id,
+              completedBy: user?.id,
+              timestamp: new Date()
+            });
+          }
+          
+          toastShadcn({ 
             title: "Success", 
             description: `Order #${order.display_id} completed successfully` 
           });

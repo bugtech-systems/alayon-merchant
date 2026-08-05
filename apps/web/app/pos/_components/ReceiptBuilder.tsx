@@ -140,6 +140,7 @@ console.log(order.metadata, order, 'HOOORD')
       .text(this.fitText(`Order #: ${order.display_id || order.id || 'N/A'} || ${order?.metadata?.beeper_ids?.[0] ? order?.metadata?.beeper_ids?.[0] : ''}`))
       .text(this.fitText(`Date: ${this.formatDate(order.created_at)}`))
       .text(this.fitText(`Status: ${order.status?.toUpperCase() || 'COMPLETED'}`))
+      .text(this.fitText(`${order.metadata?.isTakeOut ? 'TAKE-OUT' : 'DINE-IN'}`))
       .newline(2);
 
     // ============================================

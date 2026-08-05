@@ -125,7 +125,7 @@ export default function DashboardPage({user}: any) {
         sort_field: "created_at",
         sort_order: "DESC",
 
-        // customer_group_id: pricingContext.customerGroupId
+        customer_group_id: pricingContext.customerGroupId
       });
       return result;
     },

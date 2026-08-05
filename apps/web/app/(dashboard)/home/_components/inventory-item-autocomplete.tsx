@@ -2,24 +2,20 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronDown, Search, X, Package, Loader2, Plus, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// Custom Autocomplete Component
+// Custom Autocomplete Component - Read-only reference mode
 export const Autocomplete = ({
   value,
   onChange,
   items,
-  onSelect,
   placeholder = 'Search...',
-  emptyMessage = 'No items found',
-  createNewLabel = 'Create new',
+  emptyMessage = 'No existing items found',
   className,
 }: {
   value: string;
   onChange: (value: string) => void;
   items: any[];
-  onSelect: (item: any) => void;
   placeholder?: string;
   emptyMessage?: string;
-  createNewLabel?: string;
   className?: string;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -39,7 +35,6 @@ export const Autocomplete = ({
       const description = item.description?.toLowerCase().replace(/\s+/g, '') || '';
       const sku = item.sku?.toLowerCase().replace(/\s+/g, '') || '';
       
-      // Search in title, description, and SKU
       return title.includes(searchTerm) || 
              description.includes(searchTerm) ||
              sku.includes(searchTerm);
@@ -57,7 +52,7 @@ export const Autocomplete = ({
 
   const filteredItems = getFilteredItems();
 
-  // Handle keyboard navigation
+  // Handle keyboard navigation (read-only, no selection)
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!isOpen) {
       if (e.key === 'ArrowDown' || e.key === 'Enter') {
@@ -80,11 +75,7 @@ export const Autocomplete = ({
         break;
       case 'Enter':
         e.preventDefault();
-        if (highlightedIndex >= 0 && highlightedIndex < filteredItems.length) {
-          onSelect(filteredItems[highlightedIndex]);
-          setIsOpen(false);
-          setHighlightedIndex(-1);
-        }
+        // No selection on Enter - purely informational
         break;
       case 'Escape':
         setIsOpen(false);
@@ -133,7 +124,6 @@ export const Autocomplete = ({
     
     if (index === -1) return text;
     
-    // Find the actual character positions in the original text
     let charIndex = 0;
     let startPos = -1;
     let endPos = -1;
@@ -213,59 +203,49 @@ export const Autocomplete = ({
         </button>
       </div>
 
-      {/* Dropdown */}
+      {/* Dropdown - Read-only reference */}
       {isOpen && (
         <div className="absolute z-50 w-full mt-1 bg-popover rounded-md border shadow-lg">
           <div className="max-h-[300px] overflow-y-auto p-1">
+            {/* Reference info header */}
+            <div className="px-3 py-1.5 border-b border-border/50">
+              <p className="text-xs text-muted-foreground">
+                ℹ️ Existing items for reference only
+              </p>
+            </div>
+
             {filteredItems.length === 0 ? (
-              // Empty state - Show create new option
+              // Empty state
               <div className="py-6 text-center">
-                <p className="text-sm text-muted-foreground mb-2">
+                <p className="text-sm text-muted-foreground">
                   {emptyMessage}
                 </p>
                 {value.trim() && (
-                  <button
-                    onClick={() => {
-                      // Handle create new
-                      if (value.trim()) {
-                        // Your create logic here
-                        onSelect({ title: value.trim(), isNew: true });
-                        setIsOpen(false);
-                      }
-                    }}
-                    className="inline-flex items-center text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    {createNewLabel} "{value.trim()}"
-                  </button>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    No existing items match "{value.trim()}"
+                  </p>
                 )}
               </div>
             ) : (
               filteredItems.map((item, index) => {
                 const isHighlighted = index === highlightedIndex;
-                const isSelected = value === item.title;
                 
                 return (
                   <div
                     key={item.id}
                     ref={(el) => (itemRefs.current[index] = el)}
-                    onClick={() => {
-                      onSelect(item);
-                      setIsOpen(false);
-                      setHighlightedIndex(-1);
-                    }}
                     onMouseEnter={() => setHighlightedIndex(index)}
                     className={cn(
-                      'flex items-start gap-2 px-3 py-2 rounded-md cursor-pointer',
+                      'flex items-start gap-2 px-3 py-2 rounded-md',
                       'transition-colors duration-150',
-                      isHighlighted && 'bg-accent',
-                      isSelected && 'bg-accent/50'
+                      isHighlighted && 'bg-accent/50',
+                      'cursor-default' // Changed from cursor-pointer
                     )}
                   >
-                    <Check className={cn(
-                      'h-4 w-4 mt-0.5 shrink-0 transition-opacity',
-                      isSelected ? 'opacity-100' : 'opacity-0'
-                    )} />
+                    {/* Reference indicator instead of checkmark */}
+                    <div className="h-4 w-4 mt-0.5 shrink-0 flex items-center justify-center">
+                      <span className="text-[10px] text-muted-foreground">#</span>
+                    </div>
                     
                     <div className="flex-1 min-w-0">
                       <div className="text-sm truncate">
@@ -280,17 +260,26 @@ export const Autocomplete = ({
                     
                     <div className="flex flex-col items-end shrink-0 ml-2">
                       <span className="text-xs text-muted-foreground">
-                        {item.sku}
+                        SKU: {item.sku}
                       </span>
                       {item.created_at && (
                         <span className="text-[10px] text-muted-foreground/70">
-                          {new Date(item.created_at).toLocaleDateString()}
+                          Added: {new Date(item.created_at).toLocaleDateString()}
                         </span>
                       )}
                     </div>
                   </div>
                 );
               })
+            )}
+            
+            {/* Reference footer */}
+            {filteredItems.length > 0 && (
+              <div className="px-3 py-1.5 border-t border-border/50 mt-1">
+                <p className="text-[10px] text-muted-foreground/60 text-center">
+                  {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''} found • Click to dismiss
+                </p>
+              </div>
             )}
           </div>
         </div>

@@ -11,7 +11,11 @@ import { PrintDialog } from "@/app/pos/_components/print-dialog";
 import { startOfDay, endOfDay, format } from 'date-fns';
 import { completeOrder, fulfillOrder } from "@/lib/actions/orders";
 import { KpiCards } from "./rider/_components/kpi-cards";
-import { TaskReminders } from "./rider/_components/task-reminders";
+import { useSocket } from "@/hooks/useSocket";
+import { NotificationBell } from "@/components/notification/NotificationBell";
+import { ChatWidget } from "@/components/chat/ChatWidget";
+import { Toaster } from "sonner";
+import { toast } from "sonner";
 
 interface DashboardClientProps {
   user: any;
@@ -24,10 +28,11 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [isSoundLoaded, setIsSoundLoaded] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
+  const [showChat, setShowChat] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const previousOrderCountRef = useRef<number>(0); // Use ref to track count without re-renders
+  const previousOrderCountRef = useRef<number>(0);
   
   // Get pagination and filter params from URL
   const page = parseInt(searchParams?.get('page') || '1', 10);
@@ -35,25 +40,16 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   const search = searchParams?.get('search') || '';
   const statusFilter = searchParams?.get('status') || '';
 
-    // Get today's date range with proper start/end of day
-      const now = new Date();
-      const from = startOfDay(now);
-      const to = endOfDay(now);
-  
-      // Build filters for Medusa v2 using created_at field
-      const filters: Record<string, any> = {
-        // Use ISO strings for Medusa v2 API
-        date_from: format(from, 'yyyy-MM-dd'),
-        date_to: format(to, 'yyyy-MM-dd'),
-      };
+  // Get today's date range with proper start/end of day
+  const now = new Date();
+  const from = startOfDay(now);
+  const to = endOfDay(now);
 
-        // Apply date filters if we have dates
-          // const dateFilters = buildDateFilters(filters.dateFrom, filters.dateTo);
-          // Object.assign(filters, dateFilters);
-  
-
-
-          
+  // Build filters for Medusa v2 using created_at field
+  const filters: Record<string, any> = {
+    date_from: format(from, 'yyyy-MM-dd'),
+    date_to: format(to, 'yyyy-MM-dd'),
+  };
 
 
   const pricingContext = React.useMemo(() => ({
@@ -69,7 +65,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
   }), [user]);
 
-
   // Fetch orders with pagination and filters
   const { data, refetch, isLoading } = useMedusaOrders({
     filters: { 
@@ -82,22 +77,33 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     }
   });
 
-
+  // Initialize Socket.IO connection
+  const { 
+    socket, 
+    isConnected, 
+    notifications, 
+    messages,
+    sendMessage,
+    markNotificationRead,
+    clearNotifications,
+  } = useSocket({
+    userId: user?.id,
+    role: userRole,
+    customerId: user?.id,
+    token: user?.token
+  });
 
   // Initialize audio for notification sound
   useEffect(() => {
-    // Try multiple audio formats for better compatibility
     const audioExtensions = ['mp3', 'wav', 'ogg'];
     let currentAudio: HTMLAudioElement | null = null;
     
-    // Try to load the audio file
     const loadAudio = (extension: string) => {
       try {
         const audio = new Audio(`/notification.${extension}`);
         audio.volume = 1.0;
         audio.preload = 'auto';
         
-        // Check if audio can be loaded
         audio.addEventListener('canplaythrough', () => {
           console.log(`Audio loaded successfully (${extension})`);
           setIsSoundLoaded(true);
@@ -107,7 +113,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
         
         audio.addEventListener('error', (e) => {
           console.warn(`Failed to load audio (${extension}):`, e);
-          // Try next format
           const currentIndex = audioExtensions.indexOf(extension);
           if (currentIndex < audioExtensions.length - 1) {
             loadAudio(audioExtensions[currentIndex + 1]);
@@ -124,7 +129,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
       }
     };
     
-    // Start loading with first format
     currentAudio = loadAudio(audioExtensions[0]);
     
     return () => {
@@ -145,7 +149,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   useEffect(() => {
     if (data?.orders) {
       const newCount = data.orders.length;
-      // Only update if count changed
       if (previousOrderCountRef.current !== newCount) {
         console.log(`Order count changed: ${previousOrderCountRef.current} -> ${newCount}`);
         previousOrderCountRef.current = newCount;
@@ -166,9 +169,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
       return;
     }
 
-    // Try multiple methods to play sound
     const playMethods = [
-      // Method 1: Use the audio element
       () => {
         if (audioRef.current && isSoundLoaded) {
           console.log('Method 1: Playing via audio element');
@@ -178,7 +179,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
         return Promise.reject('Audio element not available');
       },
       
-      // Method 2: Create a new audio element
       () => {
         console.log('Method 2: Creating new audio element');
         const audio = new Audio('/notification.mp3');
@@ -186,7 +186,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
         return audio.play();
       },
       
-      // Method 3: Use Web Speech API
       () => {
         console.log('Method 3: Using Web Speech API');
         if ('speechSynthesis' in window) {
@@ -205,7 +204,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
       }
     ];
 
-    // Try each method in sequence
     for (let i = 0; i < playMethods.length; i++) {
       try {
         const result = await playMethods[i]();
@@ -213,11 +211,9 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
         return true;
       } catch (error) {
         console.warn(`Method ${i + 1} failed:`, error);
-        // Continue to next method
       }
     }
 
-    // If all methods fail, use the simplest fallback
     try {
       console.log('Using final fallback: Web Audio API');
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -246,27 +242,108 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     }
   }, [isSoundEnabled, isSoundLoaded]);
 
+  // Handle socket notifications
+  useEffect(() => {
+    if (!socket) return;
+
+    // Handle order received events
+    socket.on('order_received', (data) => {
+      console.log('New order received via socket:', data);
+      
+      // Show toast notification
+      toast.info(`New Order #${data.order.display_id}`, {
+        description: `${data.order.items.length} items - Total: ₱${data.order.total}`,
+        duration: 5000,
+        action: {
+          label: 'View',
+          onClick: () => {
+            // Navigate to order details or highlight the order
+            handleRowClick(data.order);
+          }
+        }
+      });
+      
+      // Play sound notification
+      if (isSoundEnabled) {
+        playNotificationSound();
+      }
+      
+      // Refetch orders to update the table
+      refetch();
+    });
+
+    // Handle order status updates
+    socket.on('order_updated', (data) => {
+      console.log('Order updated via socket:', data);
+      
+      toast.info(`Order #${data.order.display_id} updated`, {
+        description: `Status: ${data.status}`,
+        duration: 3000
+      });
+      
+      // Refetch to update the table
+      refetch();
+    });
+
+    // Handle messages from kitchen/cashier
+    socket.on('message_received', (data) => {
+      console.log('Message received:', data);
+      
+      toast.info(`Message from ${data.senderName || 'Kitchen'}`, {
+        description: data.text,
+        duration: 4000,
+        action: {
+          label: 'Reply',
+          onClick: () => setShowChat(true)
+        }
+      });
+      
+      if (isSoundEnabled) {
+        playNotificationSound();
+      }
+    });
+
+    // Handle customer messages
+    socket.on('customer_message', (data) => {
+      console.log('Customer message received:', data);
+      
+      toast.info(`Customer: ${data.customerName || 'Customer'}`, {
+        description: data.text,
+        duration: 4000,
+        action: {
+          label: 'Reply',
+          onClick: () => setShowChat(true)
+        }
+      });
+      
+      if (isSoundEnabled) {
+        playNotificationSound();
+      }
+    });
+
+    return () => {
+      socket.off('order_received');
+      socket.off('order_updated');
+      socket.off('message_received');
+      socket.off('customer_message');
+    };
+  }, [socket, isSoundEnabled, playNotificationSound, refetch]);
+
   // Auto-refetch every 10 seconds
   useEffect(() => {
     const intervalId = setInterval(async () => {
       if (!isLoading && data?.orders) {
-        // Get current count from the ref (most up-to-date)
         const currentOrderCount = previousOrderCountRef.current;
         
         console.log(`Auto-refresh: Checking for new orders... Current count: ${currentOrderCount}`);
         
-        // Store the current data before refetch
         const currentData = data;
-        
-        // Refetch data
         const result = await refetch();
         
-        // Get the new data from the result
         if (result.data?.orders) {
           const newOrderCount = result.data.orders.length;
           console.log(`Auto-refresh: New count: ${newOrderCount}, Previous count: ${currentOrderCount}`);
           
-          // Check if there are new orders (count increased)
           if (newOrderCount > currentOrderCount) {
             console.log(`New order detected! Playing notification... (${currentOrderCount} -> ${newOrderCount})`);
             if (isSoundEnabled) {
@@ -274,7 +351,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
             }
           }
           
-          // Update the ref with the new count
           previousOrderCountRef.current = newOrderCount;
           setPreviousOrderCount(newOrderCount);
         }
@@ -314,12 +390,10 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     if (isSoundEnabled) {
       await playNotificationSound();
     } else {
-      // Temporarily enable sound to test
       console.log('Sound was disabled, enabling temporarily for test');
       setIsSoundEnabled(true);
       setTimeout(async () => {
         await playNotificationSound();
-        // Don't revert - let user decide if they want to keep it on
       }, 100);
     }
   }, [isSoundEnabled, playNotificationSound]);
@@ -328,7 +402,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   const stopNotificationSound = useCallback(() => {
     console.log('Stopping notification sound...');
     
-    // Method 1: Stop the audio element
     if (audioRef.current) {
       try {
         audioRef.current.pause();
@@ -339,7 +412,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
       }
     }
     
-    // Method 2: Stop any other audio elements that might be playing
     try {
       const allAudio = document.querySelectorAll('audio');
       allAudio.forEach(audio => {
@@ -353,7 +425,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
       console.warn('Error stopping other audio elements:', error);
     }
     
-    // Method 3: Stop Web Speech API
     if ('speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
@@ -362,29 +433,12 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
         console.warn('Error canceling speech synthesis:', error);
       }
     }
-    
-    // Method 4: Stop Web Audio API contexts
-    try {
-      // @ts-ignore - webkitAudioContext may not be recognized
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      if (AudioContextClass) {
-        // Get all audio contexts and close them
-        // Note: This is a simplified approach - in a real app you might track active contexts
-        console.log('Attempting to close audio contexts...');
-      }
-    } catch (error) {
-      console.warn('Error closing audio contexts:', error);
-    }
   }, []);
 
-  // *** NEW: Handler for print action that stops sound first ***
+  // Handler for print action that stops sound first
   const handlePrint = useCallback((cartData: any) => {
     console.log('Print action triggered - stopping notification sound...');
-    
-    // Stop any playing notification sound
     stopNotificationSound();
-    
-    // Then open the print dialog
     setCartPrint(cartData);
   }, [stopNotificationSound]);
 
@@ -414,32 +468,22 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
 
   const handleRowClick = (order: any) => {
     console.log(order, 'ORDER');
+    stopNotificationSound();
   };
 
-  
-  const handleAcceptOrder = async (orderId:any, stock_location_id:any) => {
+  const handleAcceptOrder = async (orderId: any, stock_location_id: any) => {
     console.log(orderId, 'ORDER', stock_location_id);
-      let order = data?.orders.find(a => a.id === orderId);
-
-      console.log(order, 'ORDEER')
-
-
-      await fulfillOrder(orderId, stock_location_id)
-      await refetch();
-      
+    let order = data?.orders.find(a => a.id === orderId);
+    console.log(order, 'ORDEER')
+    await fulfillOrder(orderId, stock_location_id)
+    await refetch();
   };
 
-    const handleConfirmOrder = async (order: any, stock_location_id:any) => {
-
-      console.log(order, 'ORDEERaaaaaa', stock_location_id)
-
-
-      await completeOrder(order, stock_location_id)
-      await refetch();
-      
+  const handleConfirmOrder = async (order: any, stock_location_id: any) => {
+    console.log(order, 'ORDEERaaaaaa', stock_location_id)
+    await completeOrder(order, stock_location_id)
+    await refetch();
   };
-
-  
 
   // Update URL query params
   const updateQueryParams = (params: Record<string, string | number | undefined>) => {
@@ -459,45 +503,76 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     updateQueryParams({ search: query, page: 1 });
   };
 
+  // Toggle sound
+  const toggleSound = useCallback(() => {
+    setIsSoundEnabled(prev => !prev);
+    toast.info(`Sound ${!isSoundEnabled ? 'enabled' : 'disabled'}`, {
+      duration: 2000
+    });
+  }, [isSoundEnabled]);
 
-
-
+  // Toggle chat
+  const toggleChat = useCallback(() => {
+    setShowChat(prev => !prev);
+  }, []);
 
   // Company role view
   if (userRole === "company") {
     const { company } = user.employee;
     return (
-      <div className="@container/main flex flex-col gap-4 md:gap-6">
+      <div className="@container/main flex flex-col gap-4 md:gap-6 relative">
+        <Toaster position="top-right" richColors />
         <PrintDialog open={cartPrint} onOpenChange={setCartPrint} cart={cartPrint} />
         
-        {/* Sound control and test buttons */}
-        {/* <div className="flex justify-end items-center gap-3 px-4">
-          <button
-            onClick={handleTestNotification}
-            className="text-sm px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md transition-colors"
-            aria-label="Test notification sound"
-          >
-            🔊 Test Sound
-          </button>
-          <button
-            onClick={toggleSound}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            aria-label={isSoundEnabled ? "Disable sound notifications" : "Enable sound notifications"}
-          >
-            {isSoundEnabled ? '🔊 Sound On' : '🔇 Sound Off'}
-          </button>
-          <span className="text-xs text-muted-foreground">
-            {isSoundLoaded ? '✅ Sound Ready' : '⏳ Loading Sound...'}
-          </span>
-          {audioError && (
-            <span className="text-xs text-red-500">
-              ⚠️ {audioError}
+        {/* Notification Controls */}
+        <div className="flex justify-between items-center px-4 py-2 bg-background border-b">
+          <div className="flex items-center gap-4">
+            <NotificationBell 
+              notifications={notifications}
+              onMarkRead={markNotificationRead}
+              onClearAll={clearNotifications}
+            />
+            <div className="flex items-center gap-2 text-sm">
+              <span className={`inline-block w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+              <span className="text-muted-foreground">
+                {isConnected ? 'Connected' : 'Disconnected'}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleTestNotification}
+              className="text-sm px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md transition-colors"
+              aria-label="Test notification sound"
+            >
+              🔊 Test Sound
+            </button>
+            <button
+              onClick={toggleSound}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              aria-label={isSoundEnabled ? "Disable sound notifications" : "Enable sound notifications"}
+            >
+              {isSoundEnabled ? '🔊 Sound On' : '🔇 Sound Off'}
+            </button>
+            <button
+              onClick={toggleChat}
+              className="text-sm px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-md transition-colors"
+            >
+              💬 Chat
+            </button>
+            <span className="text-xs text-muted-foreground">
+              {isSoundLoaded ? '✅ Sound Ready' : '⏳ Loading Sound...'}
             </span>
-          )}
-          <span className="text-xs text-muted-foreground">
-            Auto-refresh: 10s
-          </span>
-        </div> */}
+            {audioError && (
+              <span className="text-xs text-red-500">
+                ⚠️ {audioError}
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground">
+              Auto-refresh: 10s
+            </span>
+          </div>
+        </div>
         
         <CompanyOrdersTable
           data={data?.orders || []}
@@ -518,6 +593,19 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           onAcceptOrder={(orderId, stock_location_id) => handleAcceptOrder(orderId, stock_location_id) as any}
           onCompleteOrder={(order, stock_location_id) => handleConfirmOrder(order, stock_location_id) as any}
         />
+
+        {/* Chat Widget */}
+        {showChat && (
+          <ChatWidget
+            isOpen={showChat}
+            onClose={toggleChat}
+            messages={messages}
+            onSendMessage={sendMessage}
+            userRole={userRole}
+            userName={user.first_name || user.email}
+            userId={user.id}
+          />
+        )}
       </div>
     );
   }
@@ -525,40 +613,66 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   // Driver role view
   if (userRole === "driver") {
     return (
-      <div className="@container/main flex flex-col gap-4 md:gap-6">
-        {/* <DriverDashboard user={user}/> */}
-              {/* KPI Cards */}
-              <KpiCards
-                totalCustomers={0}
-                activeCustomers={0}
-                totalRevenue={0}
-                totalOrders={0}
-                isLoading={isLoading }
-              />
+      <div className="@container/main flex flex-col gap-4 md:gap-6 relative">
+        <Toaster position="top-right" richColors />
         
-              {/* Task Reminders */}
-              {/* <TaskReminders customerId={pricingContext.customerId} locationId={pricingContext.stockLocationId} priceListId={pricingContext.priceListId}/> */}
-         {/* <CompanyOrdersTable
-          data={data?.orders || []}
-          totalCount={data?.total || 0}
+        {/* Notification Controls */}
+        <div className="flex justify-between items-center px-4 py-2 bg-background border-b">
+          <div className="flex items-center gap-4">
+            <NotificationBell 
+              notifications={notifications}
+              onMarkRead={markNotificationRead}
+              onClearAll={clearNotifications}
+            />
+            <div className="flex items-center gap-2 text-sm">
+              <span className={`inline-block w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+              <span className="text-muted-foreground">
+                {isConnected ? 'Connected' : 'Disconnected'}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleSound}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {isSoundEnabled ? '🔊 Sound On' : '🔇 Sound Off'}
+            </button>
+            <button
+              onClick={toggleChat}
+              className="text-sm px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-md transition-colors"
+            >
+              💬 Chat
+            </button>
+          </div>
+        </div>
+
+        {/* KPI Cards */}
+        <KpiCards
+          totalCustomers={0}
+          activeCustomers={0}
+          totalRevenue={0}
+          totalOrders={0}
           isLoading={isLoading}
-          onAssignDriver={handleAssignRider}
-          onStatusChange={handleUpdateStatus}
-          onRefresh={handleManualRefresh}
-          onRowClick={handleRowClick}
-          companyId={pricingContext?.companyId}
-          defaultStockLocationId={pricingContext?.stockLocationId}
-          searchQuery={search}
-          onSearchChange={handleSearchChange}
-          enableDragDrop={true}
-          enableColumnVisibility={true}
-          enableRowSelection={true}
-          onPrint={handlePrint}
-          onAcceptOrder={(orderId, stock_location_id) => handleAcceptOrder(orderId, stock_location_id) as any}
-          onCompleteOrder={(order, stock_location_id) => handleConfirmOrder(order, stock_location_id) as any}
-        /> */}
+        />
+        
+        {/* Task Reminders */}
+        {/* <TaskReminders customerId={pricingContext.customerId} locationId={pricingContext.stockLocationId} priceListId={pricingContext.priceListId}/> */}
+         
         <DriverDashboard user={user}/>
 
+        {/* Chat Widget */}
+        {showChat && (
+          <ChatWidget
+            isOpen={showChat}
+            onClose={toggleChat}
+            messages={messages}
+            onSendMessage={sendMessage}
+            userRole={userRole}
+            userName={user.first_name || user.email}
+            userId={user.id}
+          />
+        )}
       </div>
     );
   }
@@ -566,8 +680,54 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   // Store role view (similar to driver)
   if (userRole === "store") {
     return (
-      <div className="@container/main flex flex-col gap-4 md:gap-6">
+      <div className="@container/main flex flex-col gap-4 md:gap-6 relative">
+        <Toaster position="top-right" richColors />
+        
+        {/* Notification Controls */}
+        <div className="flex justify-between items-center px-4 py-2 bg-background border-b">
+          <div className="flex items-center gap-4">
+            <NotificationBell 
+              notifications={notifications}
+              onMarkRead={markNotificationRead}
+              onClearAll={clearNotifications}
+            />
+            <div className="flex items-center gap-2 text-sm">
+              <span className={`inline-block w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+              <span className="text-muted-foreground">
+                {isConnected ? 'Connected' : 'Disconnected'}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleSound}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {isSoundEnabled ? '🔊 Sound On' : '🔇 Sound Off'}
+            </button>
+            <button
+              onClick={toggleChat}
+              className="text-sm px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-md transition-colors"
+            >
+              💬 Chat
+            </button>
+          </div>
+        </div>
+
         <DriverDashboard user={user}/>
+
+        {/* Chat Widget */}
+        {showChat && (
+          <ChatWidget
+            isOpen={showChat}
+            onClose={toggleChat}
+            messages={messages}
+            onSendMessage={sendMessage}
+            userRole={userRole}
+            userName={user.first_name || user.email}
+            userId={user.id}
+          />
+        )}
       </div>
     );
   }
@@ -575,6 +735,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   // Default fallback
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
+      <Toaster position="top-right" richColors />
       <p>Welcome {user.first_name || user.email}</p>
     </div>
   );

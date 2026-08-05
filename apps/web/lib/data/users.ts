@@ -11,6 +11,13 @@ export async function retrieveUser() {
         ...getCacheOptions("users"),
       },
     });
+
+    let headers = await getAuthHeaders();
+
+
+   let token = String(headers?.authorization).split('Bearer ')[1];
+
+
     let userContext = {
         priceListId: user?.metadata?.role === 'company' 
           ? user.employee?.company?.price_list_id 
@@ -21,10 +28,11 @@ export async function retrieveUser() {
         customerId: user?.id,
         companyId: user?.metadata?.role == 'company' ? user.employee?.company_id : user?.driver?.company_id,
         stockLocationId: user?.metadata?.role == 'company' ? user.employee?.company?.stock_location_id : user?.driver?.stock_location_id,
-        pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
+        pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group',
+        token
       }
-
-    return {...userContext, ...user};
+      
+    return {...userContext, ...user, token};
   } catch (error) {
     console.error(error);
     return null;

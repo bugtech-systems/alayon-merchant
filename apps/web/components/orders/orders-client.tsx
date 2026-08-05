@@ -1264,136 +1264,7 @@ const DetailedOrderView = ({
   );
 };
 
-// ============================================
-// MOBILE ORDER CARD
-// ============================================
 
-const MobileOrderCard = ({ 
-  order, 
-  orderType, 
-  onView
-}: any) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  return (
-    <div className="bg-card rounded-lg border p-4 space-y-3 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-            {orderType === 'drafts' ? (
-              <FileText className="h-4 w-4 text-primary" />
-            ) : (
-              <Package className="h-4 w-4 text-primary" />
-            )}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-sm font-semibold">
-                {orderType === 'drafts' ? order.id.slice(0, 8) : `#${order.display_id}`}
-              </span>
-              {orderType === 'orders' && (
-                <PaymentStatusBadge status={order.payment_status} />
-              )}
-            </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <CalendarDays className="h-3 w-3" />
-              {order.created_at && formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {orderType === 'drafts' ? (
-            <Badge variant="outline">Draft</Badge>
-          ) : (
-            <OrderStatusBadge status={order.status} />
-          )}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3 text-sm bg-muted/30 rounded-lg p-3">
-        <div className="flex items-center gap-2">
-          <User className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="font-medium">
-            {order.customer?.first_name || order.customer_name || order.email?.split('@')[0] || 'Guest'}
-          </span>
-        </div>
-        {order.email && (
-          <div className="flex items-center gap-1 text-muted-foreground">
-            <Mail className="h-3 w-3" />
-            <span className="text-xs truncate max-w-[120px]">{order.email}</span>
-          </div>
-        )}
-        {order.shipping_address?.city && (
-          <div className="flex items-center gap-1 text-muted-foreground">
-            <MapPin className="h-3 w-3" />
-            <span className="text-xs">{order.shipping_address.city}</span>
-          </div>
-        )}
-      </div>
-
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-center w-full text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ChevronDown className={cn("h-3 w-3 transition-transform", isExpanded && "rotate-180")} />
-        <span className="ml-1">{isExpanded ? 'Show less' : 'Show more'}</span>
-      </button>
-
-      {isExpanded && (
-        <div className="space-y-2 text-sm bg-muted/20 rounded-lg p-3">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <span className="text-muted-foreground">Items:</span>
-              <span className="font-medium ml-1">{order.items?.length || order.items_count || 0}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Subtotal:</span>
-              <span className="font-medium ml-1">₱{(order.subtotal || 0).toFixed(2)}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Shipping:</span>
-              <span className="font-medium ml-1">₱{(order.shipping_total || 0).toFixed(2)}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Tax:</span>
-              <span className="font-medium ml-1">₱{(order.tax_total || 0).toFixed(2)}</span>
-            </div>
-            {order.discount_total > 0 && (
-              <div className="col-span-2">
-                <span className="text-muted-foreground">Discount:</span>
-                <span className="font-medium ml-1 text-emerald-600">-₱{(order.discount_total || 0).toFixed(2)}</span>
-              </div>
-            )}
-            {order.customer_note && (
-              <div className="col-span-2">
-                <span className="text-muted-foreground">Note:</span>
-                <span className="ml-1 text-sm">{order.customer_note}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between pt-2 border-t">
-        <div>
-          <div className="text-lg font-bold">
-            ₱{(order.total || 0).toFixed(2)}
-          </div>
-          {order.eta && (
-            <div className="text-xs text-muted-foreground flex items-center gap-1">
-              <Timer className="h-3 w-3" />
-              ETA: {format(new Date(order.eta), 'h:mm a')}
-            </div>
-          )}
-        </div>
-        <Button size="sm" variant="outline" onClick={() => onView(order)}>
-          <Eye className="h-3.5 w-3.5 mr-1" />
-          View
-        </Button>
-      </div>
-    </div>
-  );
-};
 
 // ============================================
 // MAIN ORDERS CLIENT COMPONENT (Updated)
@@ -1742,6 +1613,185 @@ console.log(data, 'DATAA')
   }
 
   const { total_pages, has_next, has_previous, count } = pagination;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const MobileOrderCard = ({ 
+  order, 
+  orderType, 
+  onView
+}: any) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+
+  console.log(orderType, 'TYYYPPPE')
+  return (
+    <div className="bg-card rounded-lg border p-4 space-y-3 hover:shadow-md transition-shadow">
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+            {orderType === 'drafts' ? (
+              <FileText className="h-4 w-4 text-primary" />
+            ) : (
+              <Package className="h-4 w-4 text-primary" />
+            )}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-sm font-semibold">
+                {orderType === 'drafts' ? order.id.slice(0, 8) : `#${order.display_id}`}
+              </span>
+              {orderType === 'orders' && (
+                <PaymentStatusBadge status={order.payment_status} />
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <CalendarDays className="h-3 w-3" />
+              {order.created_at && formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {orderType === 'drafts' ? (
+            <Badge variant="outline">Draft</Badge>
+          ) : orderType === 'orders' ? 
+           <StatusDropdown
+                              currentStatus={order?.delivery?.delivery_status || order.status}
+                              paymentStatus={order.payment_status}
+                              onStatusChange={(status) => handleStatusUpdate(order.id, status)}
+                              onCapturePayment={() => handleCaptureDialog(order)}
+                              onMarkAsPaid={() => handleMarkAsPaid(order)}
+                              canCapturePayment={order.payment_status === 'authorized' || order.payment_status === 'not_paid'}
+                              disabled={isLoading || captureLoading}
+                            />
+
+          : (
+            <OrderStatusBadge status={order.status} />
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 text-sm bg-muted/30 rounded-lg p-3">
+        <div className="flex items-center gap-2">
+          <User className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="font-medium">
+            {order.customer?.first_name || order.customer_name || order.email?.split('@')[0] || 'Guest'}
+          </span>
+        </div>
+        {order.email && (
+          <div className="flex items-center gap-1 text-muted-foreground">
+            <Mail className="h-3 w-3" />
+            <span className="text-xs truncate max-w-[120px]">{order.email}</span>
+          </div>
+        )}
+        {order.shipping_address?.city && (
+          <div className="flex items-center gap-1 text-muted-foreground">
+            <MapPin className="h-3 w-3" />
+            <span className="text-xs">{order.shipping_address.city}</span>
+          </div>
+        )}
+      </div>
+
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center justify-center w-full text-xs text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ChevronDown className={cn("h-3 w-3 transition-transform", isExpanded && "rotate-180")} />
+        <span className="ml-1">{isExpanded ? 'Show less' : 'Show more'}</span>
+      </button>
+
+      {isExpanded && (
+        <div className="space-y-2 text-sm bg-muted/20 rounded-lg p-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <span className="text-muted-foreground">Items:</span>
+              <span className="font-medium ml-1">{order.items?.length || order.items_count || 0}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Subtotal:</span>
+              <span className="font-medium ml-1">₱{(order.subtotal || 0).toFixed(2)}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Shipping:</span>
+              <span className="font-medium ml-1">₱{(order.shipping_total || 0).toFixed(2)}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Tax:</span>
+              <span className="font-medium ml-1">₱{(order.tax_total || 0).toFixed(2)}</span>
+            </div>
+            {order.discount_total > 0 && (
+              <div className="col-span-2">
+                <span className="text-muted-foreground">Discount:</span>
+                <span className="font-medium ml-1 text-emerald-600">-₱{(order.discount_total || 0).toFixed(2)}</span>
+              </div>
+            )}
+            {order.customer_note && (
+              <div className="col-span-2">
+                <span className="text-muted-foreground">Note:</span>
+                <span className="ml-1 text-sm">{order.customer_note}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between pt-2 border-t">
+        <div>
+          <div className="text-lg font-bold">
+            ₱{(order.total || 0).toFixed(2)}
+          </div>
+          {order.eta && (
+            <div className="text-xs text-muted-foreground flex items-center gap-1">
+              <Timer className="h-3 w-3" />
+              ETA: {format(new Date(order.eta), 'h:mm a')}
+            </div>
+          )}
+        </div>
+        <Button size="sm" variant="outline" onClick={() => onView(order)}>
+          <Eye className="h-3.5 w-3.5 mr-1" />
+          View
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+
+
+
+
+
+
+
+
+
+
+
   return (
     <TooltipProvider>
       <div className="space-y-6">
@@ -1802,7 +1852,7 @@ console.log(data, 'DATAA')
                     <TableHead className="font-medium min-w-[150px]">Customer</TableHead>
                     <TableHead className="font-medium text-right min-w-[100px]">Total</TableHead>
                     <TableHead className="font-medium min-w-[140px]">Status</TableHead>
-                    <TableHead className="font-medium text-center min-w-[60px]">Items</TableHead>
+                    <TableHead className="font-medium text-left min-w-[60px]">Items</TableHead>
                     <TableHead className="font-medium min-w-[120px]">Date</TableHead>
                     <TableHead className="font-medium text-right min-w-[60px]">Actions</TableHead>
                   </TableRow>
@@ -1877,10 +1927,15 @@ console.log(data, 'DATAA')
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell>
+                        <div className="d-flex flex-col items-center justify-center">
                         <div className="font-medium">
                           {order.items?.length || order.items_count || 0}
                         </div>
+                                <div className={`text-xs text-muted-foreground flex items-center gap-1 ${order?.metadata?.isTakeOut ? 'text-primary' : ''}`}>
+                                  {order?.metadata?.isTakeOut ? 'TAKE-OUT' : 'DINE-IN'}
+                              </div>
+                              </div>
                       </TableCell>
                       <TableCell>
                         <Tooltip>
