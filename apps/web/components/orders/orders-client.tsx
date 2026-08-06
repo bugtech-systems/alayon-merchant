@@ -936,7 +936,9 @@ const DetailedOrderView = ({
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b">
         <div>
           <h3 className="text-2xl font-bold flex items-center gap-2">
-            {isDraft ? 'Draft Order' : `Order #${order.display_id}`}
+            {isDraft ? 'Draft Order' : `Order #${order.display_id}` }
+        {order?.metadata?.beeper_ids?.length && ` | ${order?.metadata?.beeper_ids.join(',')}`}
+
             {isDraft && <Badge variant="outline" className="ml-2">Draft</Badge>}
           </h3>
           <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
@@ -1236,7 +1238,7 @@ const MobileOrderCard = ({
             <Badge variant="outline">Draft</Badge>
           ) : orderType === 'orders' ?
             <StatusDropdown
-              currentStatus={order?.delivery?.delivery_status || order.status}
+              currentStatus={ order.status != 'completed' ? order?.delivery?.delivery_status != 'delivered' ? order?.delivery?.delivery_status : order.status : order.status }
               paymentStatus={order.payment_status}
               onStatusChange={(status) => onStatusUpdate(order.id, status)}
               onCapturePayment={() => onCapturePayment(order)}
@@ -1256,7 +1258,10 @@ const MobileOrderCard = ({
           <span className="font-medium">
             {order.customer?.first_name || order.customer_name || order.email?.split('@')[0] || 'Guest'}
           </span>
+                  {order?.metadata?.beeper_ids?.length && ` | ${order?.metadata?.beeper_ids.join(',')}`}
+
         </div>
+
         {order.email && (
           <div className="flex items-center gap-1 text-muted-foreground">
             <Mail className="h-3 w-3" />
