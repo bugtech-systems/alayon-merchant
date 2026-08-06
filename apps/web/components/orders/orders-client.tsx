@@ -283,6 +283,13 @@ const CapturePaymentDialog = ({
     }
   }, [amountReceived, totalAmount]);
 
+
+    useEffect(() => {
+      if(open){
+        setAmountReceived(order?.total)
+      }
+  }, [open]);
+
   const handleCapture = async () => {
     const received = parseFloat(amountReceived);
     if (isNaN(received) || received <= 0) {
@@ -320,7 +327,7 @@ const CapturePaymentDialog = ({
             </div>
           </div>
 
-          <div className="space-y-2">
+          {/* <div className="space-y-2">
             <label className="text-sm font-medium flex items-center gap-2">
               <Tag className="h-4 w-4 text-muted-foreground" />
               Discount Code (Optional)
@@ -331,7 +338,7 @@ const CapturePaymentDialog = ({
               onChange={(e) => setDiscountCode(e.target.value)}
               className="h-10"
             />
-          </div>
+          </div> */}
 
           <div className="space-y-2">
             <label className="text-sm font-medium flex items-center gap-2">
@@ -1634,6 +1641,9 @@ export function OrdersClient({
     setCaptureDialogOpen(true);
   };
 
+
+  console.log(selectedOrder, 'ORDDSS')
+
   return (
     <TooltipProvider>
       <div className="space-y-6">
@@ -1765,7 +1775,7 @@ export function OrdersClient({
                         <div className="space-y-1.5">
                           {orderType === 'orders' ? (
                             <StatusDropdown
-                              currentStatus={order?.delivery?.delivery_status || order.status}
+                              currentStatus={ order.status != 'completed' ? order?.delivery?.delivery_status ?? order.status : order.status }
                               paymentStatus={order.payment_status}
                               onStatusChange={(status) => handleStatusUpdate(order.id, status)}
                               onCapturePayment={() => handleCaptureDialog(order)}
