@@ -2,11 +2,12 @@
 
 'use client';
 
-import React, { useState, useTransition, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { format, formatDistanceToNow, isToday, startOfDay, endOfDay, isYesterday } from 'date-fns';
-
 import { toast } from 'sonner';
+
+// UI Components
 import {
   Dialog,
   DialogContent,
@@ -48,16 +49,29 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { updateOrderStatus, convertDraftToOrder, deleteDraftOrder, deletePosOrder, updatePosOrderStatus } from '@/lib/actions/orders';
-import { captureOrderPayment, markAsPaid } from '@/lib/actions/capture-payments';
-import { 
-  Eye, 
-  Trash2, 
-  RefreshCw, 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+
+// Icons
+import {
+  Eye,
+  RefreshCw,
   ChevronLeft,
   ChevronRight,
-  Plus,
-  CreditCard,
   Search,
   X,
   Package,
@@ -65,110 +79,93 @@ import {
   Calendar as CalendarIcon,
   DollarSign,
   ShoppingBag,
-  MoreVertical,
   FileText,
   Clock,
   CheckCircle,
   AlertCircle,
   RotateCcw,
-  Users,
-  Filter,
   ChevronDown,
   Loader2,
   CreditCard as CreditCardIcon,
   AlertTriangle,
-  Building,
   MapPin,
   Phone,
   Mail,
-  Hash,
-  ShoppingCart,
   Check,
-  DollarSign as DollarIcon,
   Banknote,
-  Receipt,
-  Store,
   CalendarDays,
-  ArrowUpDown,
-  GripVertical,
   Tag,
   Percent,
-  Info,
   Timer,
   CalendarClock,
-  ViewIcon,
-  View,
-  Goal,
-  AppWindow,
-  Notebook
+  Notebook,
+  Building,
+  Store,
+  CreditCard,
 } from 'lucide-react';
+
+// Utils & Actions
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { sortOrders } from '@/lib/utils/helpers';
-import { usePosOrders } from '@/hooks/useMedusaOrders';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Calendar } from '../ui/calendar';
-import Link from 'next/link';
+import { updatePosOrderStatus, deletePosOrder, deleteDraftOrder, convertDraftToOrder } from '@/lib/actions/orders';
+import { captureOrderPayment, markAsPaid } from '@/lib/actions/capture-payments';
+import { listPosOrders } from '@/lib/data/orders';
 
 // ============================================
 // STATUS CONFIGURATIONS
 // ============================================
 
 const ORDER_STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning'; priority: number }> = {
-  pending: { 
-    label: 'Pending', 
+  pending: {
+    label: 'Pending',
     icon: <Clock className="h-3 w-3" />,
     variant: 'warning',
     priority: 1
   },
-  company_accepted: { 
-    label: 'Pending', 
+  company_accepted: {
+    label: 'Pending',
     icon: <Clock className="h-3 w-3" />,
     variant: 'warning',
     priority: 1
   },
-  company_preparing: { 
-    label: 'Processing', 
+  company_preparing: {
+    label: 'Processing',
     icon: <RefreshCw className="h-3 w-3 animate-spin" />,
     variant: 'default',
     priority: 2
   },
-  completed: { 
-    label: 'Completed', 
+  completed: {
+    label: 'Completed',
     icon: <CheckCircle className="h-3 w-3" />,
     variant: 'success',
     priority: 3
   },
-  delivered: { 
-    label: 'Completed', 
+  delivered: {
+    label: 'Completed',
     icon: <CheckCircle className="h-3 w-3" />,
     variant: 'success',
     priority: 3
   },
-  cancelled: { 
-    label: 'Cancelled', 
+  cancelled: {
+    label: 'Cancelled',
     icon: <AlertCircle className="h-3 w-3" />,
     variant: 'destructive',
     priority: 0
   },
-  refunded: { 
-    label: 'Refunded', 
+  refunded: {
+    label: 'Refunded',
     icon: <RotateCcw className="h-3 w-3" />,
     variant: 'secondary',
     priority: 0
   },
-  draft: { 
-    label: 'Draft', 
+  draft: {
+    label: 'Draft',
     icon: <FileText className="h-3 w-3" />,
     variant: 'outline',
     priority: 0
   },
-  requires_action: { 
-    label: 'Requires Action', 
+  requires_action: {
+    label: 'Requires Action',
     icon: <AlertTriangle className="h-3 w-3" />,
     variant: 'destructive',
     priority: 0
@@ -190,13 +187,13 @@ const PAYMENT_STATUS_CONFIG: Record<string, { label: string; variant: 'default' 
 // ============================================
 
 const OrderStatusBadge = ({ status, showLabel = true }: { status: string; showLabel?: boolean }) => {
-  const config = ORDER_STATUS_CONFIG[status?.toLowerCase()] || { 
-    label: status || 'Unknown', 
-    icon: null, 
+  const config = ORDER_STATUS_CONFIG[status?.toLowerCase()] || {
+    label: status || 'Unknown',
+    icon: null,
     variant: 'secondary' as const,
     priority: 0
   };
-  
+
   const variantStyles = {
     default: 'bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 border-blue-500/20',
     secondary: 'bg-gray-500/10 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400 border-gray-500/20',
@@ -207,8 +204,8 @@ const OrderStatusBadge = ({ status, showLabel = true }: { status: string; showLa
   };
 
   return (
-    <Badge 
-      variant="outline" 
+    <Badge
+      variant="outline"
       className={cn(
         "gap-1.5 capitalize font-medium transition-all",
         variantStyles[config.variant as keyof typeof variantStyles] || variantStyles.secondary
@@ -221,12 +218,12 @@ const OrderStatusBadge = ({ status, showLabel = true }: { status: string; showLa
 };
 
 const PaymentStatusBadge = ({ status }: { status: string }) => {
-  const config = PAYMENT_STATUS_CONFIG[status?.toLowerCase()] || { 
-    label: status || 'Unknown', 
+  const config = PAYMENT_STATUS_CONFIG[status?.toLowerCase()] || {
+    label: status || 'Unknown',
     variant: 'secondary' as const,
     icon: null
   };
-  
+
   const variantStyles = {
     default: 'bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 border-blue-500/20',
     secondary: 'bg-gray-500/10 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400 border-gray-500/20',
@@ -237,8 +234,8 @@ const PaymentStatusBadge = ({ status }: { status: string }) => {
   };
 
   return (
-    <Badge 
-      variant="outline" 
+    <Badge
+      variant="outline"
       className={cn(
         "gap-1.5 capitalize font-medium",
         variantStyles[config.variant as keyof typeof variantStyles] || variantStyles.secondary
@@ -272,12 +269,10 @@ const CapturePaymentDialog = ({
   const [amountReceived, setAmountReceived] = useState<string>('');
   const [discountCode, setDiscountCode] = useState<string>('');
   const [change, setChange] = useState<number>(0);
-  const [discountError, setDiscountError] = useState<string>('');
 
   const totalAmount = order?.total || 0;
   const formattedTotal = `₱${totalAmount.toFixed(2)}`;
 
-  // Calculate change when amount received changes
   useEffect(() => {
     const received = parseFloat(amountReceived);
     if (!isNaN(received) && received > 0) {
@@ -300,14 +295,8 @@ const CapturePaymentDialog = ({
       return;
     }
 
-    // Validate discount code if provided
-    if (discountCode && discountCode.trim()) {
-      // You can add discount validation logic here
-      // For now, we'll just pass it to the capture function
-    }
-
     await onCapture(received, discountCode.trim() || undefined);
-    setAmountReceived('')
+    setAmountReceived('');
   };
 
   return (
@@ -324,24 +313,13 @@ const CapturePaymentDialog = ({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* Order Summary */}
           <div className="bg-muted/30 rounded-lg p-4 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Order Total</span>
               <span className="font-bold text-lg">{formattedTotal}</span>
             </div>
-            {discountCode && (
-              <div className="flex justify-between text-sm text-emerald-600">
-                <span className="flex items-center gap-1">
-                  <Tag className="h-3 w-3" />
-                  Discount Applied
-                </span>
-                <span>-₱{/* Add discount amount calculation */}</span>
-              </div>
-            )}
           </div>
 
-          {/* Discount Code Input */}
           <div className="space-y-2">
             <label className="text-sm font-medium flex items-center gap-2">
               <Tag className="h-4 w-4 text-muted-foreground" />
@@ -350,18 +328,11 @@ const CapturePaymentDialog = ({
             <Input
               placeholder="Enter discount code"
               value={discountCode}
-              onChange={(e) => {
-                setDiscountCode(e.target.value);
-                setDiscountError('');
-              }}
+              onChange={(e) => setDiscountCode(e.target.value)}
               className="h-10"
             />
-            {discountError && (
-              <p className="text-xs text-red-500">{discountError}</p>
-            )}
           </div>
 
-          {/* Amount Received Input */}
           <div className="space-y-2">
             <label className="text-sm font-medium flex items-center gap-2">
               <DollarSign className="h-4 w-4 text-muted-foreground" />
@@ -381,20 +352,12 @@ const CapturePaymentDialog = ({
                 step="0.01"
               />
             </div>
-            {amountReceived && parseFloat(amountReceived) < totalAmount && (
-              <p className="text-xs text-amber-500">
-                Amount is less than total ({formattedTotal})
-              </p>
-            )}
           </div>
 
-          {/* Change Display */}
           {change > 0 && (
             <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-lg p-4 border border-emerald-200 dark:border-emerald-800">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-                  Change
-                </span>
+                <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Change</span>
                 <span className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
                   ₱{change.toFixed(2)}
                 </span>
@@ -402,7 +365,6 @@ const CapturePaymentDialog = ({
             </div>
           )}
 
-          {/* Payment Summary */}
           <div className="bg-primary/5 rounded-lg p-3 text-sm space-y-1">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Total Due</span>
@@ -414,21 +376,11 @@ const CapturePaymentDialog = ({
                 {amountReceived ? `₱${parseFloat(amountReceived).toFixed(2)}` : '—'}
               </span>
             </div>
-            {change > 0 && (
-              <div className="flex justify-between text-emerald-600 font-medium">
-                <span>Change</span>
-                <span>₱{change.toFixed(2)}</span>
-              </div>
-            )}
           </div>
         </div>
 
         <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isCapturing}
-          >
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isCapturing}>
             Cancel
           </Button>
           <Button
@@ -455,18 +407,18 @@ const CapturePaymentDialog = ({
 };
 
 // ============================================
-// STATUS DROPDOWN (Updated to use Capture Dialog)
+// STATUS DROPDOWN
 // ============================================
 
-const StatusDropdown = ({ 
-  currentStatus, 
+const StatusDropdown = ({
+  currentStatus,
   onStatusChange,
   disabled = false,
   paymentStatus,
   canCapturePayment = false,
   onCapturePayment,
   onMarkAsPaid
-}: { 
+}: {
   currentStatus: string;
   onStatusChange: (status: string) => void;
   disabled?: boolean;
@@ -476,25 +428,20 @@ const StatusDropdown = ({
   onMarkAsPaid?: () => void;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  
-  const statuses = ['pending', 'company_preparing', 'completed'];
-  const currentConfig = ORDER_STATUS_CONFIG[currentStatus?.toLowerCase()];
 
-  console.log(paymentStatus, 'PAYMENT STATSS')
+  const statuses = ['pending', 'company_preparing', 'completed'];
+
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           size="sm"
           className="h-8 px-2 hover:bg-transparent"
           disabled={disabled}
         >
           <div className="flex items-center gap-1.5">
             <OrderStatusBadge status={currentStatus} showLabel={!isOpen} />
-            {/* {!isOpen && currentConfig?.icon && currentStatus != 'company_preparing' && (
-              <span className="text-muted-foreground">{currentConfig.icon}</span>
-            )} */}
             <ChevronDown className={cn(
               "h-3 w-3 text-muted-foreground transition-transform",
               isOpen && "rotate-180"
@@ -512,10 +459,7 @@ const StatusDropdown = ({
             <DropdownMenuItem
               key={status}
               onClick={() => onStatusChange(status)}
-              className={cn(
-                "gap-2 capitalize cursor-pointer",
-                isActive && "bg-muted"
-              )}
+              className={cn("gap-2 capitalize cursor-pointer", isActive && "bg-muted")}
             >
               <span className="flex items-center gap-2 flex-1">
                 {config?.icon}
@@ -528,10 +472,7 @@ const StatusDropdown = ({
         {canCapturePayment && paymentStatus === 'authorized' && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={onCapturePayment}
-              className="gap-2 text-blue-600 cursor-pointer"
-            >
+            <DropdownMenuItem onClick={onCapturePayment} className="gap-2 text-blue-600 cursor-pointer">
               <Banknote className="h-4 w-4" />
               Capture Payment
             </DropdownMenuItem>
@@ -540,10 +481,7 @@ const StatusDropdown = ({
         {canCapturePayment && paymentStatus === 'not_paid' && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={onMarkAsPaid}
-              className="gap-2 text-blue-600 cursor-pointer"
-            >
+            <DropdownMenuItem onClick={onMarkAsPaid} className="gap-2 text-blue-600 cursor-pointer">
               <Banknote className="h-4 w-4" />
               Mark As Paid
             </DropdownMenuItem>
@@ -560,17 +498,16 @@ const StatusDropdown = ({
 
 const StatsCards = ({ orders, orderType, isLoading }: { orders: any[]; orderType: string; isLoading?: boolean }) => {
   const stats = useMemo(() => {
-    const activeOrders = orders.filter(o => 
+    const activeOrders = orders.filter(o =>
       o.status !== 'canceled' && o.status !== 'refunded'
     );
-    
+
     const total = activeOrders.length;
     const totalValue = activeOrders.reduce((sum, o) => sum + (o.total || 0), 0);
     const completed = activeOrders.filter(o => o.status === 'completed').length;
     const pending = activeOrders.filter(o => o.status === 'pending' || o.status === 'processing').length;
-    const avgOrderValue = total > 0 ? totalValue / total : 0;
-    
-    return { total, totalValue, completed, pending, avgOrderValue };
+
+    return { total, totalValue, completed, pending };
   }, [orders]);
 
   if (isLoading) {
@@ -625,8 +562,8 @@ const StatsCards = ({ orders, orderType, isLoading }: { orders: any[]; orderType
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
       {statCards.map((card, index) => (
-        <div 
-          key={index} 
+        <div
+          key={index}
           className="bg-card rounded-lg border p-4 hover:shadow-md transition-all hover:scale-[1.02] cursor-default"
         >
           <div className="flex items-center justify-between">
@@ -648,12 +585,12 @@ const StatsCards = ({ orders, orderType, isLoading }: { orders: any[]; orderType
 // DATE RANGE FILTER
 // ============================================
 
-const DateRangeFilter = ({ 
-  dateFrom, 
-  dateTo, 
+const DateRangeFilter = ({
+  dateFrom,
+  dateTo,
   onDateChange,
   onClear
-}: { 
+}: {
   dateFrom?: Date | null;
   dateTo?: Date | null;
   onDateChange: (from: Date | null, to: Date | null) => void;
@@ -742,15 +679,12 @@ const DateRangeFilter = ({
         <Button
           variant="outline"
           size="sm"
-          className={cn(
-            "h-10 gap-2",
-            hasDates && "border-primary/50 bg-primary/5"
-          )}
+          className={cn("h-10 gap-2", hasDates && "border-primary/50 bg-primary/5")}
         >
           <CalendarIcon className="h-4 w-4" />
           <span className="hidden sm:inline">{formatDateRange()}</span>
           {hasDates && (
-            <X 
+            <X
               className="h-3 w-3 text-muted-foreground hover:text-foreground cursor-pointer ml-1"
               onClick={(e) => {
                 e.stopPropagation();
@@ -778,9 +712,9 @@ const DateRangeFilter = ({
               ))}
             </div>
           </div>
-          
+
           <Separator />
-          
+
           <div className="space-y-2">
             <h4 className="font-medium text-sm">Custom Range</h4>
             <div className="grid grid-cols-2 gap-3">
@@ -838,7 +772,7 @@ const DateRangeFilter = ({
               </div>
             </div>
           </div>
-          
+
           <div className="flex gap-2 pt-2 border-t">
             <Button variant="outline" size="sm" className="flex-1" onClick={clearFilter}>
               Clear
@@ -857,19 +791,19 @@ const DateRangeFilter = ({
 // PAGINATION
 // ============================================
 
-const Pagination = ({ 
-  page, 
-  totalPages, 
-  hasNext, 
-  hasPrevious, 
-  total, 
+const Pagination = ({
+  page,
+  totalPages,
+  hasNext,
+  hasPrevious,
+  total,
   orderType,
   onPageChange,
-  isLoading 
-}: { 
-  page: number; 
-  totalPages: number; 
-  hasNext: boolean; 
+  isLoading
+}: {
+  page: number;
+  totalPages: number;
+  hasNext: boolean;
   hasPrevious: boolean;
   total: number;
   orderType: string;
@@ -881,11 +815,11 @@ const Pagination = ({
     const maxVisible = 7;
     let start = Math.max(1, page - Math.floor(maxVisible / 2));
     let end = Math.min(totalPages, start + maxVisible - 1);
-    
+
     if (end - start < maxVisible - 1) {
       start = Math.max(1, end - maxVisible + 1);
     }
-    
+
     for (let i = start; i <= end; i++) {
       pages.push(i);
     }
@@ -911,7 +845,7 @@ const Pagination = ({
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        
+
         {getPageNumbers().map((p) => (
           <Button
             key={p}
@@ -919,15 +853,12 @@ const Pagination = ({
             size="sm"
             onClick={() => onPageChange(p)}
             disabled={isLoading}
-            className={cn(
-              "h-8 w-8 px-0",
-              p === page && "pointer-events-none"
-            )}
+            className={cn("h-8 w-8 px-0", p === page && "pointer-events-none")}
           >
             {p}
           </Button>
         ))}
-        
+
         <Button
           variant="outline"
           size="sm"
@@ -943,7 +874,7 @@ const Pagination = ({
 };
 
 // ============================================
-// DETAILED ORDER VIEW COMPONENT (Updated)
+// DETAILED ORDER VIEW COMPONENT
 // ============================================
 
 interface DetailedOrderViewProps {
@@ -954,8 +885,8 @@ interface DetailedOrderViewProps {
   isCapturing?: boolean;
 }
 
-const DetailedOrderView = ({ 
-  order, 
+const DetailedOrderView = ({
+  order,
   isDraft = false,
   onStatusUpdate,
   onCapturePayment,
@@ -979,7 +910,7 @@ const DetailedOrderView = ({
   const getPaymentBreakdown = () => {
     const payments = order.payments || [];
     const totalPaid = order?.metadata?.pos_payment?.amount || payments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-    
+
     const paymentMethod = payments.length > 0 ? payments[0]?.payment_method : null;
     return {
       totalPaid,
@@ -1086,14 +1017,13 @@ const DetailedOrderView = ({
             <div className="text-sm text-muted-foreground">No shipping address provided</div>
           )}
         </div>
-                <div>
+        <div>
           <h4 className="text-sm font-semibold text-muted-foreground mb-2">Notes</h4>
           {order?.metadata?.notes && (
             <div className="space-y-1 text-sm">
               <div className="flex items-start gap-2">
                 <Notebook className="h-4 w-4 text-muted-foreground mt-0.5" />
                 <div>
-                
                   <div>{order?.metadata?.notes}</div>
                 </div>
               </div>
@@ -1122,7 +1052,7 @@ const DetailedOrderView = ({
                 const unitPrice = item.unit_price || item.price || 0;
                 const discount = item.discount_amount || 0;
                 const quantity = item.quantity || 1;
-                
+
                 return (
                   <TableRow key={index}>
                     <TableCell>
@@ -1230,7 +1160,7 @@ const DetailedOrderView = ({
             )}
             {order.payment_status === 'authorized' && onCapturePayment && (
               <div className="mt-3">
-                <Button 
+                <Button
                   onClick={onCapturePayment}
                   disabled={isCapturing}
                   className="w-full"
@@ -1248,423 +1178,26 @@ const DetailedOrderView = ({
           </div>
         </div>
       </div>
-
-      {/* Notes and Additional Information */}
-      {(order.customer_note || order.internal_note || order.shipping_method) && (
-        <div className="space-y-3">
-          <h4 className="text-sm font-semibold text-muted-foreground">Additional Information</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {order.shipping_method && (
-              <div className="p-3 border rounded-lg">
-                <div className="text-xs text-muted-foreground mb-1">Shipping Method</div>
-                <div className="text-sm font-medium">{order.shipping_method}</div>
-              </div>
-            )}
-            {order.customer_note && (
-              <div className="p-3 border rounded-lg">
-                <div className="text-xs text-muted-foreground mb-1">Customer Note</div>
-                <div className="text-sm">{order.customer_note}</div>
-              </div>
-            )}
-            {order.internal_note && (
-              <div className="p-3 border rounded-lg col-span-2">
-                <div className="text-xs text-muted-foreground mb-1">Internal Note</div>
-                <div className="text-sm">{order.internal_note}</div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
-
-
 // ============================================
-// MAIN ORDERS CLIENT COMPONENT (Updated)
+// MOBILE ORDER CARD
 // ============================================
 
-interface OrdersClientProps {
-  initialData: {
-    orders?: any[];
-    draft_orders?: any[];
-    count: number;
-    page: number;
-    total_pages: number;
-    has_next: boolean;
-    has_previous: boolean;
-  };
-  initialPage: number;
-  initialLimit: number;
-  initialSortField: string;
-  initialSortOrder: 'asc' | 'desc';
-  initialSearch: string;
-  initialStatus: string;
-  initialPaymentStatus: string;
-  initialDateFrom: string;
-  initialDateTo: string;
-  initialMinTotal: string;
-  initialMaxTotal: string;
-  initialCustomerId: string;
-  user: any;
-  orderType: 'orders' | 'drafts';
-}
-
-export function OrdersClient({
-  initialData,
-  initialPage,
-  initialLimit,
-  initialSortField,
-  initialSortOrder,
-  initialSearch,
-  initialDateFrom,
-  initialDateTo,
-  user,
-  orderType
-}: OrdersClientProps) {
-  
-  const pricingContext = React.useMemo(() => ({
-    priceListId: user?.metadata?.role === 'company' 
-      ? user.employee?.company?.price_list_id 
-      : user?.driver?.price_list_id,
-    customerGroupId: user?.metadata?.role === 'company' 
-      ? user.employee?.company?.customer_group_id 
-      : user?.driver?.customer_group_id,
-    customerId: user?.id,
-    companyId: user?.metadata?.role == 'company' ? user.employee?.company_id : user?.driver?.company_id,
-    stockLocationId: user?.metadata?.role == 'company' ? user.employee?.company?.stock_location_id : user?.driver?.stock_location_id,
-    pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
-  }), [user]);
-
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
-  
-  // State
-  const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
-  const [viewDialogOpen, setViewDialogOpen] = useState(false);
-  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [convertDialogOpen, setConvertDialogOpen] = useState(false);
-  const [captureDialogOpen, setCaptureDialogOpen] = useState(false);
-  const [newStatus, setNewStatus] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [captureLoading, setCaptureLoading] = useState(false);
-    // Date filter state
-  const [dateFrom, setDateFrom] = useState<Date | null>(
-    initialDateFrom ? new Date(initialDateFrom) : null
-  );
-  const [dateTo, setDateTo] = useState<Date | null>(
-    initialDateTo ? new Date(initialDateTo) : null
-  );
-  // Search state
-  const [searchTerm, setSearchTerm] = useState(initialSearch);
-  
-  // Date filter state - fixed to today's date
-  const today = new Date();
-  const todayStart = startOfDay(initialDateFrom || today);
-  const todayEnd = endOfDay(initialDateTo || today);
-  
-  // Build filters object for the hook
-  const filters = useMemo(() => {
-    const filterObj: Record<string, any> = {
-      company_id: pricingContext.companyId,
-    };
-    
-    filterObj.created_at_from = todayStart.toISOString();
-    filterObj.created_at_to = todayEnd.toISOString();
-    filterObj.status_not_in = ['canceled', 'refunded'];
-    
-    if (searchTerm) {
-      filterObj.search = searchTerm;
-    }
-    
-    if (orderType === 'drafts') {
-      filterObj.is_draft = true;
-    }
-    
-    return filterObj;
-  }, [pricingContext.companyId, searchTerm, orderType, initialDateTo, initialDateFrom]);
-
-  // Get pagination params from URL
-  const page = parseInt(searchParams.get('page') || String(initialPage));
-  const limit = parseInt(searchParams.get('limit') || String(initialLimit));
-  
-  // Use the hook with filters
-  const { data, refetch, isLoading: isFetching } = usePosOrders({
-    filters,
-    limit,
-  }) as any;
-
-  // Handle loading state
-  useEffect(() => {
-    setIsLoading(isFetching);
-  }, [isFetching]);
-
-  // Update orders when data changes
-  const [orders, setOrders] = useState<any[]>([]);
-  const [pagination, setPagination] = useState({
-    count: initialData.count,
-    page: initialData.page,
-    total_pages: initialData.total_pages,
-    has_next: initialData.has_next,
-    has_previous: initialData.has_previous
-  });
-
-  useEffect(() => {
-    if (data) {
-      let filteredOrders = (data.orders || []).filter((order: any) => {
-        const orderDate = new Date(order.created_at);
-        const isTodayDate = orderDate >= todayStart && orderDate <= todayEnd;
-        const isNotCancelledOrRefunded = order.status !== 'cancelled' && order.status !== 'refunded';
-        return isTodayDate && isNotCancelledOrRefunded;
-      });
-      
-      const sortedOrders = sortOrders(filteredOrders, initialSortField, initialSortOrder);
-      setOrders(sortedOrders);
-      
-      setPagination({
-        count: data.count || filteredOrders.length,
-        page: data.page || 1,
-        total_pages: data.total_pages || Math.ceil((data.count || filteredOrders.length) / limit),
-        has_next: data.has_next || false,
-        has_previous: data.has_previous || false
-      });
-    }
-  }, [data, initialSortField, initialSortOrder, limit]);
-
-
-
-  
-
-
-console.log(data, 'DATAA')
-
-  // Check mobile
-  const [isMobile, setIsMobile] = useState(false);
-  
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  // Update URL params and refetch
-  const updateUrlParams = useCallback((updates: Record<string, string | number | null | undefined>) => {
-    const params = new URLSearchParams(searchParams.toString());
-    
-    Object.entries(updates).forEach(([key, value]) => {
-      if (value === null || value === undefined || value === '' || value === 0) {
-        params.delete(key);
-      } else {
-        params.set(key, String(value));
-      }
-    });
-    
-    params.set('type', orderType);
-    
-    startTransition(() => {
-      router.push(`${pathname}?${params.toString()}`);
-    });
-  }, [router, pathname, searchParams, orderType]);
-
-
-  // Handle date change
-  const handleDateChange = useCallback((from: Date | null, to: Date | null) => {
-    setDateFrom(from);
-    setDateTo(to);
-    updateUrlParams({ 
-      date_from: from ? format(from, 'yyyy-MM-dd') : null,
-      date_to: to ? format(to, 'yyyy-MM-dd') : null,
-      page: 1
-    });
-    refetch();
-  }, [updateUrlParams, refetch]);
-
-  // Handle page change
-  const handlePageChange = useCallback((page: number) => {
-    updateUrlParams({ page });
-  }, [updateUrlParams]);
-
-  // Handle search
-  const handleSearchChange = useCallback((term: string) => {
-    setSearchTerm(term);
-    const timeoutId = setTimeout(() => {
-      updateUrlParams({ search: term || null, page: 1 });
-    }, 500);
-    return () => clearTimeout(timeoutId);
-  }, [updateUrlParams]);
-
-  // Handle status update
-  const handleStatusUpdate = async (orderId: string, status: string) => {
-    setIsLoading(true);
-    try {
-      const result = await updatePosOrderStatus(orderId, status);
-      if (result.success) {
-        toast.success(`Order status updated to ${status}`);
-        await refetch();
-        setViewDialogOpen(false);
-      } else {
-        throw new Error(result.error);
-      }
-    } catch (error) {
-      toast.error('Failed to update order status');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Handle capture payment with amount and discount
-  const handleCapturePayment = async (amount: number, discountCode?: string) => {
-    setCaptureLoading(true);
-    try {
-      const result = await captureOrderPayment({
-        order_id: selectedOrder?.id,
-        payment_method: 'cash',
-        payment_data: {
-          amount: amount,
-          received: amount,
-          change: amount - (selectedOrder?.total || 0),
-          discount_code: discountCode
-        }
-      });
-
-      if (result?.id) {
-        toast.success('Payment captured successfully');
-        await refetch();
-        setCaptureDialogOpen(false);
-        setViewDialogOpen(false);
-      }
-    } catch (error) {
-      toast.error('Failed to capture payment');
-    } finally {
-      setCaptureLoading(false);
-    }
-  };
-
-  // Handle delete
-  const handleDelete = async (order: any) => {
-    setIsLoading(true);
-    try {
-      let result;
-      if (orderType === 'drafts') {
-        result = await deleteDraftOrder(order.id);
-      } else {
-        result = await deletePosOrder(order.id);
-      }
-      
-      if (result.success) {
-        toast.success(`${orderType === 'drafts' ? 'Draft order' : 'Order'} deleted successfully`);
-        await refetch();
-      } else {
-        throw new Error(result.error);
-      }
-    } catch (error) {
-      toast.error(`Failed to delete ${orderType === 'drafts' ? 'draft order' : 'order'}`);
-    } finally {
-      setIsLoading(false);
-      setDeleteDialogOpen(false);
-    }
-  };
-
-  // Handle convert to order
-  const handleConvertToOrder = async (order: any) => {
-    setIsLoading(true);
-    try {
-      const result = await convertDraftToOrder(order.id);
-      if (result.success) {
-        toast.success('Draft order converted to regular order successfully');
-        await refetch();
-        const params = new URLSearchParams(searchParams.toString());
-        params.set('type', 'orders');
-        router.push(`${pathname}?${params.toString()}`);
-      } else {
-        throw new Error(result.error);
-      }
-    } catch (error) {
-      toast.error('Failed to convert draft order');
-    } finally {
-      setIsLoading(false);
-      setConvertDialogOpen(false);
-    }
-  };
-
-  // View handlers
-  const handleView = (order: any) => {
-    setSelectedOrder(order);
-    setViewDialogOpen(true);
-  };
-
-  const handleStatusDialog = (order: any) => {
-    setSelectedOrder(order);
-    setNewStatus(order.status);
-    setStatusDialogOpen(true);
-  };
-
-  const handleDeleteDialog = (order: any) => {
-    setSelectedOrder(order);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleConvertDialog = (order: any) => {
-    setSelectedOrder(order);
-    setConvertDialogOpen(true);
-  };
-
-  const handleCaptureDialog = (order: any) => {
-    setSelectedOrder(order);
-    setCaptureDialogOpen(true);
-  };
-
-  const handleMarkAsPaid = async (orderData) => {
-    console.log(orderData, 'MARK AS PAID')
-   let response = await markAsPaid(orderData?.payment_collections[0].id, orderData?.id);
-    console.log(response, 'RES')
-  }
-
-  const { total_pages, has_next, has_previous, count } = pagination;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-const MobileOrderCard = ({ 
-  order, 
-  orderType, 
-  onView
+const MobileOrderCard = ({
+  order,
+  orderType,
+  onView,
+  onStatusUpdate,
+  onCapturePayment,
+  onMarkAsPaid,
+  isLoading,
+  captureLoading
 }: any) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-
-  console.log(orderType, 'TYYYPPPE')
   return (
     <div className="bg-card rounded-lg border p-4 space-y-3 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between">
@@ -1694,20 +1227,19 @@ const MobileOrderCard = ({
         <div className="flex items-center gap-2">
           {orderType === 'drafts' ? (
             <Badge variant="outline">Draft</Badge>
-          ) : orderType === 'orders' ? 
-           <StatusDropdown
-                              currentStatus={order?.delivery?.delivery_status || order.status}
-                              paymentStatus={order.payment_status}
-                              onStatusChange={(status) => handleStatusUpdate(order.id, status)}
-                              onCapturePayment={() => handleCaptureDialog(order)}
-                              onMarkAsPaid={() => handleMarkAsPaid(order)}
-                              canCapturePayment={order.payment_status === 'authorized' || order.payment_status === 'not_paid'}
-                              disabled={isLoading || captureLoading}
-                            />
-
-          : (
-            <OrderStatusBadge status={order.status} />
-          )}
+          ) : orderType === 'orders' ?
+            <StatusDropdown
+              currentStatus={order?.delivery?.delivery_status || order.status}
+              paymentStatus={order.payment_status}
+              onStatusChange={(status) => onStatusUpdate(order.id, status)}
+              onCapturePayment={() => onCapturePayment(order)}
+              onMarkAsPaid={() => onMarkAsPaid(order)}
+              canCapturePayment={order.payment_status === 'authorized' || order.payment_status === 'not_paid'}
+              disabled={isLoading || captureLoading}
+            />
+            : (
+              <OrderStatusBadge status={order.status} />
+            )}
         </div>
       </div>
 
@@ -1765,12 +1297,6 @@ const MobileOrderCard = ({
                 <span className="font-medium ml-1 text-emerald-600">-₱{(order.discount_total || 0).toFixed(2)}</span>
               </div>
             )}
-            {order.customer_note && (
-              <div className="col-span-2">
-                <span className="text-muted-foreground">Note:</span>
-                <span className="ml-1 text-sm">{order.customer_note}</span>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -1796,49 +1322,366 @@ const MobileOrderCard = ({
   );
 };
 
+// ============================================
+// MAIN ORDERS CLIENT COMPONENT
+// ============================================
+
+interface OrdersClientProps {
+  initialFilters: Record<string, any>;
+  initialPage: number;
+  initialLimit: number;
+  initialSortField: string;
+  initialSortOrder: 'asc' | 'desc';
+  user: any;
+  orderType: 'orders' | 'drafts';
+}
+
+export function OrdersClient({
+  initialFilters,
+  initialPage,
+  initialLimit,
+  initialSortField,
+  initialSortOrder,
+  user,
+  orderType
+}: OrdersClientProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // State
+  const [orders, setOrders] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [captureLoading, setCaptureLoading] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [convertDialogOpen, setConvertDialogOpen] = useState(false);
+  const [captureDialogOpen, setCaptureDialogOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState(initialFilters?.search || '');
+  const [dateFrom, setDateFrom] = useState<Date | null>(
+    initialFilters?.date_from ? new Date(initialFilters?.date_from) : null
+  );
+  const [dateTo, setDateTo] = useState<Date | null>(
+    initialFilters?.date_to ? new Date(initialFilters?.date_to) : null
+  );
+  const [pagination, setPagination] = useState({
+    count: 0,
+    page: initialPage,
+    total_pages: 1,
+    has_next: false,
+    has_previous: false
+  });
+
+  // Get pagination params from URL
+  const page = parseInt(searchParams.get('page') || String(initialPage));
+  const limit = parseInt(searchParams.get('limit') || String(initialLimit));
+
+  // Check mobile
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Build filters
+  const buildFilters = useCallback(() => {
+    const filters: Record<string, any> = {
+      seller_id: user?.id,
+      company_id: user?.employee?.company_id || user?.driver?.company_id,
+      status_not_in: ['canceled', 'refunded']
+    };
+
+    if (orderType === 'drafts') {
+      filters.is_draft = true;
+    }
+
+    if (searchTerm) {
+      filters.search = searchTerm;
+    }
+
+    if (dateFrom) {
+      // Philippine time adjustment (UTC+8)
+      const fromDate = new Date(dateFrom);
+      fromDate.setHours(16, 0, 0, 0); // 16:00 UTC = 00:00 PHT
+      filters.created_at_gte = fromDate.toISOString();
+    }
+
+    if (dateTo) {
+      const toDate = new Date(dateTo);
+      toDate.setHours(15, 59, 59, 999); // 15:59:59 UTC = 23:59 PHT
+      filters.created_at_lte = toDate.toISOString();
+    }
+
+    // Default to today if no date filters
+    if (!dateFrom && !dateTo) {
+      const today = new Date();
+      const startOfDay = new Date(today);
+      startOfDay.setHours(16, 0, 0, 0);
+      const endOfDay = new Date(today);
+      endOfDay.setHours(15, 59, 59, 999);
+      filters.created_at_gte = startOfDay.toISOString();
+      filters.created_at_lte = endOfDay.toISOString();
+    }
+
+    return filters;
+  }, [user, orderType, searchTerm, dateFrom, dateTo]);
+
+  // Fetch orders
+  const fetchOrders = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const filters = buildFilters();
+      const queryParams = new URLSearchParams({
+        limit: String(limit),
+        page: String(page),
+        ...Object.entries(filters).reduce((acc, [key, value]) => {
+          if (value !== undefined && value !== null && value !== '') {
+            acc[key] = String(value);
+          }
+          return acc;
+        }, {} as Record<string, string>)
+      });
+
+        const offset = (page - 1) * limit;
 
 
+      const response = await listPosOrders(limit, offset, filters);
+
+      console.log(response,'INITTTS')
 
 
+      const sortedOrders = sortOrders(response.orders || [], initialSortField, initialSortOrder);
 
+      setOrders(sortedOrders);
+      setPagination({
+        count: response.count || 0,
+        page: response.page || 1,
+        total_pages: response.total_pages || 1,
+        has_next: response.has_next || false,
+        has_previous: response.has_previous || false
+      });
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      toast.error('Failed to load orders');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [buildFilters, limit, page, initialSortField, initialSortOrder]);
 
+  // Initial fetch
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
 
+  // Update URL params
+  const updateUrlParams = useCallback((updates: Record<string, string | number | null | undefined>) => {
+    const params = new URLSearchParams(searchParams.toString());
 
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === null || value === undefined || value === '' || value === 0) {
+        params.delete(key);
+      } else {
+        params.set(key, String(value));
+      }
+    });
 
+    params.set('type', orderType);
 
+    router.push(`${pathname}?${params.toString()}`);
+  }, [router, pathname, searchParams, orderType]);
+
+  // Handlers
+  const handlePageChange = useCallback((newPage: number) => {
+    updateUrlParams({ page: newPage });
+  }, [updateUrlParams]);
+
+  const handleSearchChange = useCallback((term: string) => {
+    setSearchTerm(term);
+    const timeoutId = setTimeout(() => {
+      updateUrlParams({ search: term || null, page: 1 });
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [updateUrlParams]);
+
+  const handleDateChange = useCallback((from: Date | null, to: Date | null) => {
+    setDateFrom(from);
+    setDateTo(to);
+    updateUrlParams({
+      date_from: from ? format(from, 'yyyy-MM-dd') : null,
+      date_to: to ? format(to, 'yyyy-MM-dd') : null,
+      page: 1
+    });
+  }, [updateUrlParams]);
+
+  const handleStatusUpdate = async (orderId: string, status: string) => {
+    try {
+      const result = await updatePosOrderStatus(orderId, status);
+      if (result.success) {
+        toast.success(`Order status updated to ${status}`);
+        await fetchOrders();
+        setViewDialogOpen(false);
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      toast.error('Failed to update order status');
+    }
+  };
+
+  const handleCapturePayment = async (amount: number, discountCode?: string) => {
+    setCaptureLoading(true);
+    try {
+      const result = await captureOrderPayment({
+        order_id: selectedOrder?.id,
+        payment_method: 'cash',
+        payment_data: {
+          amount: amount,
+          received: amount,
+          change: amount - (selectedOrder?.total || 0),
+          discount_code: discountCode
+        }
+      });
+
+      if (result?.id) {
+        toast.success('Payment captured successfully');
+        await fetchOrders();
+        setCaptureDialogOpen(false);
+        setViewDialogOpen(false);
+      }
+    } catch (error) {
+      toast.error('Failed to capture payment');
+    } finally {
+      setCaptureLoading(false);
+    }
+  };
+
+  const handleMarkAsPaid = async (orderData: any) => {
+    try {
+      const response = await markAsPaid(orderData?.payment_collections[0].id, orderData?.id);
+      if (response) {
+        toast.success('Order marked as paid');
+        await fetchOrders();
+      }
+    } catch (error) {
+      toast.error('Failed to mark as paid');
+    }
+  };
+
+  const handleDelete = async (order: any) => {
+    try {
+      let result;
+      if (orderType === 'drafts') {
+        result = await deleteDraftOrder(order.id);
+      } else {
+        result = await deletePosOrder(order.id);
+      }
+
+      if (result.success) {
+        toast.success(`${orderType === 'drafts' ? 'Draft order' : 'Order'} deleted successfully`);
+        await fetchOrders();
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      toast.error(`Failed to delete ${orderType === 'drafts' ? 'draft order' : 'order'}`);
+    } finally {
+      setDeleteDialogOpen(false);
+    }
+  };
+
+  const handleConvertToOrder = async (order: any) => {
+    try {
+      const result = await convertDraftToOrder(order.id);
+      if (result.success) {
+        toast.success('Draft order converted to regular order successfully');
+        await fetchOrders();
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('type', 'orders');
+        router.push(`${pathname}?${params.toString()}`);
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      toast.error('Failed to convert draft order');
+    } finally {
+      setConvertDialogOpen(false);
+    }
+  };
+
+  const handleView = (order: any) => {
+    setSelectedOrder(order);
+    setViewDialogOpen(true);
+  };
+
+  const handleDeleteDialog = (order: any) => {
+    setSelectedOrder(order);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConvertDialog = (order: any) => {
+    setSelectedOrder(order);
+    setConvertDialogOpen(true);
+  };
+
+  const handleCaptureDialog = (order: any) => {
+    setSelectedOrder(order);
+    setCaptureDialogOpen(true);
+  };
 
   return (
     <TooltipProvider>
       <div className="space-y-6">
         {/* Search Section */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder={`Search active ${orderType === 'drafts' ? 'draft orders' : 'orders'} by ID, customer, email...`}
-              value={searchTerm}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="pl-9 h-10"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => handleSearchChange('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-           <div className="flex items-center gap-2">
-            {/* Date Range Filter */}
-            <DateRangeFilter
-              dateFrom={dateFrom}
-              dateTo={dateTo}
-              onDateChange={handleDateChange}
-              onClear={() => handleDateChange(null, null)}
-            />
-          </div>
-        </div>
+<div className="flex flex-col sm:flex-row gap-4">
+  <div className="flex-1 relative">
+    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+    <Input
+      placeholder={`Search ${orderType === 'drafts' ? 'draft orders' : 'orders'} by ID, customer, email...`}
+      value={searchTerm}
+      onChange={(e) => handleSearchChange(e.target.value)}
+      className="pl-9 h-10"
+    />
+    {searchTerm && (
+      <button
+        onClick={() => handleSearchChange('')}
+        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    )}
+  </div>
+  <div className="flex items-center gap-2">
+    <DateRangeFilter
+      dateFrom={dateFrom}
+      dateTo={dateTo}
+      onDateChange={handleDateChange}
+      onClear={() => handleDateChange(null, null)}
+    />
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => {
+        fetchOrders();
+        toast.success('Orders refreshed');
+      }}
+      disabled={isLoading}
+      className="h-10 gap-2"
+    >
+      {isLoading ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <RefreshCw className="h-4 w-4" />
+      )}
+      <span className="hidden sm:inline">Refresh</span>
+    </Button>
+  </div>
+</div>
 
         {/* Stats Cards */}
         <StatsCards orders={orders} orderType={orderType} isLoading={isLoading} />
@@ -1853,8 +1696,8 @@ const MobileOrderCard = ({
             <div className="h-16 w-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
               <Package className="h-8 w-8 text-muted-foreground/50" />
             </div>
-            <p className="text-lg font-medium text-muted-foreground">No active {orderType} found for today</p>
-            <p className="text-sm text-muted-foreground mt-1">Try adjusting your search</p>
+            <p className="text-lg font-medium text-muted-foreground">No {orderType} found</p>
+            <p className="text-sm text-muted-foreground mt-1">Try adjusting your search or filters</p>
           </div>
         ) : !isMobile ? (
           /* Desktop Table View */
@@ -1873,9 +1716,7 @@ const MobileOrderCard = ({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders.map((order) => {
-                    console.log(order, 'ORDER ID')
-                    return (
+                  {orders.map((order) => (
                     <TableRow key={order.id} className="hover:bg-muted/30 transition-colors">
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -1889,6 +1730,7 @@ const MobileOrderCard = ({
                           <div>
                             <div className="font-mono text-sm font-semibold">
                               {orderType === 'drafts' ? order.id.slice(0, 8) : `#${order.display_id}`}
+                              {order?.metadata?.beeper_ids?.length && ` | ${order?.metadata?.beeper_ids.join(',')}`}
                             </div>
                             {orderType === 'orders' && order.payment_status && (
                               <div className="mt-0.5">
@@ -1943,14 +1785,14 @@ const MobileOrderCard = ({
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="d-flex flex-col items-center justify-center">
-                        <div className="font-medium">
-                          {order.items?.length || order.items_count || 0}
+                        <div className="flex flex-col items-center justify-center">
+                          <div className="font-medium">
+                            {order.items?.length || order.items_count || 0}
+                          </div>
+                          <div className={`text-xs text-muted-foreground flex items-center gap-1 ${order?.metadata?.isTakeOut ? 'text-primary' : ''}`}>
+                            {order?.metadata?.isTakeOut ? 'TAKE-OUT' : 'DINE-IN'}
+                          </div>
                         </div>
-                                <div className={`text-xs text-muted-foreground flex items-center gap-1 ${order?.metadata?.isTakeOut ? 'text-primary' : ''}`}>
-                                  {order?.metadata?.isTakeOut ? 'TAKE-OUT' : 'DINE-IN'}
-                              </div>
-                              </div>
                       </TableCell>
                       <TableCell>
                         <Tooltip>
@@ -1961,7 +1803,7 @@ const MobileOrderCard = ({
                               </div>
                               <div className="text-xs text-muted-foreground flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
-                                                                {order?.delivery?.eta ? formatDistanceToNow(new Date(order?.delivery?.eta), { addSuffix: true }) : format(new Date(order.created_at), 'h:mm a')}
+                                {order?.delivery?.eta ? formatDistanceToNow(new Date(order?.delivery?.eta), { addSuffix: true }) : format(new Date(order.created_at), 'h:mm a')}
                               </div>
                             </div>
                           </TooltipTrigger>
@@ -1971,30 +1813,17 @@ const MobileOrderCard = ({
                         </Tooltip>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div>
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="sm"
                           onClick={() => handleView(order)}
                           className="h-8 gap-2"
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Link href={`/company/orders/${order?.id}`}   >
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          className="h-8 gap-2"
-                        >
-
-                          <AppWindow className="h-4 w-4"/>
-                          </Button>
-                        </Link>
-                        </div>
                       </TableCell>
                     </TableRow>
-                  )
-                  })}
+                  ))}
                 </TableBody>
               </Table>
             </div>
@@ -2008,6 +1837,11 @@ const MobileOrderCard = ({
                 order={order}
                 orderType={orderType}
                 onView={handleView}
+                onStatusUpdate={handleStatusUpdate}
+                onCapturePayment={handleCaptureDialog}
+                onMarkAsPaid={handleMarkAsPaid}
+                isLoading={isLoading}
+                captureLoading={captureLoading}
               />
             ))}
           </div>
@@ -2016,16 +1850,16 @@ const MobileOrderCard = ({
         {/* Pagination */}
         <Pagination
           page={page}
-          totalPages={total_pages}
-          hasNext={has_next}
-          hasPrevious={has_previous}
-          total={count}
+          totalPages={pagination.total_pages}
+          hasNext={pagination.has_next}
+          hasPrevious={pagination.has_previous}
+          total={pagination.count}
           orderType={orderType}
           onPageChange={handlePageChange}
           isLoading={isLoading}
         />
 
-        {/* View Order Dialog with Detailed View */}
+        {/* View Order Dialog */}
         <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
           <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -2048,7 +1882,7 @@ const MobileOrderCard = ({
             <DialogFooter className="flex-col sm:flex-row gap-2">
               <div className="flex-1 flex gap-2">
                 {orderType === 'drafts' && selectedOrder && (
-                  <Button 
+                  <Button
                     onClick={() => {
                       setViewDialogOpen(false);
                       setConvertDialogOpen(true);
@@ -2059,76 +1893,9 @@ const MobileOrderCard = ({
                     Convert to Order
                   </Button>
                 )}
-                {/* {selectedOrder && (
-                  <Button 
-                    variant="destructive" 
-                    size="sm"
-                    onClick={() => {
-                      setViewDialogOpen(false);
-                      setDeleteDialogOpen(true);
-                    }}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete
-                  </Button>
-                )} */}
               </div>
               <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
                 Close
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Update Status Dialog */}
-        <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Update Order Status</DialogTitle>
-              <DialogDescription>
-                Change the status of order #{selectedOrder?.display_id}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Status</label>
-                <Select value={newStatus} onValueChange={setNewStatus}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {['pending', 'processing', 'completed', 'cancelled', 'refunded'].map((status) => (
-                      <SelectItem key={status} value={status}>
-                        <div className="flex items-center gap-2">
-                          {ORDER_STATUS_CONFIG[status]?.icon}
-                          {ORDER_STATUS_CONFIG[status]?.label || status}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {selectedOrder?.payment_status === 'authorized' && (
-                <div className="bg-blue-500/10 text-blue-600 dark:text-blue-400 p-3 rounded-lg text-sm">
-                  <p className="flex items-center gap-2">
-                    <Banknote className="h-4 w-4" />
-                    This order has an authorized payment that can be captured.
-                  </p>
-                </div>
-              )}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setStatusDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={() => {
-                if (selectedOrder) {
-                  handleStatusUpdate(selectedOrder.id, newStatus);
-                  setStatusDialogOpen(false);
-                }
-              }} disabled={isLoading}>
-                {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                Update Status
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -2149,15 +1916,14 @@ const MobileOrderCard = ({
             <AlertDialogHeader>
               <AlertDialogTitle>Convert to Order</AlertDialogTitle>
               <AlertDialogDescription>
-                This will convert the draft order into a regular order. 
+                This will convert the draft order into a regular order.
                 The customer will be notified and the order will be ready for fulfillment.
                 This action cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => selectedOrder && handleConvertToOrder(selectedOrder)} disabled={isLoading}>
-                {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              <AlertDialogAction onClick={() => selectedOrder && handleConvertToOrder(selectedOrder)}>
                 Convert to Order
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -2171,18 +1937,16 @@ const MobileOrderCard = ({
               <AlertDialogTitle>Are you sure?</AlertDialogTitle>
               <AlertDialogDescription>
                 This action cannot be undone. This will permanently delete the
-                {orderType === 'drafts' ? ' draft order' : ` order #${selectedOrder?.display_id}`} 
+                {orderType === 'drafts' ? ' draft order' : ` order #${selectedOrder?.display_id}`}
                 and remove all associated data.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction 
-                onClick={() => selectedOrder && handleDelete(selectedOrder)} 
+              <AlertDialogAction
+                onClick={() => selectedOrder && handleDelete(selectedOrder)}
                 className="bg-destructive hover:bg-destructive/90"
-                disabled={isLoading}
               >
-                {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                 Delete
               </AlertDialogAction>
             </AlertDialogFooter>

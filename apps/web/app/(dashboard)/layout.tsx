@@ -27,7 +27,6 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
 
 
   let user = userData?.user ?? userData
-console.log(user, 'USSSERR')
   return (
     <SidebarProvider
       defaultOpen={defaultOpen}
