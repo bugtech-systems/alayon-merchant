@@ -27,13 +27,15 @@ import {
   useReactTable,
   type VisibilityState,
   type Row,
+  type ColumnDef,
+  getSortedRowModel,
+  type SortingState,
 } from "@tanstack/react-table";
 import {
   ChevronDownIcon,
   ListFilter,
   XIcon,
   PackageIcon,
-  TruckIcon,
   UserIcon,
   PhoneIcon,
   MapPinIcon,
@@ -44,10 +46,9 @@ import {
   EditIcon,
   UserPlusIcon,
   Trash2Icon,
-  CheckCircleIcon,
-  XCircleIcon,
-  AlertCircleIcon,
-  InfoIcon,
+  ArrowUpDownIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
 } from "lucide-react";
 import { formatDistanceToNow, parseISO, format } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -68,6 +69,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuLabel,
+  DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
@@ -137,10 +139,6 @@ export const STOCK_STATUS_CONFIG = {
   low: { color: "bg-rose-500", label: "Low", textColor: "text-rose-700" },
 } as any;
 
-// ============================================================
-// 1. Types & Config
-// ============================================================
-
 export interface CustomerDetails {
   id: string;
   name: string;
@@ -184,9 +182,9 @@ export interface OrderDetails {
 export interface WaterDeliveryOrder {
   id: string;
   orderNumber: string;
-  customer: string; // display name
+  customer: string;
   customerPhone: string;
-  location: string; // display location name
+  location: string;
   address: string;
   quantity: number;
   total: number;
@@ -196,7 +194,6 @@ export interface WaterDeliveryOrder {
   assignedDriverId: string | null;
   remainingStock: number;
   previousOrderQty: number;
-  // Expanded details
   customerDetails: CustomerDetails;
   locationDetails: LocationDetails;
   orderDetails: OrderDetails;
@@ -205,6 +202,19 @@ export interface WaterDeliveryOrder {
     name: string;
     phone: string;
     vehicle: string;
+  };
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  last_order_at?: string;
+  metadata?: any;
+  latest_order?: any;
+  stock_health?: {
+    remainingStock: number;
+    previousOrderQty: number;
+    stockHealthScore: number;
+    stockHealthPercentage: number;
+    stockHealthStatus: "high" | "medium" | "low";
   };
 }
 
@@ -234,21 +244,6 @@ const statusOptions = [
   "delivered",
   "completed",
 ] as const;
-
-const stockHealthSlots = Array.from({ length: 10 }, (_, index) => ({
-  id: `slot-${index + 1}`,
-  threshold: index + 1,
-}));
-
-function getStockHealthScore(remaining: number, previousQty: number) {
-  if (remaining <= 0) return 0;
-  const pct = (remaining / previousQty) * 100;
-  if (pct >= 80) return 10;
-  if (pct >= 60) return 8;
-  if (pct >= 40) return 6;
-  if (pct >= 20) return 4;
-  return 2;
-}
 
 function getStatusColor(status: string) {
   const colors: Record<string, string> = {
@@ -290,8 +285,6 @@ interface SortableRowProps {
   onClick: () => void;
 }
 
-
-
 function SortableRow({ row, children, onClick }: SortableRowProps) {
   const {
     attributes,
@@ -323,7 +316,32 @@ function SortableRow({ row, children, onClick }: SortableRowProps) {
 }
 
 // ============================================================
-// 3. DETAIL MODALS (unchanged)
+// 3. SORTABLE HEADER COMPONENT
+// ============================================================
+
+interface SortableHeaderProps {
+  column: any;
+  title: string;
+}
+
+function SortableHeader({ column, title }: SortableHeaderProps) {
+  const isSorted = column.getIsSorted();
+  
+  return (
+    <div
+      className="flex items-center gap-1 cursor-pointer hover:text-foreground select-none"
+      onClick={() => column.toggleSorting()}
+    >
+      <span>{title}</span>
+      {isSorted === "asc" && <ArrowUpIcon className="size-3.5" />}
+      {isSorted === "desc" && <ArrowDownIcon className="size-3.5" />}
+      {!isSorted && <ArrowUpDownIcon className="size-3.5 text-muted-foreground/50" />}
+    </div>
+  );
+}
+
+// ============================================================
+// 4. DETAIL MODALS
 // ============================================================
 
 function OrderDetailModal({ open, onOpenChange, order }: { open: boolean; onOpenChange: (open: boolean) => void; order: WaterDeliveryOrder | null }) {
@@ -576,20 +594,6 @@ function StockDetailModal({ open, onOpenChange, order }: { open: boolean; onOpen
   );
 }
 
-
-
-
-// ============================================================
-// 3. Detail Modals
-// ============================================================
-
-interface OrderDetailModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  order: WaterDeliveryOrder | null;
-}
-
-
 function StatusUpdateModal({ open, onOpenChange, order, onUpdate }: { open: boolean; onOpenChange: (open: boolean) => void; order: WaterDeliveryOrder | null; onUpdate?: (status: WaterDeliveryOrder["status"]) => void }) {
   const [newStatus, setNewStatus] = React.useState<WaterDeliveryOrder["status"] | null>(null);
   if (!order) return null;
@@ -632,10 +636,7 @@ function StatusUpdateModal({ open, onOpenChange, order, onUpdate }: { open: bool
 }
 
 // ============================================================
-// 4. Main Component
-// ============================================================
-// ============================================================
-// 4. DEBOUNCE HOOK
+// 5. DEBOUNCE HOOK
 // ============================================================
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -648,7 +649,7 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 // ============================================================
-// 5. QUERY PARAMS HELPERS
+// 6. QUERY PARAMS HELPERS
 // ============================================================
 
 interface QueryParams {
@@ -687,11 +688,8 @@ function buildQueryString(params: QueryParams): string {
 }
 
 // ============================================================
-// 6. MAIN COMPONENT
+// 7. MAIN COMPONENT
 // ============================================================
-
-
-
 
 interface WaterDeliveryOrdersSectionProps {
   data?: WaterDeliveryOrder[];
@@ -708,27 +706,21 @@ export function WaterDeliveryOrdersSection({
   onUpdateStatus,
   onBulkAction,
 }: WaterDeliveryOrdersSectionProps) {
-
-
-    const router = useRouter();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const initialParams = React.useMemo(() => parseQueryParams(searchParams), [searchParams]);
 
   // --- State ---
-  const [orders, setOrders] = React.useState<WaterDeliveryOrder[]>([]);
-  const [total, setTotal] = React.useState(0);
-  const [error, setError] = React.useState<Error | null>(null);
-
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
-  const [density, setDensity] = React.useState<"compact" | "normal">("normal");
   const [data, setData] = React.useState<WaterDeliveryOrder[]>(initialData);
   const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({});
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = React.useState("");
+  const [sorting, setSorting] = React.useState<SortingState>([]);
   const [pagination, setPagination] = React.useState<PaginationState>({
     pageIndex: 0,
     pageSize: 10,
   });
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [isDetailOpen, setIsDetailOpen] = React.useState(false);
   const [selectedOrder, setSelectedOrder] = React.useState<WaterDeliveryOrder | null>(null);
   const [detailType, setDetailType] = React.useState<"order" | "customer" | "location" | "stock" | "status">("order");
@@ -742,8 +734,8 @@ export function WaterDeliveryOrdersSection({
     useSensor(KeyboardSensor, {})
   );
 
-  // -- Table --
- const columns = React.useMemo<ColumnDef<WaterDeliveryOrder>[]>(() => {
+  // -- Table Columns --
+  const columns = React.useMemo<ColumnDef<WaterDeliveryOrder>[]>(() => {
     return [
       {
         id: "dragHandle",
@@ -779,18 +771,8 @@ export function WaterDeliveryOrdersSection({
         enableHiding: false,
       },
       {
-        accessorKey: "priority",
-        header: "#",
-        cell: ({ row }) => (
-          <span className="text-xs font-mono text-muted-foreground">{row.index + 1}</span>
-        ),
-        size: 40,
-        enableSorting: false,
-        enableHiding: true,
-      },
-      {
         accessorKey: "customer",
-        header: "Customer",
+        header: ({ column }) => <SortableHeader column={column} title="Customer" />,
         cell: ({ row }) => {
           const order = row.original;
           const name = order.first_name ? `${order.first_name} ${order.last_name || ''}` : order.customer || "Unknown";
@@ -821,7 +803,7 @@ export function WaterDeliveryOrdersSection({
       },
       {
         accessorKey: "location",
-        header: "Location",
+        header: ({ column }) => <SortableHeader column={column} title="Location" />,
         cell: ({ row }) => {
           const order = row.original;
           const meta = order.metadata || {};
@@ -844,7 +826,7 @@ export function WaterDeliveryOrdersSection({
       },
       {
         accessorKey: "status",
-        header: "Status",
+        header: ({ column }) => <SortableHeader column={column} title="Status" />,
         cell: ({ row }) => {
           const order = row.original;
           const status = order.status || order.latest_order?.status || "pending";
@@ -862,10 +844,15 @@ export function WaterDeliveryOrdersSection({
         size: 150,
         enableSorting: true,
         sortingFn: "alphanumeric",
+        filterFn: (row, id, filterValue) => {
+          if (filterValue === "all" || !filterValue) return true;
+          const status = row.getValue(id) as string;
+          return status === filterValue;
+        },
       },
       {
         accessorKey: "quantity",
-        header: () => <div className="">Qty</div>,
+        header: ({ column }) => <SortableHeader column={column} title="Qty" />,
         cell: ({ row }) => (
           <div className="tabular-nums">{row.original.latest_order?.total_items || row.original.quantity || 0}</div>
         ),
@@ -875,9 +862,9 @@ export function WaterDeliveryOrdersSection({
       },
       {
         accessorKey: "total",
-        header: () => <div className="">Total</div>,
+        header: ({ column }) => <SortableHeader column={column} title="Total" />,
         cell: ({ row }) => (
-          <div className=" font-medium tabular-nums">₱{(row.original.latest_order?.total || row.original.total || 0).toFixed(2)}</div>
+          <div className="font-medium tabular-nums">₱{(row.original.latest_order?.total || row.original.total || 0).toFixed(2)}</div>
         ),
         size: 120,
         enableSorting: true,
@@ -885,7 +872,7 @@ export function WaterDeliveryOrdersSection({
       },
       {
         accessorKey: "orderDate",
-        header: "Last Order",
+        header: ({ column }) => <SortableHeader column={column} title="Last Order" />,
         cell: ({ row }) => {
           const date = row.original.last_order_at || row.original.orderDate || new Date().toISOString();
           return (
@@ -898,124 +885,119 @@ export function WaterDeliveryOrdersSection({
         enableSorting: true,
         sortingFn: "datetime",
       },
-{
-  accessorKey: "stockHealth",
-  header: () => <span className="hidden sm:inline">Stock Health</span>,
-  cell: ({ row }) => {
-    const order = row.original;
-    const stock = order.stock_health || {
-      remainingStock: 0,
-      previousOrderQty: 0,
-      stockHealthScore: 0,
-      stockHealthPercentage: 0,
-      stockHealthStatus: "low",
-    };
+      {
+        accessorKey: "stockHealth",
+        header: ({ column }) => <SortableHeader column={column} title="Stock Health" />,
+        cell: ({ row }) => {
+          const order = row.original;
+          const stock = order.stock_health || {
+            remainingStock: 0,
+            previousOrderQty: 0,
+            stockHealthScore: 0,
+            stockHealthPercentage: 0,
+            stockHealthStatus: "low",
+          };
 
-    const pct = Math.min(100, Math.max(0, stock.stockHealthPercentage ?? 0));
-    const status = stock.stockHealthStatus ?? "low" as any;
-    const remaining = stock.remainingStock ?? 0;
-    const prevQty = stock.previousOrderQty ?? 0;
+          const pct = Math.min(100, Math.max(0, stock.stockHealthPercentage ?? 0));
+          const status = stock.stockHealthStatus ?? "low" as any;
+          const remaining = stock.remainingStock ?? 0;
+          const prevQty = stock.previousOrderQty ?? 0;
 
-    const statusConfig = STOCK_STATUS_CONFIG[status] || STOCK_STATUS_CONFIG.low;
-    const barColor = statusConfig.color;
-    const showBars = prevQty > 0;
+          const statusConfig = STOCK_STATUS_CONFIG[status] || STOCK_STATUS_CONFIG.low;
+          const barColor = statusConfig.color;
+          const showBars = prevQty > 0;
 
-    // Number of filled slots (each slot = 10%)
-    const filledSlots = Math.min(10, Math.round(pct / 10));
+          const filledSlots = Math.min(10, Math.round(pct / 10));
 
-    return (
-      <TooltipProvider>
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <div
-              className="flex items-center gap-1.5 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity px-1 py-0.5 rounded-md hover:bg-muted/50"
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedOrder(order);
-                setDetailType("stock");
-                setIsDetailOpen(true);
-              }}
-            >
-              {/* Bar chart – 10 slots */}
-              <div
-                className="flex items-end gap-[2px] sm:gap-[3px]"
-                aria-label={`Stock health: ${pct}% remaining`}
-              >
-                {STOCK_HEALTH_SLOTS.map((slot) => {
-                  const isFilled = slot.threshold <= filledSlots;
-                  return (
+          return (
+            <TooltipProvider>
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <div
+                    className="flex items-center gap-1.5 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity px-1 py-0.5 rounded-md hover:bg-muted/50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedOrder(order);
+                      setDetailType("stock");
+                      setIsDetailOpen(true);
+                    }}
+                  >
                     <div
-                      key={slot.id}
+                      className="flex items-end gap-[2px] sm:gap-[3px]"
+                      aria-label={`Stock health: ${pct}% remaining`}
+                    >
+                      {STOCK_HEALTH_SLOTS.map((slot) => {
+                        const isFilled = slot.threshold <= filledSlots;
+                        return (
+                          <div
+                            key={slot.id}
+                            className={cn(
+                              "h-4 w-1.5 sm:h-5 sm:w-2 rounded-full transition-all duration-300",
+                              isFilled && showBars ? barColor : "bg-muted-foreground/20",
+                              !showBars && "bg-muted-foreground/10"
+                            )}
+                            style={{
+                              opacity: isFilled && showBars ? 0.7 + (slot.threshold / 10) * 0.3 : 1,
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+
+                    <span
                       className={cn(
-                        "h-4 w-1.5 sm:h-5 sm:w-2 rounded-full transition-all duration-300",
-                        isFilled && showBars ? barColor : "bg-muted-foreground/20",
-                        !showBars && "bg-muted-foreground/10"
+                        "text-[10px] sm:text-xs font-medium tabular-nums transition-colors",
+                        showBars ? statusConfig.textColor : "text-muted-foreground",
+                        "hidden xs:inline"
                       )}
-                      style={{
-                        // Slight gradient opacity for filled bars
-                        opacity: isFilled && showBars ? 0.7 + (slot.threshold / 10) * 0.3 : 1,
-                      }}
-                    />
-                  );
-                })}
-              </div>
+                    >
+                      {showBars ? `${pct}%` : "—"}
+                    </span>
+                  </div>
+                </TooltipTrigger>
 
-              {/* Percentage label */}
-              <span
-                className={cn(
-                  "text-[10px] sm:text-xs font-medium tabular-nums transition-colors",
-                  showBars ? statusConfig.textColor : "text-muted-foreground",
-                  "hidden xs:inline"
-                )}
-              >
-                {showBars ? `${pct}%` : "—"}
-              </span>
-            </div>
-          </TooltipTrigger>
-
-          <TooltipContent side="top" align="center" className="max-w-xs p-3 space-y-1.5">
-            <div className="flex items-center justify-between gap-4">
-              <span className="font-medium">Stock Health</span>
-              <span
-                className={cn(
-                  "px-2 py-0.5 rounded-full text-xs font-semibold",
-                  status === "high" && "bg-emerald-100 text-emerald-800",
-                  status === "medium" && "bg-amber-100 text-amber-800",
-                  status === "low" && "bg-rose-100 text-rose-800"
-                )}
-              >
-                {statusConfig.label}
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-sm">
-              <span className="text-muted-foreground">Remaining</span>
-              <span className="font-mono font-medium text-right">{remaining} units</span>
-              <span className="text-muted-foreground">Last order</span>
-              <span className="font-mono font-medium text-right">{prevQty} units</span>
-              <span className="text-muted-foreground">Percentage</span>
-              <span className="font-mono font-medium text-right">{pct}%</span>
-            </div>
-            {!showBars && (
-              <p className="text-xs text-muted-foreground italic mt-1">No prior order data.</p>
-            )}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
-  },
-  size: 160,
-  minSize: 120,
-  enableSorting: true,
-  // Sort by percentage (descending)
-  sortingFn: (rowA, rowB) => {
-    const a = rowA.original.stock_health?.stockHealthPercentage ?? 0;
-    const b = rowB.original.stock_health?.stockHealthPercentage ?? 0;
-    return b - a; // higher percentage first
-  },
-},
+                <TooltipContent side="top" align="center" className="max-w-xs p-3 space-y-1.5">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="font-medium">Stock Health</span>
+                    <span
+                      className={cn(
+                        "px-2 py-0.5 rounded-full text-xs font-semibold",
+                        status === "high" && "bg-emerald-100 text-emerald-800",
+                        status === "medium" && "bg-amber-100 text-amber-800",
+                        status === "low" && "bg-rose-100 text-rose-800"
+                      )}
+                    >
+                      {statusConfig.label}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-sm">
+                    <span className="text-muted-foreground">Remaining</span>
+                    <span className="font-mono font-medium text-right">{remaining} units</span>
+                    <span className="text-muted-foreground">Last order</span>
+                    <span className="font-mono font-medium text-right">{prevQty} units</span>
+                    <span className="text-muted-foreground">Percentage</span>
+                    <span className="font-mono font-medium text-right">{pct}%</span>
+                  </div>
+                  {!showBars && (
+                    <p className="text-xs text-muted-foreground italic mt-1">No prior order data.</p>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          );
+        },
+        size: 160,
+        minSize: 120,
+        enableSorting: true,
+        sortingFn: (rowA, rowB) => {
+          const a = rowA.original.stock_health?.stockHealthPercentage ?? 0;
+          const b = rowB.original.stock_health?.stockHealthPercentage ?? 0;
+          return b - a;
+        },
+      },
       {
         accessorKey: "orderNumber",
-        header: "Order #",
+        header: ({ column }) => <SortableHeader column={column} title="Order #" />,
         cell: ({ row }) => {
           const order = row.original;
           return (
@@ -1025,14 +1007,6 @@ export function WaterDeliveryOrdersSection({
             >
               <PackageIcon className="size-3.5 text-muted-foreground" />
               <span className="font-mono text-sm font-medium">#{order.orderNumber || order.latest_order?.orderNumber || "N/A"}</span>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <InfoIcon className="size-3 text-muted-foreground hover:text-primary" />
-                  </TooltipTrigger>
-                  <TooltipContent>Click for order details</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
             </div>
           );
         },
@@ -1043,19 +1017,28 @@ export function WaterDeliveryOrdersSection({
     ];
   }, []);
 
+  // -- Table Instance --
   const table = useReactTable({
     data,
     columns,
-    state: { rowSelection, columnFilters, globalFilter, pagination },
+    state: {
+      rowSelection,
+      columnFilters,
+      globalFilter,
+      pagination,
+      sorting,
+    },
     getRowId: (row) => row.id,
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
     onPaginationChange: setPagination,
+    onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     globalFilterFn: "includesString",
   });
 
@@ -1088,7 +1071,6 @@ export function WaterDeliveryOrdersSection({
     if (onBulkAction) {
       onBulkAction(action, selectedIds);
     } else {
-      // Default actions
       switch (action) {
         case "delete":
           if (confirm(`Delete ${selectedIds.length} orders?`)) {
@@ -1097,7 +1079,6 @@ export function WaterDeliveryOrdersSection({
           }
           break;
         case "status":
-          // open a dialog to update status for all selected
           const newStatus = prompt("Enter new status (pending, delivered, etc.)") as WaterDeliveryOrder["status"] | null;
           if (newStatus && statusOptions.includes(newStatus)) {
             setData(prev => prev.map(order => 
@@ -1161,9 +1142,6 @@ export function WaterDeliveryOrdersSection({
     );
   }
 
-
-
-  console.log(selectedOrder, 'SELELEC', isDetailOpen, detailType)
   // ----- Render -----
   return (
     <section className="space-y-4">
@@ -1175,7 +1153,7 @@ export function WaterDeliveryOrdersSection({
               <Badge variant="secondary">{filteredOrderCount}</Badge>
             </CardTitle>
             <CardDescription>
-              Track and manage water delivery orders across all statuses.
+              Track and manage water delivery orders across all statuses. Click column headers to sort.
             </CardDescription>
           </div>
           <CardAction>
@@ -1225,6 +1203,30 @@ export function WaterDeliveryOrdersSection({
                       </DropdownMenuRadioItem>
                     ))}
                   </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9">
+                    Columns
+                    <ChevronDownIcon className="size-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {table.getAllColumns().filter(column => column.getCanHide()).map((column) => {
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={column.id}
+                        checked={column.getIsVisible()}
+                        onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                      >
+                        {column.columnDef.header?.toString() || column.id}
+                      </DropdownMenuCheckboxItem>
+                    );
+                  })}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -1294,10 +1296,7 @@ export function WaterDeliveryOrdersSection({
                         <SortableRow
                           key={row.id}
                           row={row}
-                          onClick={(e) => {
-                            // setSelectedOrder(row.original);
-                            // setDetailType("order");
-                            // setIsDetailOpen(true);
+                          onClick={() => {
                             onOrderClick?.(row.original);
                           }}
                         >
@@ -1392,11 +1391,6 @@ export function WaterDeliveryOrdersSection({
         onClose={() => { if (isDetailOpen) { setIsDetailOpen(false); setDetailType('order'); } }}
         customer={selectedOrder}
       />
-      {/* <LocationDetailModal
-        open={isDetailOpen && detailType === "location"}
-        onOpenChange={(open) => { if (!open) setIsDetailOpen(false); }}
-        location={selectedOrder?.metadata || null}
-      /> */}
       <StockDetailModal
         open={isDetailOpen && detailType === "stock"}
         onOpenChange={(open) => { if (!open) setIsDetailOpen(false); }}

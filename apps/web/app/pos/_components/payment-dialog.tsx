@@ -120,12 +120,10 @@ export function PaymentDialog({
         throw new Error("Failed to create order");
       }
       
-   
-  
       
-      setPaymentSuccess(true);
       await onComplete(completeResult.order);
       setIsTakeOut(false)
+      setPaymentSuccess(true);
       setTimeout(() => {
         onOpenChange(false);
         setPaymentSuccess(false);

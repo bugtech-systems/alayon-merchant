@@ -414,7 +414,7 @@ export async function processPOSPayment(params: {
   const headers = await getAuthHeaders();
   
   // Generate unique idempotency key for this transaction
-  const idempotencyKey = `pos_${cart.id}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  const idempotencyKey = uuidv4();
   
   // Add idempotency key to headers
   const headersWithIdempotency = {
@@ -480,11 +480,14 @@ export async function processPOSPayment(params: {
           {}, 
           headersWithIdempotency
         );
+        
 
-        let orderDelivery = await createDelivery({cart_id: cart?.id, order_id: orderResult.order.id, company_id: pricingContext.companyId})
-        if(orderDelivery){
-          await acceptDelivery(orderDelivery?.id)
-        }
+          if(!orderResult?.order?.id) throw new Error("Failed to create order");
+;
+         await createDelivery({cart_id: cart?.id, order_id: orderResult.order.id, company_id: pricingContext.companyId})
+        // if(orderDelivery){
+        //   await acceptDelivery(orderDelivery?.id)
+        // }
 
         break; // Success, exit retry loop
       } catch (completeError: any) {

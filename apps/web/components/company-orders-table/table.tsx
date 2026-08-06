@@ -203,6 +203,7 @@ function CustomerView({ customer }: { customer: Order["customer"] }) {
 // ==================== Columns Definition ====================
 
 function getOrderColumns({
+  isLoading,
   onAcceptOrder,
   onCompleteOrder,
   onPrint,
@@ -226,6 +227,7 @@ function getOrderColumns({
   processingOrderIds?: Set<string>;
   getStockLocationId?: (order: Order) => string | undefined;
   defaultStockLocationId?: string;
+  isLoading?: any;
 }) {
   // Helper to render Accept/Print cell for both views
   const renderAcceptPrintCell = (order: any) => {
@@ -490,7 +492,9 @@ function getOrderColumns({
     {
       id: "accept_actions",
       header: "Accept / Print",
-      cell: ({ row }: { row: any }) => renderAcceptPrintCell(row.original),
+      cell: ({ row }: { row: any }) => isLoading ? (
+              <LoaderCircle className="size-3 animate-spin" />
+            ) : renderAcceptPrintCell(row.original),
       enableSorting: false,
       size: 120,
     },
@@ -583,6 +587,7 @@ export function CompanyOrdersTable({
   const columns = React.useMemo(
     () =>
       getOrderColumns({
+        isLoading,
         onAcceptOrder,
         onCompleteOrder,
         onPrint,

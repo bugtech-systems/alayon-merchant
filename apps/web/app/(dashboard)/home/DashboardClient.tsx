@@ -16,6 +16,7 @@ import { NotificationBell } from "@/components/notification/NotificationBell";
 import { ChatWidget } from "@/components/chat/ChatWidget";
 import { Toaster } from "sonner";
 import { toast } from "sonner";
+import { acceptDelivery } from "@/lib/actions";
 
 interface DashboardClientProps {
   user: any;
@@ -24,6 +25,7 @@ interface DashboardClientProps {
 
 export function DashboardClient({ user, userRole }: DashboardClientProps) {
   const [cartPrint, setCartPrint] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [previousOrderCount, setPreviousOrderCount] = useState<number>(0);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [isSoundLoaded, setIsSoundLoaded] = useState(false);
@@ -473,16 +475,23 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
 
   const handleAcceptOrder = async (orderId: any, stock_location_id: any) => {
     console.log(orderId, 'ORDER', stock_location_id);
-    let order = data?.orders.find(a => a.id === orderId);
+      setLoading(true);
+    let order = data?.orders.find(a => a.id === orderId) as any;
     console.log(order, 'ORDEER')
+
+    console.log(order, 'ORDER ACCEPT')
+    await acceptDelivery(order?.delivery?.id)
     await fulfillOrder(orderId, stock_location_id)
     await refetch();
+    setLoading(false);
   };
 
   const handleConfirmOrder = async (order: any, stock_location_id: any) => {
     console.log(order, 'ORDEERaaaaaa', stock_location_id)
+    setLoading(true);
     await completeOrder(order, stock_location_id)
     await refetch();
+    setLoading(false);
   };
 
   // Update URL query params
@@ -577,7 +586,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
         <CompanyOrdersTable
           data={data?.orders || []}
           totalCount={data?.total || 0}
-          isLoading={isLoading}
+          isLoading={(isLoading || loading)}
           onAssignDriver={handleAssignRider}
           onStatusChange={handleUpdateStatus}
           onRefresh={handleManualRefresh}

@@ -13,6 +13,7 @@ import { AccountSwitcher } from "@/components/sidebar/account-switcher";
 import { LayoutControls } from "@/components/sidebar/layout-controls";
 import { ThemeSwitcher } from "@/components/sidebar/theme-switcher";
 import { retrieveUser } from "@/lib/data";
+import { ChatButton } from "@/components/chat/chat-button";
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
   const cookieStore = await cookies();
@@ -25,6 +26,8 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   ]);
 
 
+  let user = userData?.user ?? userData
+console.log(user, 'USSSERR')
   return (
     <SidebarProvider
       defaultOpen={defaultOpen}
@@ -60,6 +63,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
               {/* <SearchDialog /> */}
             </div>
             <div className="flex items-center gap-2">
+
               <LayoutControls />
               <ThemeSwitcher />
               <AccountSwitcher users={[userData?.user ?? userData]} />
@@ -68,6 +72,16 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
         </header>
         <div className="h-full p-3 overflow-hidden">{children}</div>
       </SidebarInset>
+       {user?.id && (
+        <ChatButton
+          userId={user?.id}
+          userRole={user?.metadata?.role || "customer"}
+          customerId={user?.id}
+          token={user?.token}
+          serverUrl={process.env.SMS_URL}
+          defaultOpen={false}
+        />
+      )}
     </SidebarProvider>
   );
 }
