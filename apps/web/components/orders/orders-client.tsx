@@ -99,7 +99,8 @@ import {
   ViewIcon,
   View,
   Goal,
-  AppWindow
+  AppWindow,
+  Notebook
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -1083,6 +1084,20 @@ const DetailedOrderView = ({
             </div>
           ) : (
             <div className="text-sm text-muted-foreground">No shipping address provided</div>
+          )}
+        </div>
+                <div>
+          <h4 className="text-sm font-semibold text-muted-foreground mb-2">Notes</h4>
+          {order?.metadata?.notes && (
+            <div className="space-y-1 text-sm">
+              <div className="flex items-start gap-2">
+                <Notebook className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <div>
+                
+                  <div>{order?.metadata?.notes}</div>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

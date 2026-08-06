@@ -362,6 +362,31 @@ const buildQueryString = (
   return params.toString();
 };
 
+function getPhilippineDateRange(dateStr: string): { start: string; end: string } {
+  const date = new Date(dateStr);
+  
+  // Philippine Time is UTC+8
+  const PHT_OFFSET = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
+  
+  // Get UTC timestamp and adjust to Philippine time
+  const phtTime = date.getTime() + PHT_OFFSET;
+  
+  // Start of day (00:00:00) in Philippine time
+  const startOfDay = new Date(phtTime);
+  startOfDay.setHours(0, 0, 0, 0);
+  const startUTC = new Date(startOfDay.getTime() - PHT_OFFSET);
+  
+  // End of day (23:59:59.999) in Philippine time
+  const endOfDay = new Date(phtTime);
+  endOfDay.setHours(23, 59, 59, 999);
+  const endUTC = new Date(endOfDay.getTime() - PHT_OFFSET);
+  
+  return {
+    start: startUTC.toISOString(),
+    end: endUTC.toISOString()
+  };
+}
+
 // Main list orders function - now matches listPosOrders pattern
 export const listOrders = async (
   limit: number = 10000,
@@ -418,19 +443,30 @@ export const listOrders = async (
     // Add status filter to exclude cancelled and refunded by default
     const excludedStatuses = ['canceled', 'refunded'];
 
-    // Add date filters if provided - with proper start/end of day handling
-    if (filters?.created_at_from) {
-      // Ensure we're using the start of the day (00:00:00)
-      const fromDate = new Date(filters.created_at_from);
-      fromDate.setHours(0, 0, 0, 0);
-      queryParams.append('created_at[gte]', fromDate.toISOString());
-    }
-    if (filters?.created_at_to) {
-      // Ensure we're using the end of the day (23:59:59.999)
-      const toDate = new Date(filters.created_at_to);
-      toDate.setHours(23, 59, 59, 999);
-      queryParams.append('created_at[lte]', toDate.toISOString());
-    }
+        // Usage in your route
+      if (filters?.created_at_from) {
+        const range = getPhilippineDateRange(filters.created_at_from);
+        queryParams.append('created_at[gte]', range.start);
+        // If only from date is provided, also filter to end of that day
+        if (!filters?.created_at_to) {
+          queryParams.append('created_at[lte]', range.end);
+        }
+      }
+
+      if (filters?.created_at_to) {
+        const range = getPhilippineDateRange(filters.created_at_to);
+        queryParams.append('created_at[lte]', range.end);
+      }
+
+      if (filters?.today) {
+        const today = new Date();
+        // Get today's date in Philippine timezone
+        const phtDate = new Date(today.getTime() + (8 * 60 * 60 * 1000));
+        const dateStr = phtDate.toISOString().split('T')[0] as any;
+        const range = getPhilippineDateRange(dateStr);
+        queryParams.append('created_at[gte]', range.start);
+        queryParams.append('created_at[lte]', range.end);
+      }
 
     // Add search filter
     if (filters?.search) {
