@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { retrieveUser } from "@/lib/data";
 import { getTodayOrdersSummary } from "@/lib/data/pos";
 import { redirect } from "next/navigation";
+import { ChatButton } from "@/components/chat/chat-button";
 
 // This is a Server Component by default (no "use client" directive)
 export const metadata = {
@@ -34,6 +35,16 @@ export default async function PosLayout({ children }: PosLayoutProps) {
           {children}
         </PosLayoutContent>
         </TooltipProvider>
+           {user?.id && (
+                <ChatButton
+                  userId={user?.id}
+                  userRole={user?.metadata?.role || "customer"}
+                  customerId={user?.id}
+                  token={user?.token}
+                  serverUrl={process.env.SMS_URL}
+                  defaultOpen={false}
+                />
+              )}
       </Suspense>
   );
 }
