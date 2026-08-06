@@ -2,9 +2,9 @@
 
 'use client';
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { format, formatDistanceToNow, isToday, startOfDay, endOfDay, isYesterday } from 'date-fns';
+import { format, formatDistanceToNow, isToday, startOfDay, endOfDay, isYesterday, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 
 // UI Components
@@ -283,12 +283,11 @@ const CapturePaymentDialog = ({
     }
   }, [amountReceived, totalAmount]);
 
-
-    useEffect(() => {
-      if(open){
-        setAmountReceived(order?.total)
-      }
-  }, [open]);
+  useEffect(() => {
+    if (open) {
+      setAmountReceived(order?.total?.toString() || '');
+    }
+  }, [open, order]);
 
   const handleCapture = async () => {
     const received = parseFloat(amountReceived);
@@ -304,6 +303,7 @@ const CapturePaymentDialog = ({
 
     await onCapture(received, discountCode.trim() || undefined);
     setAmountReceived('');
+    setDiscountCode('');
   };
 
   return (
@@ -326,19 +326,6 @@ const CapturePaymentDialog = ({
               <span className="font-bold text-lg">{formattedTotal}</span>
             </div>
           </div>
-
-          {/* <div className="space-y-2">
-            <label className="text-sm font-medium flex items-center gap-2">
-              <Tag className="h-4 w-4 text-muted-foreground" />
-              Discount Code (Optional)
-            </label>
-            <Input
-              placeholder="Enter discount code"
-              value={discountCode}
-              onChange={(e) => setDiscountCode(e.target.value)}
-              className="h-10"
-            />
-          </div> */}
 
           <div className="space-y-2">
             <label className="text-sm font-medium flex items-center gap-2">
@@ -589,7 +576,7 @@ const StatsCards = ({ orders, orderType, isLoading }: { orders: any[]; orderType
 };
 
 // ============================================
-// DATE RANGE FILTER
+// DATE RANGE FILTER - Refined for smooth updates
 // ============================================
 
 const DateRangeFilter = ({
@@ -606,19 +593,27 @@ const DateRangeFilter = ({
   const [isOpen, setIsOpen] = useState(false);
   const [tempFrom, setTempFrom] = useState<Date | null>(dateFrom || null);
   const [tempTo, setTempTo] = useState<Date | null>(dateTo || null);
+
+  // Sync temp state when props change
+  useEffect(() => {
+    setTempFrom(dateFrom || null);
+    setTempTo(dateTo || null);
+  }, [dateFrom, dateTo]);
+
   const hasDates = dateFrom || dateTo;
 
-  const applyFilter = () => {
+  // Apply filter immediately without waiting for popover to close
+  const applyFilter = useCallback(() => {
     onDateChange(tempFrom, tempTo);
     setIsOpen(false);
-  };
+  }, [tempFrom, tempTo, onDateChange]);
 
-  const clearFilter = () => {
+  const clearFilter = useCallback(() => {
     setTempFrom(null);
     setTempTo(null);
     onDateChange(null, null);
     setIsOpen(false);
-  };
+  }, [onDateChange]);
 
   const presetRanges = [
     { label: 'Today', value: 'today' },
@@ -628,7 +623,7 @@ const DateRangeFilter = ({
     { label: 'Last Month', value: 'lastMonth' },
   ];
 
-  const applyPreset = (preset: string) => {
+  const applyPreset = useCallback((preset: string) => {
     const now = new Date();
     let from: Date | null = null;
     let to: Date | null = null;
@@ -665,9 +660,10 @@ const DateRangeFilter = ({
 
     setTempFrom(from);
     setTempTo(to);
+    // Apply immediately
     onDateChange(from, to);
     setIsOpen(false);
-  };
+  }, [onDateChange]);
 
   const formatDateRange = () => {
     if (!dateFrom && !dateTo) return 'All Dates';
@@ -745,7 +741,14 @@ const DateRangeFilter = ({
                     <Calendar
                       mode="single"
                       selected={tempFrom || undefined}
-                      onSelect={(date) => setTempFrom(date || null)}
+                      onSelect={(date) => {
+                        setTempFrom(date || null);
+                        // Auto-apply if both dates are selected
+                        if (date && tempTo) {
+                          onDateChange(date, tempTo);
+                          setIsOpen(false);
+                        }
+                      }}
                       initialFocus
                     />
                   </PopoverContent>
@@ -771,7 +774,14 @@ const DateRangeFilter = ({
                     <Calendar
                       mode="single"
                       selected={tempTo || undefined}
-                      onSelect={(date) => setTempTo(date || null)}
+                      onSelect={(date) => {
+                        setTempTo(date || null);
+                        // Auto-apply if both dates are selected
+                        if (date && tempFrom) {
+                          onDateChange(tempFrom, date);
+                          setIsOpen(false);
+                        }
+                      }}
                       initialFocus
                     />
                   </PopoverContent>
@@ -936,9 +946,8 @@ const DetailedOrderView = ({
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b">
         <div>
           <h3 className="text-2xl font-bold flex items-center gap-2">
-            {isDraft ? 'Draft Order' : `Order #${order.display_id}` }
-        {order?.metadata?.beeper_ids?.length && ` | ${order?.metadata?.beeper_ids.join(',')}`}
-
+            {isDraft ? 'Draft Order' : `Order #${order.display_id}`}
+            {order?.metadata?.beeper_ids?.length && ` | ${order?.metadata?.beeper_ids.join(',')}`}
             {isDraft && <Badge variant="outline" className="ml-2">Draft</Badge>}
           </h3>
           <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
@@ -1238,7 +1247,7 @@ const MobileOrderCard = ({
             <Badge variant="outline">Draft</Badge>
           ) : orderType === 'orders' ?
             <StatusDropdown
-              currentStatus={ order.status != 'completed' ? order?.delivery?.delivery_status != 'delivered' ? order?.delivery?.delivery_status : order.status : order.status }
+              currentStatus={order.status != 'completed' ? order?.delivery?.delivery_status != 'delivered' ? order?.delivery?.delivery_status : order.status : order.status}
               paymentStatus={order.payment_status}
               onStatusChange={(status) => onStatusUpdate(order.id, status)}
               onCapturePayment={() => onCapturePayment(order)}
@@ -1258,8 +1267,7 @@ const MobileOrderCard = ({
           <span className="font-medium">
             {order.customer?.first_name || order.customer_name || order.email?.split('@')[0] || 'Guest'}
           </span>
-                  {order?.metadata?.beeper_ids?.length && ` | ${order?.metadata?.beeper_ids.join(',')}`}
-
+          {order?.metadata?.beeper_ids?.length && ` | ${order?.metadata?.beeper_ids.join(',')}`}
         </div>
 
         {order.email && (
@@ -1371,28 +1379,50 @@ export function OrdersClient({
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [captureDialogOpen, setCaptureDialogOpen] = useState(false);
   
-  // FIX: Initialize from URL params first, then fallback to initialFilters
+  // Debounce timer ref
+  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Get today's date for default filter
+  const getTodayDefault = useCallback(() => {
+    const today = new Date();
+    return {
+      from: startOfDay(today),
+      to: endOfDay(today)
+    };
+  }, []);
+
+  // Initialize state from URL params or defaults
   const [searchTerm, setSearchTerm] = useState(() => {
     const urlSearch = searchParams.get('search');
     return urlSearch || initialFilters?.search || '';
   });
-  
+
   const [dateFrom, setDateFrom] = useState<Date | null>(() => {
     const urlDateFrom = searchParams.get('date_from');
     if (urlDateFrom) {
-      const parsed = new Date(urlDateFrom);
-      return isNaN(parsed.getTime()) ? null : parsed;
+      const parsed = parseISO(urlDateFrom);
+      if (!isNaN(parsed.getTime())) return parsed;
     }
-    return initialFilters?.date_from ? new Date(initialFilters.date_from) : null;
+    if (initialFilters?.date_from) {
+      const parsed = parseISO(initialFilters.date_from);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+    // Default to today
+    return getTodayDefault().from;
   });
-  
+
   const [dateTo, setDateTo] = useState<Date | null>(() => {
     const urlDateTo = searchParams.get('date_to');
     if (urlDateTo) {
-      const parsed = new Date(urlDateTo);
-      return isNaN(parsed.getTime()) ? null : parsed;
+      const parsed = parseISO(urlDateTo);
+      if (!isNaN(parsed.getTime())) return parsed;
     }
-    return initialFilters?.date_to ? new Date(initialFilters.date_to) : null;
+    if (initialFilters?.date_to) {
+      const parsed = parseISO(initialFilters.date_to);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+    // Default to today
+    return getTodayDefault().to;
   });
 
   const [pagination, setPagination] = useState({
@@ -1419,35 +1449,7 @@ export function OrdersClient({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // FIX: Sync URL params to state when URL changes (e.g., browser back/forward)
-  useEffect(() => {
-    const urlSearch = searchParams.get('search');
-    if (urlSearch !== null && urlSearch !== searchTerm) {
-      setSearchTerm(urlSearch);
-    }
-    
-    const urlDateFrom = searchParams.get('date_from');
-    if (urlDateFrom !== null) {
-      const parsed = new Date(urlDateFrom);
-      if (!isNaN(parsed.getTime()) && (!dateFrom || dateFrom.toISOString().split('T')[0] !== urlDateFrom)) {
-        setDateFrom(parsed);
-      }
-    } else if (urlDateFrom === null && dateFrom !== null) {
-      setDateFrom(null);
-    }
-    
-    const urlDateTo = searchParams.get('date_to');
-    if (urlDateTo !== null) {
-      const parsed = new Date(urlDateTo);
-      if (!isNaN(parsed.getTime()) && (!dateTo || dateTo.toISOString().split('T')[0] !== urlDateTo)) {
-        setDateTo(parsed);
-      }
-    } else if (urlDateTo === null && dateTo !== null) {
-      setDateTo(null);
-    }
-  }, [searchParams]);
-
-  // Build filters - FIX: Use dateFrom/dateTo state directly
+  // Build filters
   const buildFilters = useCallback(() => {
     const filters: Record<string, any> = {
       seller_id: user?.id,
@@ -1463,7 +1465,7 @@ export function OrdersClient({
       filters.search = searchTerm;
     }
 
-    // FIX: Proper date handling with timezone
+    // Date filtering with timezone handling (Philippine Time UTC+8)
     if (dateFrom) {
       const fromDate = new Date(dateFrom);
       fromDate.setUTCHours(16, 0, 0, 0); // 16:00 UTC = 00:00 PHT next day
@@ -1476,8 +1478,8 @@ export function OrdersClient({
       filters.created_at_lte = toDate.toISOString();
     }
 
-    // FIX: Only apply default today filter if no date filters and no search
-    if (!dateFrom && !dateTo && !searchTerm) {
+    // If no date filters are explicitly set, default to today
+    if (!dateFrom && !dateTo) {
       const today = new Date();
       const startOfDay = new Date(today);
       startOfDay.setUTCHours(16, 0, 0, 0);
@@ -1490,7 +1492,7 @@ export function OrdersClient({
     return filters;
   }, [user, orderType, searchTerm, dateFrom, dateTo]);
 
-  // Fetch orders - FIX: Use the current page from URL
+  // Fetch orders - immediate with no artificial delay
   const fetchOrders = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -1517,12 +1519,12 @@ export function OrdersClient({
     }
   }, [buildFilters, limit, page, initialSortField, initialSortOrder]);
 
-  // Initial fetch - FIX: Fetch when dependencies change
+  // Fetch immediately when dependencies change
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
 
-  // Update URL params - FIX: Preserve existing params
+  // Update URL params - immediate update
   const updateUrlParams = useCallback((updates: Record<string, string | number | null | undefined>) => {
     const params = new URLSearchParams(searchParams.toString());
 
@@ -1537,44 +1539,56 @@ export function OrdersClient({
     // Preserve the type param
     params.set('type', orderType);
 
-    router.push(`${pathname}?${params.toString()}`);
-  }, [router, pathname, searchParams, orderType]);
+    // If date filters are being removed, ensure we keep the default today filter
+    if (updates.date_from === null && updates.date_to === null) {
+      const today = getTodayDefault();
+      params.set('date_from', format(today.from, 'yyyy-MM-dd'));
+      params.set('date_to', format(today.to, 'yyyy-MM-dd'));
+    }
 
-  // Handlers - FIX: Update state and URL together
+    router.push(`${pathname}?${params.toString()}`);
+  }, [router, pathname, searchParams, orderType, getTodayDefault]);
+
+  // Handlers - immediate updates without artificial delays
   const handlePageChange = useCallback((newPage: number) => {
     updateUrlParams({ page: newPage });
   }, [updateUrlParams]);
 
   const handleSearchChange = useCallback((term: string) => {
     setSearchTerm(term);
-    // Update URL immediately with debounce
-    const timeoutId = setTimeout(() => {
+    
+    // Clear existing debounce
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+    
+    // Debounce search to avoid too many requests
+    searchDebounceRef.current = setTimeout(() => {
       updateUrlParams({ search: term || null, page: 1 });
-    }, 500);
-    return () => clearTimeout(timeoutId);
+    }, 300);
   }, [updateUrlParams]);
 
+  // Immediate date change - no debounce
   const handleDateChange = useCallback((from: Date | null, to: Date | null) => {
     setDateFrom(from);
     setDateTo(to);
-    
-    const updates: Record<string, string | null> = {
-      date_from: from ? format(from, 'yyyy-MM-dd') : null,
-      date_to: to ? format(to, 'yyyy-MM-dd') : null,
-      page: 1
-    };
-    
-    // If both dates are cleared, remove them from URL
+
     if (!from && !to) {
-      updateUrlParams({ 
-        date_from: null, 
-        date_to: null, 
-        page: 1 
+      // If clearing dates, reset to today's default
+      const today = getTodayDefault();
+      updateUrlParams({
+        date_from: format(today.from, 'yyyy-MM-dd'),
+        date_to: format(today.to, 'yyyy-MM-dd'),
+        page: 1
       });
     } else {
-      updateUrlParams(updates);
+      updateUrlParams({
+        date_from: from ? format(from, 'yyyy-MM-dd') : null,
+        date_to: to ? format(to, 'yyyy-MM-dd') : null,
+        page: 1
+      });
     }
-  }, [updateUrlParams]);
+  }, [updateUrlParams, getTodayDefault]);
 
   const handleStatusUpdate = async (orderId: string, status: string) => {
     try {
@@ -1691,57 +1705,54 @@ export function OrdersClient({
     setCaptureDialogOpen(true);
   };
 
-
-  console.log(selectedOrder, 'ORDDSS')
-
   return (
     <TooltipProvider>
       <div className="space-y-6">
         {/* Search Section */}
-<div className="flex flex-col sm:flex-row gap-4">
-  <div className="flex-1 relative">
-    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-    <Input
-      placeholder={`Search ${orderType === 'drafts' ? 'draft orders' : 'orders'} by ID, customer, email...`}
-      value={searchTerm}
-      onChange={(e) => handleSearchChange(e.target.value)}
-      className="pl-9 h-10"
-    />
-    {searchTerm && (
-      <button
-        onClick={() => handleSearchChange('')}
-        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-      >
-        <X className="h-4 w-4" />
-      </button>
-    )}
-  </div>
-  <div className="flex items-center gap-2">
-    <DateRangeFilter
-      dateFrom={dateFrom}
-      dateTo={dateTo}
-      onDateChange={handleDateChange}
-      onClear={() => handleDateChange(null, null)}
-    />
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={() => {
-        fetchOrders();
-        toast.success('Orders refreshed');
-      }}
-      disabled={isLoading}
-      className="h-10 gap-2"
-    >
-      {isLoading ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : (
-        <RefreshCw className="h-4 w-4" />
-      )}
-      <span className="hidden sm:inline">Refresh</span>
-    </Button>
-  </div>
-</div>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder={`Search ${orderType === 'drafts' ? 'draft orders' : 'orders'} by ID, customer, email...`}
+              value={searchTerm}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="pl-9 h-10"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => handleSearchChange('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <DateRangeFilter
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+              onDateChange={handleDateChange}
+              onClear={() => handleDateChange(null, null)}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                fetchOrders();
+                toast.success('Orders refreshed');
+              }}
+              disabled={isLoading}
+              className="h-10 gap-2"
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              <span className="hidden sm:inline">Refresh</span>
+            </Button>
+          </div>
+        </div>
 
         {/* Stats Cards */}
         <StatsCards orders={orders} orderType={orderType} isLoading={isLoading} />
@@ -1825,7 +1836,7 @@ export function OrdersClient({
                         <div className="space-y-1.5">
                           {orderType === 'orders' ? (
                             <StatusDropdown
-                              currentStatus={ order.status != 'completed' ? order?.delivery?.delivery_status != 'delivered' ? order?.delivery?.delivery_status : order.status : order.status }
+                              currentStatus={order.status != 'completed' ? order?.delivery?.delivery_status != 'delivered' ? order?.delivery?.delivery_status : order.status : order.status}
                               paymentStatus={order.payment_status}
                               onStatusChange={(status) => handleStatusUpdate(order.id, status)}
                               onCapturePayment={() => handleCaptureDialog(order)}
