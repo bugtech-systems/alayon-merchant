@@ -471,10 +471,10 @@ function getOrderColumns({
       header: "Status",
       cell: ({ row }: { row: any }) => {
         const order = row.original;
-          const isFulfilled = order.fulfillment_status === "fulfilled" || order.delivery_status === "delivered";
+          const isFulfilled = order.fulfillment_status === "fulfilled" || order.delivery_status === "delivered" || order?.status === 'completed';
           const isProcessing = order?.delivery_status == "company_preparing";
 
-          console.log(isFulfilled, order, 'orddss')
+          console.log(isFulfilled, order.display_id, order,'orddss')
         return (
           <Badge variant="outline" className="px-1.5 text-muted-foreground">
             {isFulfilled ? (

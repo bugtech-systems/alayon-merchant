@@ -1775,7 +1775,7 @@ export function OrdersClient({
                         <div className="space-y-1.5">
                           {orderType === 'orders' ? (
                             <StatusDropdown
-                              currentStatus={ order.status != 'completed' ? order?.delivery?.delivery_status ?? order.status : order.status }
+                              currentStatus={ order.status != 'completed' ? order?.delivery?.delivery_status != 'delivered' ? order?.delivery?.delivery_status : order.status : order.status }
                               paymentStatus={order.payment_status}
                               onStatusChange={(status) => handleStatusUpdate(order.id, status)}
                               onCapturePayment={() => handleCaptureDialog(order)}
