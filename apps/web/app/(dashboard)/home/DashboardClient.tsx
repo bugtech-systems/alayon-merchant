@@ -533,54 +533,12 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
         <PrintDialog open={cartPrint} onOpenChange={setCartPrint} cart={cartPrint} />
         
         {/* Notification Controls */}
-        <div className="flex justify-between items-center px-4 py-2 bg-background border-b">
-          <div className="flex items-center gap-4">
-            <NotificationBell 
-              notifications={notifications}
-              onMarkRead={markNotificationRead}
-              onClearAll={clearNotifications}
-            />
-            <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-2 text-sm">
               <span className={`inline-block w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
               <span className="text-muted-foreground">
                 {isConnected ? 'Connected' : 'Disconnected'}
               </span>
             </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleTestNotification}
-              className="text-sm px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md transition-colors"
-              aria-label="Test notification sound"
-            >
-              🔊 Test Sound
-            </button>
-            <button
-              onClick={toggleSound}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              aria-label={isSoundEnabled ? "Disable sound notifications" : "Enable sound notifications"}
-            >
-              {isSoundEnabled ? '🔊 Sound On' : '🔇 Sound Off'}
-            </button>
-            <button
-              onClick={toggleChat}
-              className="text-sm px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-md transition-colors"
-            >
-              💬 Chat
-            </button>
-            <span className="text-xs text-muted-foreground">
-              {isSoundLoaded ? '✅ Sound Ready' : '⏳ Loading Sound...'}
-            </span>
-            {audioError && (
-              <span className="text-xs text-red-500">
-                ⚠️ {audioError}
-              </span>
-            )}
-            <span className="text-xs text-muted-foreground">
-              Auto-refresh: 10s
-            </span>
-          </div>
-        </div>
         
         <CompanyOrdersTable
           data={data?.orders || []}
