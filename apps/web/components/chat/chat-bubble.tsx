@@ -2,13 +2,16 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { Send, X, Minimize2, Users, Circle, MoreVertical, ChevronDown } from "lucide-react";
+import { 
+  Send, X, Minimize2, Users, Circle, MoreVertical, ChevronDown, 
+  User, UserPlus, MessageCircle, Search, Check, Clock 
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { format, formatDistanceToNow, isToday, isYesterday } from "date-fns";
+import { format, isToday, isYesterday } from "date-fns";
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +19,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Message {
   id: string;
@@ -31,6 +42,18 @@ interface Message {
   customerId?: string;
   room?: string;
   groupId?: string;
+  recipientId?: string;
+  recipientName?: string;
+}
+
+interface OnlineUser {
+  id: string;
+  name: string;
+  role: string;
+  email?: string;
+  avatar?: string;
+  customerId?: string;
+  lastActive?: Date;
 }
 
 interface ChatBubbleProps {
@@ -40,9 +63,10 @@ interface ChatBubbleProps {
   unreadCount: number;
   isConnected: boolean;
   isAuthenticated: boolean;
-  onlineUsers: Array<{ id: string; name: string; role: string }>;
+  onlineUsers: OnlineUser[];
   typingUsers: Record<string, boolean>;
-  onSendMessage: (text: string, room?: string) => boolean;
+  onSendMessage: (text: string, room?: string, recipientId?: string) => boolean;
+  onSendPrivateMessage: (recipientId: string, text: string) => boolean;
   onMinimize: () => void;
   onClose: () => void;
   onMarkAllRead: () => void;
@@ -63,6 +87,7 @@ export function ChatBubble({
   onlineUsers,
   typingUsers,
   onSendMessage,
+  onSendPrivateMessage,
   onMinimize,
   onClose,
   onMarkAllRead,
@@ -78,6 +103,10 @@ export function ChatBubble({
   const [showOnlineUsers, setShowOnlineUsers] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [newMessageCount, setNewMessageCount] = useState(0);
+  const [selectedRecipient, setSelectedRecipient] = useState<OnlineUser | null>(null);
+  const [isPrivateMode, setIsPrivateMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isUserListOpen, setIsUserListOpen] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -85,20 +114,41 @@ export function ChatBubble({
   const messageEndRef = useRef<HTMLDivElement>(null);
   const previousMessagesLength = useRef(messages.length);
 
+  // Filter online users based on search
+  const filteredUsers = useMemo(() => {
+    if (!searchQuery.trim()) return onlineUsers;
+    return onlineUsers.filter(user => 
+      user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.role?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [onlineUsers, searchQuery]);
+
   // Sort messages: oldest to newest (ascending)
   const sortedMessages = useMemo(() => {
     return [...messages].sort((a, b) => {
       const timeA = new Date(a.timestamp).getTime();
       const timeB = new Date(b.timestamp).getTime();
-      return timeA - timeB; // Oldest first
+      return timeA - timeB;
     });
   }, [messages]);
 
+  // Filter messages for selected recipient
+  const filteredMessages = useMemo(() => {
+    if (!selectedRecipient) return sortedMessages;
+    
+    return sortedMessages.filter(msg => 
+      (msg.sender === selectedRecipient.id || msg.senderId === selectedRecipient.id) ||
+      (msg.recipientId === selectedRecipient.id) ||
+      (msg.sender === userId && msg.recipientId === selectedRecipient.id)
+    );
+  }, [sortedMessages, selectedRecipient, userId]);
+
   // Group messages by date
-  const getGroupedMessages = useCallback(() => {
+  const getGroupedMessages = useCallback((messagesToGroup: Message[]) => {
     const groups: { [key: string]: Message[] } = {};
     
-    sortedMessages.forEach(message => {
+    messagesToGroup.forEach(message => {
       const date = typeof message.timestamp === 'string' 
         ? new Date(message.timestamp) 
         : message.timestamp;
@@ -119,7 +169,11 @@ export function ChatBubble({
     });
     
     return groups;
-  }, [sortedMessages]);
+  }, []);
+
+  const groupedMessages = useMemo(() => {
+    return getGroupedMessages(filteredMessages);
+  }, [filteredMessages, getGroupedMessages]);
 
   // Check if scroll is at bottom
   const checkIfAtBottom = useCallback(() => {
@@ -144,30 +198,27 @@ export function ChatBubble({
 
   // Handle new messages and auto-scroll
   useEffect(() => {
-    const currentLength = sortedMessages.length;
+    const currentLength = filteredMessages.length;
     const prevLength = previousMessagesLength.current;
     
     if (currentLength > prevLength) {
-      // New message added
-      const isOwn = sortedMessages[currentLength - 1]?.isOwn;
+      const isOwn = filteredMessages[currentLength - 1]?.isOwn;
       
       if (isOwn || isAtBottom) {
-        // Auto-scroll if it's our message or we're at the bottom
         setTimeout(() => scrollToBottom(true), 50);
         setNewMessageCount(0);
       } else {
-        // Show "new messages" indicator
         setNewMessageCount(prev => prev + 1);
       }
     }
     
     previousMessagesLength.current = currentLength;
-  }, [sortedMessages, isAtBottom, scrollToBottom]);
+  }, [filteredMessages, isAtBottom, scrollToBottom]);
 
   // Initial scroll to bottom on mount
   useEffect(() => {
     setTimeout(() => scrollToBottom(false), 100);
-  }, [scrollToBottom]);
+  }, [scrollToBottom, filteredMessages]);
 
   // Focus input on open
   useEffect(() => {
@@ -194,27 +245,39 @@ export function ChatBubble({
     setNewMessageCount(0);
   }, [scrollToBottom]);
 
-  // Send message handler
-  const handleSendMessage = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!messageInput.trim() || !isConnected || !isAuthenticated || isSending) return;
+// components/chat/chat-bubble.tsx - Updated handleSendMessage
+const handleSendMessage = useCallback(async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!messageInput.trim() || !isConnected || !isAuthenticated || isSending) return;
 
-    setIsSending(true);
-    try {
-      const success = onSendMessage(messageInput.trim(), room);
-      if (success) {
-        setMessageInput("");
-        setIsTyping(false);
-        if (typingTimeoutRef.current) {
-          clearTimeout(typingTimeoutRef.current);
-        }
-        // Optimistically scroll to bottom
-        setTimeout(() => scrollToBottom(true), 50);
+  setIsSending(true);
+  try {
+    let success = false;
+    
+    if (isPrivateMode && selectedRecipient) {
+      // Use private message if available, otherwise fallback to group
+      if (onSendPrivateMessage) {
+        success = onSendPrivateMessage(selectedRecipient.id, messageInput.trim());
+      } else {
+        console.warn('onSendPrivateMessage is not available, falling back to group message');
+        success = onSendMessage(messageInput.trim(), room);
       }
-    } finally {
-      setIsSending(false);
+    } else {
+      success = onSendMessage(messageInput.trim(), room);
     }
-  }, [messageInput, isConnected, isAuthenticated, isSending, onSendMessage, room, scrollToBottom]);
+    
+    if (success) {
+      setMessageInput("");
+      setIsTyping(false);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      setTimeout(() => scrollToBottom(true), 50);
+    }
+  } finally {
+    setIsSending(false);
+  }
+}, [messageInput, isConnected, isAuthenticated, isSending, isPrivateMode, selectedRecipient, onSendMessage, onSendPrivateMessage, room, scrollToBottom]);
 
   // Typing handler
   const handleTyping = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -222,18 +285,14 @@ export function ChatBubble({
     
     if (e.target.value.length > 0 && !isTyping) {
       setIsTyping(true);
-      // Emit typing event would go here
     } else if (e.target.value.length === 0 && isTyping) {
       setIsTyping(false);
-      // Emit stop typing event would go here
     }
 
-    // Clear typing timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    // Set typing timeout
     typingTimeoutRef.current = setTimeout(() => {
       setIsTyping(false);
     }, 3000);
@@ -247,6 +306,28 @@ export function ChatBubble({
       }
     }
   }, [hasMoreMessages, isLoadingMore, onLoadMore]);
+
+  // Select a user to chat with
+  const handleSelectUser = useCallback((user: OnlineUser) => {
+    setSelectedRecipient(user);
+    setIsPrivateMode(true);
+    setIsUserListOpen(false);
+    setShowOnlineUsers(false);
+    // Clear messages and load chat history for this user
+    // This would trigger a new message fetch
+  }, []);
+
+  // Switch back to group chat
+  const handleSwitchToGroup = useCallback(() => {
+    setSelectedRecipient(null);
+    setIsPrivateMode(false);
+  }, []);
+
+  // Get user status indicator
+  const getUserStatus = useCallback((userId: string) => {
+    const user = onlineUsers.find(u => u.id === userId);
+    return user ? 'online' : 'offline';
+  }, [onlineUsers]);
 
   // Utility functions
   const getInitials = useCallback((name: string) => {
@@ -315,10 +396,18 @@ export function ChatBubble({
 
   // Check if there are any typing users (excluding self)
   const hasTypingUsers = useMemo(() => {
-    return Object.entries(typingUsers).some(([userId, typing]) => 
-      typing && userId !== userId
+    return Object.entries(typingUsers).some(([id, typing]) => 
+      typing && id !== userId
     );
   }, [typingUsers, userId]);
+
+  // Get current chat title
+  const chatTitle = useMemo(() => {
+    if (isPrivateMode && selectedRecipient) {
+      return `Chat with ${selectedRecipient.name}`;
+    }
+    return "Group Chat";
+  }, [isPrivateMode, selectedRecipient]);
 
   return (
     <div
@@ -332,18 +421,26 @@ export function ChatBubble({
         <div className="flex items-center gap-3">
           <div className="relative">
             <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
-              <MessageIcon className="h-5 w-5 text-primary" />
+              {isPrivateMode && selectedRecipient ? (
+                <Avatar className="h-9 w-9">
+                  <AvatarFallback className={cn(
+                    "text-white text-xs",
+                    getRoleColor(selectedRecipient.role)
+                  )}>
+                    {getInitials(selectedRecipient.name)}
+                  </AvatarFallback>
+                </Avatar>
+              ) : (
+                <MessageIcon className="h-5 w-5 text-primary" />
+              )}
             </div>
-            {isConnected && isAuthenticated && (
+            {isPrivateMode && selectedRecipient && isUserOnline(selectedRecipient.id) && (
               <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-background animate-pulse" />
-            )}
-            {(!isConnected || !isAuthenticated) && (
-              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-yellow-500 ring-2 ring-background" />
             )}
           </div>
           <div>
             <h3 className="text-sm font-semibold flex items-center gap-2">
-              Chat Support
+              {chatTitle}
               {!isConnected && (
                 <Badge variant="outline" className="text-[10px]">
                   Connecting...
@@ -361,7 +458,12 @@ export function ChatBubble({
                 isConnected && isAuthenticated ? "text-green-500" : "text-yellow-500"
               )} />
               {isConnected && isAuthenticated ? "Online" : "Connecting..."}
-              {onlineUsers.length > 0 && (
+              {isPrivateMode && selectedRecipient && (
+                <span className="ml-1">
+                  · {isUserOnline(selectedRecipient.id) ? 'Online' : 'Offline'}
+                </span>
+              )}
+              {!isPrivateMode && onlineUsers.length > 0 && (
                 <span className="ml-1">· {onlineUsers.length} online</span>
               )}
             </p>
@@ -369,20 +471,86 @@ export function ChatBubble({
         </div>
         
         <div className="flex items-center gap-1">
-          {/* Online users count */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 relative"
-            onClick={() => setShowOnlineUsers(!showOnlineUsers)}
-          >
-            <Users className="h-4 w-4" />
-            {onlineUsers.length > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[8px] text-primary-foreground">
-                {onlineUsers.length}
-              </span>
-            )}
-          </Button>
+          {/* User list toggle */}
+          <Dialog open={isUserListOpen} onOpenChange={setIsUserListOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 relative"
+              >
+                <Users className="h-4 w-4" />
+                {onlineUsers.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[8px] text-primary-foreground">
+                    {onlineUsers.length}
+                  </span>
+                )}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Select User to Chat</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search users..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                <ScrollArea className="h-[300px]">
+                  <div className="space-y-2">
+                    {/* Group chat option */}
+                    <Button
+                      variant={!isPrivateMode ? "default" : "ghost"}
+                      className="w-full justify-start"
+                      onClick={() => {
+                        handleSwitchToGroup();
+                        setIsUserListOpen(false);
+                      }}
+                    >
+                      <Users className="h-4 w-4 mr-2" />
+                      <span>Group Chat</span>
+                      {!isPrivateMode && <Check className="h-4 w-4 ml-auto" />}
+                    </Button>
+                    
+                    {filteredUsers.map((user) => (
+                      <Button
+                        key={user.id}
+                        variant={selectedRecipient?.id === user.id ? "default" : "ghost"}
+                        className="w-full justify-start"
+                        onClick={() => handleSelectUser(user)}
+                      >
+                        <Avatar className="h-6 w-6 mr-2">
+                          <AvatarFallback className={cn(
+                            "text-[8px] text-white",
+                            getRoleColor(user.role)
+                          )}>
+                            {getInitials(user.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col items-start flex-1">
+                          <span className="text-sm">{user.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {getRoleLabel(user.role)}
+                          </span>
+                        </div>
+                        {selectedRecipient?.id === user.id && (
+                          <Check className="h-4 w-4 ml-auto" />
+                        )}
+                        {isUserOnline(user.id) && (
+                          <Circle className="h-2 w-2 ml-2 fill-green-500 text-green-500" />
+                        )}
+                      </Button>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            </DialogContent>
+          </Dialog>
           
           <Button
             variant="ghost"
@@ -403,6 +571,11 @@ export function ChatBubble({
               <DropdownMenuItem onClick={onMarkAllRead}>
                 Mark all as read
               </DropdownMenuItem>
+              {isPrivateMode && selectedRecipient && (
+                <DropdownMenuItem onClick={handleSwitchToGroup}>
+                  Switch to group chat
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => {
                 // Clear chat functionality
               }}>
@@ -422,26 +595,6 @@ export function ChatBubble({
         </div>
       </div>
 
-      {/* Online Users Panel */}
-      {showOnlineUsers && (
-        <div className="border-b bg-muted/30 px-4 py-2 max-h-32 overflow-y-auto">
-          <p className="text-xs font-medium text-muted-foreground mb-2">Online Users</p>
-          <div className="flex flex-wrap gap-2">
-            {onlineUsers.map((user) => (
-              <div key={user.id} className="flex items-center gap-1.5 bg-background px-2 py-1 rounded-full shadow-sm">
-                <Avatar className="h-5 w-5">
-                  <AvatarFallback className="text-[8px]">
-                    {getInitials(user.name)}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-xs">{user.name}</span>
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Messages */}
       <div className="relative flex-1">
         <ScrollArea 
@@ -450,14 +603,23 @@ export function ChatBubble({
           onScrollCapture={handleScroll}
           onScroll={handleScrollTop}
         >
-          {sortedMessages.length === 0 ? (
+          {filteredMessages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-center">
               <div className="rounded-full bg-muted p-4">
-                <MessageIcon className="h-8 w-8 text-muted-foreground" />
+                {isPrivateMode ? (
+                  <User className="h-8 w-8 text-muted-foreground" />
+                ) : (
+                  <MessageIcon className="h-8 w-8 text-muted-foreground" />
+                )}
               </div>
-              <h4 className="mt-4 text-sm font-medium">No messages yet</h4>
+              <h4 className="mt-4 text-sm font-medium">
+                {isPrivateMode ? `No messages with ${selectedRecipient?.name}` : "No messages yet"}
+              </h4>
               <p className="text-xs text-muted-foreground max-w-[200px]">
-                Start a conversation with our team. We're here to help!
+                {isPrivateMode 
+                  ? `Start a private conversation with ${selectedRecipient?.name}`
+                  : "Start a conversation with our team. We're here to help!"
+                }
               </p>
             </div>
           ) : (
@@ -475,7 +637,7 @@ export function ChatBubble({
               )}
               
               {/* Messages grouped by date */}
-              {Object.entries(getGroupedMessages()).map(([date, dateMessages]) => (
+              {Object.entries(groupedMessages).map(([date, dateMessages]) => (
                 <div key={date}>
                   <div className="flex justify-center mb-3">
                     <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
@@ -601,7 +763,13 @@ export function ChatBubble({
         <Input
           ref={inputRef}
           type="text"
-          placeholder={isConnected && isAuthenticated ? "Type a message..." : "Connecting..."}
+          placeholder={
+            isPrivateMode && selectedRecipient
+              ? `Message ${selectedRecipient.name}...`
+              : isConnected && isAuthenticated 
+                ? "Type a message..." 
+                : "Connecting..."
+          }
           value={messageInput}
           onChange={handleTyping}
           className="flex-1"
@@ -627,7 +795,11 @@ export function ChatBubble({
         <p className="text-[10px] text-muted-foreground text-center">
           {isConnected && isAuthenticated ? (
             <>
-              Chat secured · {onlineUsers.length} users online
+              {isPrivateMode && selectedRecipient ? (
+                <>Private chat with {selectedRecipient.name} · {isUserOnline(selectedRecipient.id) ? 'Online' : 'Offline'}</>
+              ) : (
+                <>Chat secured · {onlineUsers.length} users online</>
+              )}
               {unreadCount > 0 && ` · ${unreadCount} unread`}
             </>
           ) : (

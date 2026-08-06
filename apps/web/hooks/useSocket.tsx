@@ -17,6 +17,8 @@ export interface Message {
   senderId?: string;
   senderName?: string;
   senderRole?: string;
+  recipientId?: string;
+  recipientName?: string;
   timestamp: Date | string;
   read: boolean;
   readBy: string[];
@@ -27,13 +29,23 @@ export interface Message {
   isOwn?: boolean;
   customerId?: string;
   room?: string;
+  private?: boolean;
+}
+
+export interface OnlineUser {
+  id: string;
+  name: string;
+  role: string;
+  email?: string;
+  customerId?: string;
+  lastActive?: Date;
 }
 
 export interface Notification {
   id: string;
   title: string;
   message: string;
-  type: 'message' | 'order' | 'status_update' | 'customer_message' | 'system';
+  type: 'message' | 'order' | 'status_update' | 'customer_message' | 'system' | 'private_message';
   read: boolean;
   timestamp: Date;
   data?: any;
@@ -52,13 +64,13 @@ export function useSocket({
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [onlineUsers, setOnlineUsers] = useState<Array<{ id: string; name: string; role: string }>>([]);
+  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
   
   const socketRef = useRef<Socket | null>(null);
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
-  const messageQueue = useRef<Message[]>([]);
+  const messageQueue = useRef<any[]>([]);
   const isOwnMessageRef = useRef<Set<string>>(new Set());
 
   // Initialize socket connection
@@ -94,7 +106,6 @@ export function useSocket({
       setIsConnected(true);
       reconnectAttempts.current = 0;
       
-      // Authenticate
       newSocket.emit('authenticate', { 
         userId, 
         role, 
@@ -109,7 +120,6 @@ export function useSocket({
       setIsAuthenticated(false);
       
       if (reason === 'io server disconnect') {
-        // Reconnect manually
         newSocket.connect();
       }
     });
@@ -135,7 +145,11 @@ export function useSocket({
       // Process any queued messages
       if (messageQueue.current.length > 0) {
         messageQueue.current.forEach(msg => {
-          sendMessage(msg.text, msg.room);
+          if (msg.type === 'group') {
+            sendMessage(msg.text, msg.room, msg.targetRooms);
+          } else if (msg.type === 'private') {
+            sendPrivateMessage(msg.recipientId, msg.text);
+          }
         });
         messageQueue.current = [];
       }
@@ -150,12 +164,14 @@ export function useSocket({
     newSocket.on('user_joined', (data) => {
       console.log('User joined:', data);
       setOnlineUsers(prev => {
-        // Avoid duplicates
         if (prev.some(u => u.id === data.userId)) return prev;
         return [...prev, { 
           id: data.userId, 
-          name: data.userName || data.role, 
-          role: data.role 
+          name: data.userName || data.role || data.userId,
+          role: data.role || 'guest',
+          email: data.email,
+          customerId: data.customerId,
+          lastActive: new Date()
         }];
       });
     });
@@ -163,6 +179,14 @@ export function useSocket({
     newSocket.on('user_left', (data) => {
       console.log('User left:', data);
       setOnlineUsers(prev => prev.filter(u => u.id !== data.userId));
+    });
+
+    // Online users list
+    newSocket.on('online_users', (data) => {
+      console.log('Online users list received:', data);
+      if (data.users && Array.isArray(data.users)) {
+        setOnlineUsers(data.users);
+      }
     });
 
     // Chat history from Redis
@@ -188,13 +212,10 @@ export function useSocket({
     newSocket.on('group_message_received', (data) => {
       console.log('Group message received:', data);
       
-      // Check if this is a message from self
       const isOwn = data.sender === userId || data.senderId === userId;
       
-      // Skip if it's our own message (already added optimistically)
       if (isOwn && isOwnMessageRef.current.has(data.id)) {
         isOwnMessageRef.current.delete(data.id);
-        // Update existing message with server data
         setMessages(prev => 
           prev.map(msg => 
             msg.id === data.id 
@@ -211,10 +232,7 @@ export function useSocket({
         return;
       }
 
-      // Skip own messages entirely if not already in state
-      if (isOwn) {
-        return;
-      }
+      if (isOwn) return;
 
       const message: Message = {
         id: data.id || `msg_${Date.now()}`,
@@ -236,8 +254,6 @@ export function useSocket({
       };
       
       setMessages(prev => [...prev, message]);
-      
-      // Increment unread count for messages not from self
       setUnreadCount(prev => prev + 1);
       
       // Show notification for new message
@@ -282,14 +298,29 @@ export function useSocket({
         senderId: data.senderId,
         senderName: data.senderName || 'Unknown',
         senderRole: data.senderRole || 'guest',
+        recipientId: data.recipientId,
+        recipientName: data.recipientName,
         timestamp: new Date(data.timestamp),
         read: data.read || false,
         readBy: data.readBy || [],
-        isOwn: false
+        isOwn: false,
+        private: true
       };
       
       setMessages(prev => [...prev, message]);
       setUnreadCount(prev => prev + 1);
+      
+      // Show notification for private message
+      const notification: Notification = {
+        id: `private_msg_${Date.now()}`,
+        title: `Private message from ${data.senderName || 'Unknown'}`,
+        message: data.text || data.content,
+        type: 'private_message',
+        read: false,
+        timestamp: new Date(data.timestamp),
+        data: message
+      };
+      setNotifications(prev => [notification, ...prev]);
     });
 
     // Customer message
@@ -299,7 +330,6 @@ export function useSocket({
       const isOwn = data.sender === userId || data.senderId === userId || data.customerId === customerId;
       
       if (isOwn) {
-        // Update optimistic message
         setMessages(prev => 
           prev.map(msg => 
             msg.id === data.id 
@@ -348,7 +378,6 @@ export function useSocket({
         [data.userId]: data.isTyping
       }));
       
-      // Auto-clear typing after 3 seconds if no new event
       if (data.isTyping) {
         setTimeout(() => {
           setTypingUsers(prev => ({
@@ -359,43 +388,9 @@ export function useSocket({
       }
     });
 
-    // Order notifications
-    newSocket.on('order_received', (data) => {
-      console.log('Order received:', data);
-      
-      const notification: Notification = {
-        id: `order_${Date.now()}`,
-        title: data.notification?.title || 'New Order',
-        message: data.notification?.message || `Order #${data.order?.display_id} received`,
-        type: 'order',
-        read: false,
-        timestamp: new Date(data.timestamp),
-        data: data
-      };
-      
-      setNotifications(prev => [notification, ...prev]);
-    });
-
-    newSocket.on('order_updated', (data) => {
-      console.log('Order updated:', data);
-      
-      const notification: Notification = {
-        id: `update_${Date.now()}`,
-        title: data.notification?.title || 'Order Updated',
-        message: data.notification?.message || `Order #${data.order?.display_id} updated`,
-        type: 'status_update',
-        read: false,
-        timestamp: new Date(data.timestamp),
-        data: data
-      };
-      
-      setNotifications(prev => [notification, ...prev]);
-    });
-
     // Message sent acknowledgment
     newSocket.on('message_sent', (data) => {
       console.log('Message sent acknowledgment:', data);
-      // Update the optimistic message with the server-generated ID
       if (data.id) {
         setMessages(prev => 
           prev.map(msg => 
@@ -419,11 +414,11 @@ export function useSocket({
     };
   }, [userId, role, customerId, token, serverUrl]);
 
-  // Send message function with Redis
+  // Send group message
   const sendMessage = useCallback((text: string, room?: string, targetRooms?: string[]) => {
     if (!socketRef.current || !isAuthenticated) {
       console.warn('Socket not authenticated, queuing message');
-      messageQueue.current.push({ text, room });
+      messageQueue.current.push({ type: 'group', text, room, targetRooms });
       return false;
     }
     
@@ -448,7 +443,6 @@ export function useSocket({
 
       socketRef.current.emit('group_message', messageData);
       
-      // Optimistically add message to local state
       const tempMessage: Message = {
         id: tempId,
         text: text.trim(),
@@ -476,6 +470,64 @@ export function useSocket({
     }
   }, [role, userId, isAuthenticated]);
 
+  // Send private message
+  const sendPrivateMessage = useCallback((recipientId: string, text: string) => {
+    if (!socketRef.current || !isAuthenticated) {
+      console.warn('Socket not authenticated, queuing private message');
+      messageQueue.current.push({ type: 'private', recipientId, text });
+      return false;
+    }
+    
+    if (!text.trim()) {
+      console.warn('Cannot send empty message');
+      return false;
+    }
+
+    if (!recipientId) {
+      console.warn('Recipient ID required for private message');
+      return false;
+    }
+
+    try {
+      const tempId = `temp_${Date.now()}`;
+      const recipient = onlineUsers.find(u => u.id === recipientId);
+      
+      socketRef.current.emit('private_message', {
+        recipientId,
+        text: text.trim(),
+        senderName: role === 'kitchen' ? 'Kitchen Staff' : 
+                    role === 'cashier' ? 'Cashier' : 'User',
+        timestamp: new Date().toISOString(),
+        tempId: tempId
+      });
+      
+      const tempMessage: Message = {
+        id: tempId,
+        text: text.trim(),
+        sender: userId || 'user',
+        senderId: userId,
+        senderName: role === 'kitchen' ? 'Kitchen Staff' : 
+                    role === 'cashier' ? 'Cashier' : 'User',
+        senderRole: role,
+        recipientId: recipientId,
+        recipientName: recipient?.name || 'Unknown',
+        timestamp: new Date(),
+        read: true,
+        readBy: [userId || 'user'],
+        isOwn: true,
+        private: true
+      };
+      
+      setMessages(prev => [...prev, tempMessage]);
+      isOwnMessageRef.current.add(tempId);
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to send private message:', error);
+      return false;
+    }
+  }, [role, userId, isAuthenticated, onlineUsers]);
+
   // Send customer message
   const sendCustomerMessage = useCallback((text: string, customerId: string) => {
     if (!socketRef.current || !isAuthenticated) {
@@ -498,7 +550,6 @@ export function useSocket({
         tempId: tempId
       });
       
-      // Optimistically add message
       const tempMessage: Message = {
         id: tempId,
         text: text.trim(),
@@ -523,61 +574,12 @@ export function useSocket({
     }
   }, [role, userId, isAuthenticated]);
 
-  // Send private message
-  const sendPrivateMessage = useCallback((recipientId: string, text: string) => {
-    if (!socketRef.current || !isAuthenticated) {
-      console.warn('Socket not authenticated');
-      return false;
-    }
-    
-    if (!text.trim()) {
-      console.warn('Cannot send empty message');
-      return false;
-    }
-
-    try {
-      const tempId = `temp_${Date.now()}`;
-      socketRef.current.emit('private_message', {
-        recipientId,
-        text: text.trim(),
-        senderName: role === 'kitchen' ? 'Kitchen Staff' : 
-                    role === 'cashier' ? 'Cashier' : 'User',
-        timestamp: new Date().toISOString(),
-        tempId: tempId
-      });
-      
-      // Optimistically add message
-      const tempMessage: Message = {
-        id: tempId,
-        text: text.trim(),
-        sender: userId || 'user',
-        senderId: userId,
-        senderName: role === 'kitchen' ? 'Kitchen Staff' : 
-                    role === 'cashier' ? 'Cashier' : 'User',
-        senderRole: role,
-        timestamp: new Date(),
-        read: true,
-        readBy: [userId || 'user'],
-        isOwn: true
-      };
-      
-      setMessages(prev => [...prev, tempMessage]);
-      isOwnMessageRef.current.add(tempId);
-      
-      return true;
-    } catch (error) {
-      console.error('Failed to send private message:', error);
-      return false;
-    }
-  }, [role, userId, isAuthenticated]);
-
   // Mark message as read
   const markMessageRead = useCallback((messageId: string) => {
     if (!socketRef.current || !isAuthenticated) return;
     
     socketRef.current.emit('mark_message_read', { messageId });
     
-    // Update local state
     setMessages(prev => 
       prev.map(msg => 
         msg.id === messageId 
@@ -586,17 +588,15 @@ export function useSocket({
       )
     );
     
-    // Decrease unread count if not own message
     setUnreadCount(prev => Math.max(0, prev - 1));
   }, [userId, isAuthenticated]);
 
-  // Mark all messages as read in a room
+  // Mark all messages as read
   const markAllRead = useCallback((room?: string) => {
     if (!socketRef.current || !isAuthenticated) return;
     
     socketRef.current.emit('mark_all_read', { room: room || role });
     
-    // Update local state
     setMessages(prev => 
       prev.map(msg => ({ ...msg, read: true }))
     );
@@ -608,6 +608,13 @@ export function useSocket({
     if (!socketRef.current || !isAuthenticated) return;
     
     socketRef.current.emit('get_chat_history', { limit, offset, room });
+  }, [isAuthenticated]);
+
+  // Get private chat history with a specific user
+  const getPrivateChatHistory = useCallback((userId: string, limit = 50, offset = 0) => {
+    if (!socketRef.current || !isAuthenticated) return;
+    
+    socketRef.current.emit('get_private_history', { userId, limit, offset });
   }, [isAuthenticated]);
 
   // Join a room
@@ -623,9 +630,13 @@ export function useSocket({
   }, [isAuthenticated]);
 
   // Send typing indicator
-  const sendTyping = useCallback((room: string, isTyping: boolean) => {
+  const sendTyping = useCallback((room: string, isTyping: boolean, recipientId?: string) => {
     if (!socketRef.current || !isAuthenticated) return;
-    socketRef.current.emit('typing', { room, isTyping });
+    socketRef.current.emit('typing', { 
+      room, 
+      isTyping, 
+      recipientId: recipientId 
+    });
   }, [isAuthenticated]);
 
   // Notification management
@@ -654,6 +665,14 @@ export function useSocket({
   // Get messages filtered by room
   const getRoomMessages = useCallback((room: string) => {
     return messages.filter(msg => msg.room === room || msg.groupId === room);
+  }, [messages]);
+
+  // Get private messages with a specific user
+  const getPrivateMessages = useCallback((userId: string) => {
+    return messages.filter(msg => 
+      (msg.sender === userId || msg.senderId === userId) ||
+      (msg.recipientId === userId)
+    );
   }, [messages]);
 
   // Get unread messages
@@ -691,11 +710,12 @@ export function useSocket({
     onlineUsers,
     typingUsers,
     sendMessage,
-    sendCustomerMessage,
     sendPrivateMessage,
+    sendCustomerMessage,
     markMessageRead,
     markAllRead,
     getChatHistory,
+    getPrivateChatHistory,
     joinRoom,
     leaveRoom,
     sendTyping,
@@ -704,6 +724,7 @@ export function useSocket({
     clearNotifications,
     getUnreadNotifications,
     getRoomMessages,
+    getPrivateMessages,
     getUnreadMessages,
     clearMessages,
     reconnect,

@@ -13,7 +13,6 @@ import { completeOrder, fulfillOrder } from "@/lib/actions/orders";
 import { KpiCards } from "./rider/_components/kpi-cards";
 import { useSocket } from "@/hooks/useSocket";
 import { NotificationBell } from "@/components/notification/NotificationBell";
-import { ChatWidget } from "@/components/chat/ChatWidget";
 import { Toaster } from "sonner";
 import { toast } from "sonner";
 import { acceptDelivery } from "@/lib/actions";
@@ -603,18 +602,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           onCompleteOrder={(order, stock_location_id) => handleConfirmOrder(order, stock_location_id) as any}
         />
 
-        {/* Chat Widget */}
-        {showChat && (
-          <ChatWidget
-            isOpen={showChat}
-            onClose={toggleChat}
-            messages={messages}
-            onSendMessage={sendMessage}
-            userRole={userRole}
-            userName={user.first_name || user.email}
-            userId={user.id}
-          />
-        )}
+     
       </div>
     );
   }
@@ -625,36 +613,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
       <div className="@container/main flex flex-col gap-4 md:gap-6 relative">
         <Toaster position="top-right" richColors />
         
-        {/* Notification Controls */}
-        <div className="flex justify-between items-center px-4 py-2 bg-background border-b">
-          <div className="flex items-center gap-4">
-            <NotificationBell 
-              notifications={notifications}
-              onMarkRead={markNotificationRead}
-              onClearAll={clearNotifications}
-            />
-            <div className="flex items-center gap-2 text-sm">
-              <span className={`inline-block w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-              <span className="text-muted-foreground">
-                {isConnected ? 'Connected' : 'Disconnected'}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={toggleSound}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {isSoundEnabled ? '🔊 Sound On' : '🔇 Sound Off'}
-            </button>
-            <button
-              onClick={toggleChat}
-              className="text-sm px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-md transition-colors"
-            >
-              💬 Chat
-            </button>
-          </div>
-        </div>
+ 
 
         {/* KPI Cards */}
         <KpiCards
@@ -670,18 +629,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
          
         <DriverDashboard user={user}/>
 
-        {/* Chat Widget */}
-        {showChat && (
-          <ChatWidget
-            isOpen={showChat}
-            onClose={toggleChat}
-            messages={messages}
-            onSendMessage={sendMessage}
-            userRole={userRole}
-            userName={user.first_name || user.email}
-            userId={user.id}
-          />
-        )}
+       
       </div>
     );
   }
@@ -693,50 +641,10 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
         <Toaster position="top-right" richColors />
         
         {/* Notification Controls */}
-        <div className="flex justify-between items-center px-4 py-2 bg-background border-b">
-          <div className="flex items-center gap-4">
-            <NotificationBell 
-              notifications={notifications}
-              onMarkRead={markNotificationRead}
-              onClearAll={clearNotifications}
-            />
-            <div className="flex items-center gap-2 text-sm">
-              <span className={`inline-block w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-              <span className="text-muted-foreground">
-                {isConnected ? 'Connected' : 'Disconnected'}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={toggleSound}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {isSoundEnabled ? '🔊 Sound On' : '🔇 Sound Off'}
-            </button>
-            <button
-              onClick={toggleChat}
-              className="text-sm px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-md transition-colors"
-            >
-              💬 Chat
-            </button>
-          </div>
-        </div>
 
         <DriverDashboard user={user}/>
 
-        {/* Chat Widget */}
-        {showChat && (
-          <ChatWidget
-            isOpen={showChat}
-            onClose={toggleChat}
-            messages={messages}
-            onSendMessage={sendMessage}
-            userRole={userRole}
-            userName={user.first_name || user.email}
-            userId={user.id}
-          />
-        )}
+
       </div>
     );
   }

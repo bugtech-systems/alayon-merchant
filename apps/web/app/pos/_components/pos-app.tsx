@@ -18,7 +18,6 @@ import { usePosProducts } from "@/hooks/use-pos-products";
 import { usePosDrafts } from "@/hooks/use-pos-drafts";
 import { usePosBeepers } from "@/hooks/use-pos-beepers";
 import { useSocket } from "@/hooks/useSocket";
-import { ChatWidget } from "@/components/chat/ChatWidget";
 import { NotificationBell } from "@/components/notification/NotificationBell";
 import { Region, Customer } from "@/types";
 import { Badge } from "@/components/ui/badge";
@@ -703,17 +702,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
           </Sheet>
         </div>
         
-        {/* Chat Widget for Mobile */}
-        <ChatWidget
-          isOpen={showChat}
-          onClose={() => setShowChat(false)}
-          messages={messages}
-          onSendMessage={sendMessage}
-          userRole="cashier"
-          userName={user?.first_name || 'Cashier'}
-          userId={user?.id}
-          position="bottom-left"
-        />
+
 
         {/* Notification Panel for Mobile */}
         {showNotificationPanel && (
@@ -816,32 +805,8 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
                 <span className={`inline-block w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
                 {isConnected ? 'Online' : 'Offline'}
               </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="relative"
-                onClick={() => setShowChat(!showChat)}
-              >
-                <MessageCircle className="h-3 w-3 mr-1" />
-                Chat
-                {messages.filter(m => !m.read).length > 0 && (
-                  <Badge variant="destructive" className="ml-1 px-1.5 py-0.5 text-xs">
-                    {messages.filter(m => !m.read).length}
-                  </Badge>
-                )}
-              </Button>
-              <NotificationBell 
-                notifications={notifications}
-                onMarkRead={markNotificationRead}
-                onClearAll={clearNotifications}
-              />
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setIsSoundEnabled(!isSoundEnabled)}
-              >
-                {isSoundEnabled ? '🔊' : '🔇'}
-              </Button>
+
+
               <Button variant="outline" size="sm" onClick={refreshProducts}>
                 <RefreshCw className="h-3 w-3 mr-1" /> Refresh
               </Button>
@@ -907,17 +872,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
         <CartSidebar {...cartSidebarProps} />
       </aside>
       
-      {/* Chat Widget */}
-      <ChatWidget
-        isOpen={showChat}
-        onClose={() => setShowChat(false)}
-        messages={messages}
-        onSendMessage={sendMessage}
-        userRole="cashier"
-        userName={user?.first_name || 'Cashier'}
-        userId={user?.id}
-        position="bottom-right"
-      />
+
       
       {/* Dialogs */}
       <DraftsDialog 
