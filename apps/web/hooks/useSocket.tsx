@@ -56,7 +56,7 @@ export function useSocket({
   role = 'guest', 
   customerId, 
   token,
-  serverUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3500'
+  serverUrl = process.env.SMS_URL || 'http://localhost:3500'
 }: UseSocketProps) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);

@@ -8,7 +8,7 @@ import { ChatBubble } from "./chat-bubble";
 import { useSocket } from "@/hooks/useSocket";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { audioManager } from "@/lib/audio-manager";
+import { getAudioManager } from "@/lib/audio-manager";
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -16,9 +16,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-// Import Button for dropdown
 import { Button } from "@/components/ui/button";
-
 
 interface ChatButtonProps {
   userId: string;
@@ -47,6 +45,7 @@ export function ChatButton({
   const [notificationEnabled, setNotificationEnabled] = useState(true);
   const [lastMessageId, setLastMessageId] = useState<string | null>(null);
   const [isBuzzing, setIsBuzzing] = useState(false);
+  const [audioManager, setAudioManager] = useState<any>(null);
   const buzzerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const {
@@ -60,8 +59,6 @@ export function ChatButton({
     sendPrivateMessage,
     markAllRead,
     getChatHistory,
-    getPrivateChatHistory,
-    setMessages
   } = useSocket({
     userId,
     role: userRole,
@@ -71,17 +68,24 @@ export function ChatButton({
     serverUrl
   });
 
-  // Load sound preferences from localStorage
+  // Initialize audio manager on client side only
   useEffect(() => {
-    const savedSound = localStorage.getItem('chat-sound-enabled');
-    if (savedSound !== null) {
-      setSoundEnabled(savedSound === 'true');
-      audioManager.setEnabled(savedSound === 'true');
-    }
-    
-    const savedNotifications = localStorage.getItem('chat-notifications-enabled');
-    if (savedNotifications !== null) {
-      setNotificationEnabled(savedNotifications === 'true');
+    if (typeof window !== 'undefined') {
+      const manager = getAudioManager();
+      setAudioManager(manager);
+      
+      // Load sound preferences
+      const savedSound = localStorage.getItem('chat-sound-enabled');
+      if (savedSound !== null) {
+        const enabled = savedSound === 'true';
+        setSoundEnabled(enabled);
+        manager.setEnabled(enabled);
+      }
+      
+      const savedNotifications = localStorage.getItem('chat-notifications-enabled');
+      if (savedNotifications !== null) {
+        setNotificationEnabled(savedNotifications === 'true');
+      }
     }
   }, []);
 
@@ -101,7 +105,7 @@ export function ChatButton({
 
   // Handle new messages - play sounds and show notifications
   useEffect(() => {
-    if (messages.length === 0) return;
+    if (messages.length === 0 || !audioManager) return;
 
     const lastMessage = messages[messages.length - 1];
     
@@ -110,20 +114,28 @@ export function ChatButton({
       setLastMessageId(lastMessage.id);
       
       // Play ringtone for new message
-      if (soundEnabled) {
-        audioManager.playRingtone();
-        audioManager.vibrate([100, 50, 100]);
+      if (soundEnabled && audioManager.isAudioAvailable()) {
+        try {
+          audioManager.playRingtone();
+          audioManager.vibrate([100, 50, 100]);
+        } catch (error) {
+          console.warn('Failed to play ringtone:', error);
+        }
       }
       
       // Show browser notification
       if (notificationEnabled && typeof window !== 'undefined' && 'Notification' in window) {
         if (Notification.permission === 'granted') {
-          new Notification('New Message', {
-            body: `${lastMessage.senderName || 'Someone'}: ${lastMessage.text}`,
-            icon: '/favicon.ico',
-            tag: 'chat-message',
-            requireInteraction: true,
-          });
+          try {
+            new Notification('New Message', {
+              body: `${lastMessage.senderName || 'Someone'}: ${lastMessage.text}`,
+              icon: '/favicon.ico',
+              tag: 'chat-message',
+              requireInteraction: true,
+            });
+          } catch (error) {
+            console.warn('Failed to show notification:', error);
+          }
         }
       }
       
@@ -132,15 +144,22 @@ export function ChatButton({
         triggerBuzzer();
       }
     }
-  }, [messages, lastMessageId, soundEnabled, notificationEnabled]);
+  }, [messages, lastMessageId, soundEnabled, notificationEnabled, audioManager]);
 
   // Buzzer effect for group messages
   const triggerBuzzer = useCallback(() => {
-    if (isBuzzing) return;
+    if (isBuzzing || !audioManager) return;
     
     setIsBuzzing(true);
-    audioManager.playBuzzer();
-    audioManager.vibrate([200, 100, 200, 100, 200]);
+    
+    try {
+      if (audioManager.isAudioAvailable()) {
+        audioManager.playBuzzer();
+        audioManager.vibrate([200, 100, 200, 100, 200]);
+      }
+    } catch (error) {
+      console.warn('Failed to play buzzer:', error);
+    }
     
     // Reset buzzer state after a delay
     if (buzzerTimeoutRef.current) {
@@ -149,7 +168,7 @@ export function ChatButton({
     buzzerTimeoutRef.current = setTimeout(() => {
       setIsBuzzing(false);
     }, 1000);
-  }, [isBuzzing]);
+  }, [isBuzzing, audioManager]);
 
   // Handle window focus to refresh unread count
   useEffect(() => {
@@ -166,7 +185,7 @@ export function ChatButton({
   // Request notification permission
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
+      Notification.requestPermission().catch(() => {});
     }
   }, []);
 
@@ -176,9 +195,11 @@ export function ChatButton({
     
     if (newState) {
       markAllRead(`company:${companyId}`);
-      audioManager.resume();
+      if (audioManager) {
+        audioManager.resume();
+      }
     }
-  }, [isOpen, markAllRead, companyId]);
+  }, [isOpen, markAllRead, companyId, audioManager]);
 
   const handleMinimize = useCallback(() => {
     setIsMinimized(true);
@@ -197,14 +218,22 @@ export function ChatButton({
   const toggleSound = useCallback(() => {
     const newState = !soundEnabled;
     setSoundEnabled(newState);
-    audioManager.setEnabled(newState);
+    
+    if (audioManager) {
+      audioManager.setEnabled(newState);
+    }
+    
     localStorage.setItem('chat-sound-enabled', String(newState));
     
     // Play a test sound if enabled
-    if (newState) {
-      audioManager.playNotification();
+    if (newState && audioManager && audioManager.isAudioAvailable()) {
+      try {
+        audioManager.playNotification();
+      } catch (error) {
+        console.warn('Failed to play test sound:', error);
+      }
     }
-  }, [soundEnabled]);
+  }, [soundEnabled, audioManager]);
 
   // Toggle notifications
   const toggleNotifications = useCallback(() => {
@@ -229,6 +258,29 @@ export function ChatButton({
   const handleLoadMore = useCallback(() => {
     getChatHistory(50, messages.length, companyId);
   }, [getChatHistory, messages.length, companyId]);
+
+  // Safe audio test functions
+  const testRingtone = useCallback(() => {
+    if (audioManager && audioManager.isAudioAvailable()) {
+      try {
+        audioManager.playRingtone();
+        audioManager.vibrate([100, 50, 100, 50, 100]);
+      } catch (error) {
+        console.warn('Failed to test ringtone:', error);
+      }
+    }
+  }, [audioManager]);
+
+  const testBuzzer = useCallback(() => {
+    if (audioManager && audioManager.isAudioAvailable()) {
+      try {
+        audioManager.playBuzzer();
+        audioManager.vibrate([200, 100, 200, 100, 200]);
+      } catch (error) {
+        console.warn('Failed to test buzzer:', error);
+      }
+    }
+  }, [audioManager]);
 
   // Get unread count for the company
   const companyUnreadCount = unreadCount;
@@ -419,20 +471,16 @@ export function ChatButton({
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem 
-              onClick={() => {
-                audioManager.playRingtone();
-                audioManager.vibrate([100, 50, 100, 50, 100]);
-              }}
+              onClick={testRingtone}
               className="cursor-pointer"
+              disabled={!audioManager || !audioManager.isAudioAvailable()}
             >
               <span>Test Ringtone</span>
             </DropdownMenuItem>
             <DropdownMenuItem 
-              onClick={() => {
-                audioManager.playBuzzer();
-                audioManager.vibrate([200, 100, 200, 100, 200]);
-              }}
+              onClick={testBuzzer}
               className="cursor-pointer"
+              disabled={!audioManager || !audioManager.isAudioAvailable()}
             >
               <span>Test Buzzer</span>
             </DropdownMenuItem>
