@@ -1370,13 +1370,31 @@ export function OrdersClient({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [captureDialogOpen, setCaptureDialogOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(initialFilters?.search || '');
-  const [dateFrom, setDateFrom] = useState<Date | null>(
-    initialFilters?.date_from ? new Date(initialFilters?.date_from) : null
-  );
-  const [dateTo, setDateTo] = useState<Date | null>(
-    initialFilters?.date_to ? new Date(initialFilters?.date_to) : null
-  );
+  
+  // FIX: Initialize from URL params first, then fallback to initialFilters
+  const [searchTerm, setSearchTerm] = useState(() => {
+    const urlSearch = searchParams.get('search');
+    return urlSearch || initialFilters?.search || '';
+  });
+  
+  const [dateFrom, setDateFrom] = useState<Date | null>(() => {
+    const urlDateFrom = searchParams.get('date_from');
+    if (urlDateFrom) {
+      const parsed = new Date(urlDateFrom);
+      return isNaN(parsed.getTime()) ? null : parsed;
+    }
+    return initialFilters?.date_from ? new Date(initialFilters.date_from) : null;
+  });
+  
+  const [dateTo, setDateTo] = useState<Date | null>(() => {
+    const urlDateTo = searchParams.get('date_to');
+    if (urlDateTo) {
+      const parsed = new Date(urlDateTo);
+      return isNaN(parsed.getTime()) ? null : parsed;
+    }
+    return initialFilters?.date_to ? new Date(initialFilters.date_to) : null;
+  });
+
   const [pagination, setPagination] = useState({
     count: 0,
     page: initialPage,
@@ -1401,7 +1419,35 @@ export function OrdersClient({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Build filters
+  // FIX: Sync URL params to state when URL changes (e.g., browser back/forward)
+  useEffect(() => {
+    const urlSearch = searchParams.get('search');
+    if (urlSearch !== null && urlSearch !== searchTerm) {
+      setSearchTerm(urlSearch);
+    }
+    
+    const urlDateFrom = searchParams.get('date_from');
+    if (urlDateFrom !== null) {
+      const parsed = new Date(urlDateFrom);
+      if (!isNaN(parsed.getTime()) && (!dateFrom || dateFrom.toISOString().split('T')[0] !== urlDateFrom)) {
+        setDateFrom(parsed);
+      }
+    } else if (urlDateFrom === null && dateFrom !== null) {
+      setDateFrom(null);
+    }
+    
+    const urlDateTo = searchParams.get('date_to');
+    if (urlDateTo !== null) {
+      const parsed = new Date(urlDateTo);
+      if (!isNaN(parsed.getTime()) && (!dateTo || dateTo.toISOString().split('T')[0] !== urlDateTo)) {
+        setDateTo(parsed);
+      }
+    } else if (urlDateTo === null && dateTo !== null) {
+      setDateTo(null);
+    }
+  }, [searchParams]);
+
+  // Build filters - FIX: Use dateFrom/dateTo state directly
   const buildFilters = useCallback(() => {
     const filters: Record<string, any> = {
       seller_id: user?.id,
@@ -1417,26 +1463,26 @@ export function OrdersClient({
       filters.search = searchTerm;
     }
 
+    // FIX: Proper date handling with timezone
     if (dateFrom) {
-      // Philippine time adjustment (UTC+8)
       const fromDate = new Date(dateFrom);
-      fromDate.setHours(16, 0, 0, 0); // 16:00 UTC = 00:00 PHT
+      fromDate.setUTCHours(16, 0, 0, 0); // 16:00 UTC = 00:00 PHT next day
       filters.created_at_gte = fromDate.toISOString();
     }
 
     if (dateTo) {
       const toDate = new Date(dateTo);
-      toDate.setHours(15, 59, 59, 999); // 15:59:59 UTC = 23:59 PHT
+      toDate.setUTCHours(15, 59, 59, 999); // 15:59:59 UTC = 23:59 PHT
       filters.created_at_lte = toDate.toISOString();
     }
 
-    // Default to today if no date filters
-    if (!dateFrom && !dateTo) {
+    // FIX: Only apply default today filter if no date filters and no search
+    if (!dateFrom && !dateTo && !searchTerm) {
       const today = new Date();
       const startOfDay = new Date(today);
-      startOfDay.setHours(16, 0, 0, 0);
+      startOfDay.setUTCHours(16, 0, 0, 0);
       const endOfDay = new Date(today);
-      endOfDay.setHours(15, 59, 59, 999);
+      endOfDay.setUTCHours(15, 59, 59, 999);
       filters.created_at_gte = startOfDay.toISOString();
       filters.created_at_lte = endOfDay.toISOString();
     }
@@ -1444,29 +1490,14 @@ export function OrdersClient({
     return filters;
   }, [user, orderType, searchTerm, dateFrom, dateTo]);
 
-  // Fetch orders
+  // Fetch orders - FIX: Use the current page from URL
   const fetchOrders = useCallback(async () => {
     setIsLoading(true);
     try {
       const filters = buildFilters();
-      const queryParams = new URLSearchParams({
-        limit: String(limit),
-        page: String(page),
-        ...Object.entries(filters).reduce((acc, [key, value]) => {
-          if (value !== undefined && value !== null && value !== '') {
-            acc[key] = String(value);
-          }
-          return acc;
-        }, {} as Record<string, string>)
-      });
-
-        const offset = (page - 1) * limit;
-
+      const offset = (page - 1) * limit;
 
       const response = await listPosOrders(limit, offset, filters);
-
-      console.log(response,'INITTTS')
-
 
       const sortedOrders = sortOrders(response.orders || [], initialSortField, initialSortOrder);
 
@@ -1486,12 +1517,12 @@ export function OrdersClient({
     }
   }, [buildFilters, limit, page, initialSortField, initialSortOrder]);
 
-  // Initial fetch
+  // Initial fetch - FIX: Fetch when dependencies change
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
 
-  // Update URL params
+  // Update URL params - FIX: Preserve existing params
   const updateUrlParams = useCallback((updates: Record<string, string | number | null | undefined>) => {
     const params = new URLSearchParams(searchParams.toString());
 
@@ -1503,18 +1534,20 @@ export function OrdersClient({
       }
     });
 
+    // Preserve the type param
     params.set('type', orderType);
 
     router.push(`${pathname}?${params.toString()}`);
   }, [router, pathname, searchParams, orderType]);
 
-  // Handlers
+  // Handlers - FIX: Update state and URL together
   const handlePageChange = useCallback((newPage: number) => {
     updateUrlParams({ page: newPage });
   }, [updateUrlParams]);
 
   const handleSearchChange = useCallback((term: string) => {
     setSearchTerm(term);
+    // Update URL immediately with debounce
     const timeoutId = setTimeout(() => {
       updateUrlParams({ search: term || null, page: 1 });
     }, 500);
@@ -1524,11 +1557,23 @@ export function OrdersClient({
   const handleDateChange = useCallback((from: Date | null, to: Date | null) => {
     setDateFrom(from);
     setDateTo(to);
-    updateUrlParams({
+    
+    const updates: Record<string, string | null> = {
       date_from: from ? format(from, 'yyyy-MM-dd') : null,
       date_to: to ? format(to, 'yyyy-MM-dd') : null,
       page: 1
-    });
+    };
+    
+    // If both dates are cleared, remove them from URL
+    if (!from && !to) {
+      updateUrlParams({ 
+        date_from: null, 
+        date_to: null, 
+        page: 1 
+      });
+    } else {
+      updateUrlParams(updates);
+    }
   }, [updateUrlParams]);
 
   const handleStatusUpdate = async (orderId: string, status: string) => {

@@ -927,6 +927,7 @@ export async function listPosOrders(limit: number = 1000, offset: number = 0, fi
       'discounts',
       'delivery.*'
     ].join(',');
+    console.log( 'filters',filters)
 
     const queryParams = new URLSearchParams({
       limit: limit.toString(),
@@ -942,11 +943,11 @@ export async function listPosOrders(limit: number = 1000, offset: number = 0, fi
     // }
 
     // Add date filters if provided
-    if (filters?.created_at_from) {
-      queryParams.append('created_at[gte]', filters.created_at_from);
+    if (filters?.created_at_gte) {
+      queryParams.append('created_at[gte]', filters.created_at_gte);
     }
-    if (filters?.created_at_to) {
-      queryParams.append('created_at[lte]', filters.created_at_to);
+    if (filters?.created_at_lte) {
+      queryParams.append('created_at[lte]', filters.created_at_lte);
     }
 
     // Add search filter
@@ -976,7 +977,7 @@ export async function listPosOrders(limit: number = 1000, offset: number = 0, fi
     // Get all orders from response
     let orders = response.orders || [];
     const totalCount = response.count || 0;
-    console.log(response, 'RESPPO')
+    // console.log(response, 'RESPPO',queryParams)
     // Filter by seller_id or company_id from metadata
     if (filters?.seller_id) {
       orders = orders.filter((order: any) => order.metadata?.seller_id === filters.seller_id);
@@ -993,12 +994,12 @@ export async function listPosOrders(limit: number = 1000, offset: number = 0, fi
     }
 
     // Additional client-side filtering for date range if server filtering wasn't applied
-    if (filters?.created_at_from) {
-      const fromDate = new Date(filters.created_at_from);
+    if (filters?.created_at_gte) {
+      const fromDate = new Date(filters.created_at_gte);
       orders = orders.filter((order: any) => new Date(order.created_at) >= fromDate);
     }
-    if (filters?.created_at_to) {
-      const toDate = new Date(filters.created_at_to);
+    if (filters?.created_at_lte) {
+      const toDate = new Date(filters.created_at_lte);
       orders = orders.filter((order: any) => new Date(order.created_at) <= toDate);
     }
 
@@ -1011,7 +1012,6 @@ export async function listPosOrders(limit: number = 1000, offset: number = 0, fi
     const end = Math.min(offset + limit, filteredCount);
     const paginatedOrders = orders.slice(start, end);
 
-    
 
 
     return {
