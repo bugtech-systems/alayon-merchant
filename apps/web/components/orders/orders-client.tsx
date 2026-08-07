@@ -1452,7 +1452,7 @@ export function OrdersClient({
   // Build filters
   const buildFilters = useCallback(() => {
     const filters: Record<string, any> = {
-      seller_id: user?.id,
+      // seller_id: user?.id,
       company_id: user?.employee?.company_id || user?.driver?.company_id,
       status_not_in: ['canceled', 'refunded']
     };
