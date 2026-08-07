@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { getRegion } from "@/lib/actions/regions";
-import PosApp from "@/components/pos/_components/pos-app";
+import PosApp from "@/app/pos/_components/pos-app";
 import { Skeleton } from "@/components/ui/skeleton";
 import { retrieveUser } from "@/lib/data";
 import { redirect } from "next/navigation";
