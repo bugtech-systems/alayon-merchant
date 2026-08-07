@@ -1,10 +1,8 @@
-// app/orders/page.tsx (Updated)
+// app/orders/page.tsx (Server Component)
 import { Suspense } from 'react';
 import { OrdersClient } from '@/components/orders/orders-client';
 import { OrderTableSkeleton } from '@/components/ui/table-skeleton';
 import { retrieveUser } from '@/lib/data';
-import { listOrders } from '@/lib/data/orders';
-import { buildDateFilters, getDateRangePreset } from '@/lib/utils/date-filters';
 
 interface PageProps {
   searchParams: Promise<{
@@ -16,7 +14,6 @@ interface PageProps {
     status?: string;
     date_from?: string;
     date_to?: string;
-    date_preset?: string; // Add preset support
     min_total?: string;
     max_total?: string;
     payment_status?: string;
@@ -31,74 +28,29 @@ export default async function OrdersPage({ searchParams }: PageProps) {
   const user = await retrieveUser();
   const orderType = params.type || 'orders';
   
-  // Parse pagination
+  // Parse initial params for client component
   const limit = parseInt(params.limit || '1000');
   const page = parseInt(params.page || '1');
-  const offset = (page - 1) * limit;
-  
-  // Parse sorting
   const sortField = params.sort_field || 'created_at';
   const sortOrder = (params.sort_order || 'desc') as 'asc' | 'desc';
   
-  // Build filters object
+  // Build filters object for initial state
   const filters: Record<string, any> = {};
   
-  // Search filter
-  if (params.search) {
-    filters.search = params.search;
-  }
-  
-  // Status filter
-  if (params.status && params.status !== 'all') {
-    filters.status = params.status;
-  }
-  
-  // Payment status filter
-  if (params.payment_status && params.payment_status !== 'all') {
-    filters.payment_status = params.payment_status;
-  }
-  
-  // Date range filters - support both custom dates and presets
-  let dateFrom = params.date_from;
-  let dateTo = params.date_to;
-  
-  // If preset is provided and no custom dates, use preset
-  if (params.date_preset && !dateFrom && !dateTo) {
-    const range = getDateRangePreset(params.date_preset);
-    dateFrom = range.from;
-    dateTo = range.to;
-  }
-  
-  // Apply date filters if we have dates
-  if (dateFrom || dateTo) {
-    const dateFilters = buildDateFilters(dateFrom, dateTo);
-    Object.assign(filters, dateFilters);
-  }
-  
-  // Total amount range filters
-  if (params.min_total) {
-    filters.min_total = parseFloat(params.min_total);
-  }
-  if (params.max_total) {
-    filters.max_total = parseFloat(params.max_total);
-  }
-  
-  // Customer filter
-  if (params.customer_id) {
-    filters.customer_id = params.customer_id;
-  }
+  if (params.search) filters.search = params.search;
+  if (params.status && params.status !== 'all') filters.status = params.status;
+  if (params.payment_status && params.payment_status !== 'all') filters.payment_status = params.payment_status;
+  if (params.date_from) filters.date_from = params.date_from;
+  if (params.date_to) filters.date_to = params.date_to;
+  if (params.min_total) filters.min_total = parseFloat(params.min_total);
+  if (params.max_total) filters.max_total = parseFloat(params.max_total);
+  if (params.customer_id) filters.customer_id = params.customer_id;
   
   if (user?.employee?.company?.id) {
     filters.company = user?.employee?.company?.id;
   }
 
-  // if (user?.id) {
-  //   filters.seller_id = user?.id;
-  // }
-
-  // Fetch initial data based on order type
-  let initialOrders = await listOrders(limit, offset, filters);
-
+  // Don't fetch data here - pass initial filters to client
   return (
     <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8">
       <div className="mb-6">
@@ -110,20 +62,11 @@ export default async function OrdersPage({ searchParams }: PageProps) {
 
       <Suspense fallback={<OrderTableSkeleton />}>
         <OrdersClient 
-          initialData={{...initialOrders, orders: []}}
+          initialFilters={filters}
           initialPage={page}
           initialLimit={limit}
           initialSortField={sortField}
           initialSortOrder={sortOrder}
-          initialSearch={params.search || ''}
-          initialStatus={params.status || 'all'}
-          initialPaymentStatus={params.payment_status || 'all'}
-          initialDateFrom={dateFrom || ''}
-          initialDateTo={dateTo || ''}
-          initialDatePreset={params.date_preset || ''}
-          initialMinTotal={params.min_total || ''}
-          initialMaxTotal={params.max_total || ''}
-          initialCustomerId={params.customer_id || ''}
           user={user}
           orderType={orderType}
         />

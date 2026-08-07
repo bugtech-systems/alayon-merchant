@@ -46,8 +46,8 @@ export default async function OrdersPage({ searchParams }: PageProps) {
   if (params.max_total) filters.max_total = parseFloat(params.max_total);
   if (params.customer_id) filters.customer_id = params.customer_id;
   
-  if (user?.id) {
-    filters.seller_id = user.id;
+  if (user?.employee?.company?.id) {
+    filters.company = user?.employee?.company?.id;
   }
 
   // Don't fetch data here - pass initial filters to client
