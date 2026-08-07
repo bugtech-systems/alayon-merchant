@@ -176,6 +176,11 @@ export const riderSidebarItems: NavGroup[] = [
           url: "/home/inventory",
         },
         {
+          title: "Productions",
+          url: "/jagwar",
+          // comingSoon: true
+        },
+        {
           title: "Purchases",
           url: "/home/purchases",
           comingSoon: true

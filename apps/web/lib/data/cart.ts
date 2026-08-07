@@ -61,7 +61,7 @@ export async function retrieveCart(
 
   // Fetch the cart first
   const { cart } = await sdk.client
-    .fetch<HttpTypes.StoreCartResponse>(`/store/carts/${cartId}`, {
+    .fetch(`/store/carts/${cartId}`, {
       credentials: "include",
       method: "GET",
       query: {
@@ -95,12 +95,12 @@ export async function retrieveCart(
             ...headers,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
+          body: {
             variant_ids: variantIds,
             customer_group_id: customerGroupId,
             region_id: cart.region_id,
             currency_code: cart.currency_code,
-          }),
+          },
         })
 
         // Create a map of variant prices

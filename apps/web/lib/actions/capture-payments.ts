@@ -473,8 +473,7 @@ export async function processPOSPayment(params: {
     let retryCount = 0;
     const maxRetries = 3;
     
-    while (retryCount < maxRetries) {
-      try {
+
         orderResult = await sdk.store.cart.complete(
           cart.id, 
           {}, 
@@ -483,33 +482,10 @@ export async function processPOSPayment(params: {
         
 
           if(!orderResult?.order?.id) throw new Error("Failed to create order");
-;
          await createDelivery({cart_id: cart?.id, order_id: orderResult.order.id, company_id: pricingContext.companyId})
-        // if(orderDelivery){
-        //   await acceptDelivery(orderDelivery?.id)
-        // }
 
-        break; // Success, exit retry loop
-      } catch (completeError: any) {
-        // Handle idempotency conflicts
-        if (completeError?.code === "invalid_state_error" || 
-            completeError?.type === "conflict") {
-          retryCount++;
-          if (retryCount >= maxRetries) {
-            return {
-              success: false,
-              order: null,
-              payment: null,
-              message: "Cart completion is taking longer than expected. Please check order status.",
-            };
-          }
-          // Wait before retrying (exponential backoff)
-          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount - 1)));
-          continue;
-        }
-        throw completeError; // Re-throw other errors
-      }
-    }
+
+
 
     if (!orderResult?.order) {
       throw new Error("Failed to create order");

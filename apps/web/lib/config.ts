@@ -146,6 +146,16 @@ export const getMedusaServerClient = () => {
   });
 };
 
+// lib/water-production/config.ts
+const WATER_PRODUCTION_API_URL = process.env.SMS_URL || 'http://localhost:3500';
+
+export const productionApiConfig = {
+  baseUrl: WATER_PRODUCTION_API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+};
+
 // Type exports (optional)
 export type { StoreProduct, StoreRegion };
 export default sdk

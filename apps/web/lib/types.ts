@@ -219,3 +219,146 @@ export interface CreateDeliveryDriverDTO {
   delivery_id: string;
   driver_id: string;
 }
+
+
+// lib/water-production/types.ts
+export interface ProductionRecord {
+  id: string;
+  timestamp: number;
+  date: string;
+  hour: number;
+  containerSize: string;
+  quantity: number;
+  volumeLiters: number;
+  machineId: string;
+  operatorId: string;
+  batchId: string;
+  backwashCount: number;
+  status: 'active' | 'completed';
+}
+
+export interface ProductionRefillInput {
+  containerSize?: string;
+  quantity: number;
+  machineId?: string;
+  operatorId?: string;
+  batchId?: string;
+  locationId?: string;
+  itemId?: any;
+}
+
+export interface ProductionRefillResponse {
+  success: boolean;
+  data: {
+    record: ProductionRecord;
+    currentCount: number;
+    backwashLimit: number;
+    backwashNeeded: boolean;
+    remaining: number;
+  };
+  message: string;
+}
+
+export interface BackwashInput {
+  reason?: 'manual' | 'limit_reached' | 'scheduled';
+  operatorId?: string;
+}
+
+export interface BackwashRecord {
+  id: string;
+  timestamp: number;
+  date: string;
+  previousCount: number;
+  reason: string;
+  operatorId: string;
+}
+
+export interface BackwashResponse {
+  success: boolean;
+  data: {
+    previousCount: number;
+    newCount: number;
+    backwashRecord: BackwashRecord;
+  };
+  message: string;
+}
+
+export interface RealtimeStats {
+  currentCount: number;
+  backwashLimit: number;
+  backwashNeeded: boolean;
+  todayTotal: number;
+  lastRefillTime: number | null;
+  lastBackwashTime: number | null;
+  lastContainerSize: string;
+  lastQuantity: number;
+}
+
+export interface DailySummary {
+  date: string;
+  totalQuantity: number;
+  totalVolume: number;
+  totalRecords: number;
+  backwashCount: number;
+  peakHour: number;
+  averagePerHour: number;
+  containerSizes: Record<string, number>;
+  hourlyBreakdown: HourlyStats[];
+  machineState: {
+    lastRefillTime: string | null;
+    lastBackwashTime: string | null;
+    currentCount: number;
+  };
+}
+
+export interface HourlyStats {
+  hour: number;
+  quantity: number;
+  volume: number;
+  backwashCount: number;
+}
+
+export interface WeeklyTrendItem {
+  date: string;
+  totalQuantity: number;
+  totalVolume: number;
+  backwashCount: number;
+}
+
+export interface EfficiencyMetrics {
+  averageDailyProduction: number;
+  backwashFrequency: number;
+  peakProductionHour: number;
+  containerSizeDistribution: Record<string, number>;
+  todayTotal: number;
+  todayVolume: number;
+}
+
+export interface BackwashLimitResponse {
+  success: boolean;
+  data: {
+    limit: number;
+  };
+}
+
+export interface BackwashHistoryItem {
+  id: string;
+  timestamp: number;
+  date: string;
+  previousCount: number;
+  reason: string;
+  operatorId: string;
+}
+
+export interface ProductionRecordsResponse {
+  success: boolean;
+  data: ProductionRecord[];
+  count: number;
+  limit: number;
+  offset: number;
+}
+
+export interface ApiError {
+  success: false;
+  error: string;
+}

@@ -237,7 +237,7 @@ export async function updateLineItemPrice(lineId: string, data: any) {
   }
 
   try {
-    console.log({ unit_price: data.customUnitPrice, custom_price: data.customUnitPrice, variant_id: data.variantId, customer_group_id: data.customerGroupId, price_list_id: data.priceListId, quantity: data.quantity }, 'prricee')
+
      return await sdk.client.fetch(`/dashboard/carts/${data?.cartId}/line-items/${lineId}/custom`, {
       method: "POST",
       headers,

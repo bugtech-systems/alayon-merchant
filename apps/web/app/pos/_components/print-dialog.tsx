@@ -40,8 +40,8 @@ interface PrintDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   cart: any;
-  receiptData: any;
-  region: any;
+  receiptData?: any;
+  region?: any;
 }
 
 interface PrinterSettings {

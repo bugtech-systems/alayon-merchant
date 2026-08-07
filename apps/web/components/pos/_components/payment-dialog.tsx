@@ -49,7 +49,6 @@ export function PaymentDialog({
   cartItems,
   region,
   onComplete,
-  isLoading = false,
   orderNumber,
   customerName,
   tableNumbers,

@@ -309,7 +309,6 @@ export async function fetchInventoryItemsByLocation(
     const locationLevel = item.location_levels?.find(
       (level: any) => level.location_id === locationId
     );
-      console.log(locationLevel, "LOC LEV")
     return {
       ...item,
       itemId: item.id,

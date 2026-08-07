@@ -54,11 +54,9 @@ export function PaymentDialog({
   cartItems,
   region,
   onComplete,
-  isLoading = false,
   orderNumber,
   customerName,
   tableNumbers,
-  companyId
 }: PaymentDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isTakeOut, setIsTakeOut] = useState(false);
