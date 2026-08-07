@@ -286,7 +286,7 @@ export async function fetchInventoryItemsByLocation(
   const {
     limit = 10000,
     offset = 0,
-    fields = "id,title,sku,hs_code,location_levels", // include location levels to get stock qty
+    fields = "*,location_levels.*", // include location levels to get stock qty
   } = params || {};
 
   const headers = await getAuthHeaders();
@@ -294,10 +294,8 @@ export async function fetchInventoryItemsByLocation(
   const { inventory_items } = await sdk.admin.inventoryItem.list(
     {
         location_levels: {
-          location_id: locationId,
-        },
-        limit,
-        offset
+          location_id: [locationId],
+        }
     },
     {
        limit,
@@ -306,7 +304,26 @@ export async function fetchInventoryItemsByLocation(
       fields, // tells the API which fields to return
     }
   );
-  return inventory_items;
+
+   return inventory_items.map((item: any) => {
+    const locationLevel = item.location_levels?.find(
+      (level: any) => level.location_id === locationId
+    );
+      console.log(locationLevel, "LOC LEV")
+    return {
+      ...item,
+      itemId: item.id,
+      sku: item.sku,
+      title: item.title,
+      location_id: locationId,
+      location_levels: [locationLevel],
+      stocked_quantity: locationLevel?.stocked_quantity || 0,
+      available_quantity: locationLevel?.available_quantity || 0,
+      reserved_quantity: locationLevel?.reserved_quantity || 0,
+      incoming_quantity: locationLevel?.incoming_quantity || 0,
+    };
+  });
+
 }
 
 /**

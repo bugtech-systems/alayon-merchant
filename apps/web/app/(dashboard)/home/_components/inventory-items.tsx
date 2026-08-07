@@ -563,7 +563,7 @@ export function InventoryTable({ user }: any) {
       }
 
       const result = await fetchInventoryItemsByLocation(user.stockLocationId);
-
+      console.log(result, user?.stockLocationId, 'STO LOC')
       if (!result) {
         throw new Error('No data received from server');
       }
