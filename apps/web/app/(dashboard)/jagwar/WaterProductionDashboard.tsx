@@ -242,155 +242,7 @@ function WaterProductionDashboard({ user }: WaterProductionDashboardProps) {
         </div>
       </div>
 
-      {/* Real-time Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Current Count */}
-        <Card className={cn(
-          "bg-gradient-to-br transition-all duration-300",
-          isBackwashNeeded 
-            ? "from-red-50 to-red-100 border-red-200" 
-            : "from-blue-50 to-blue-100 border-blue-200"
-        )}>
-          <CardContent className="pt-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className={cn(
-                  "text-sm font-medium",
-                  isBackwashNeeded ? "text-red-600" : "text-blue-600"
-                )}>
-                  Current Count
-                </p>
-                <p className={cn(
-                  "text-3xl font-bold transition-all duration-300",
-                  isBackwashNeeded ? "text-red-700" : "text-blue-700"
-                )}>
-                  {currentCount}
-                </p>
-              </div>
-              <Container className={cn(
-                "h-8 w-8",
-                isBackwashNeeded ? "text-red-400" : "text-blue-400"
-              )} />
-            </div>
-            <div className="mt-3 space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className={isBackwashNeeded ? "text-red-500" : "text-blue-500"}>
-                  Limit: {limit}
-                </span>
-                <span className={isBackwashNeeded ? "text-red-500" : "text-blue-500"}>
-                  {Math.round(progressPercentage)}%
-                </span>
-              </div>
-              <div className={cn(
-                "h-1.5 rounded-full overflow-hidden",
-                isBackwashNeeded ? "bg-red-200" : "bg-blue-200"
-              )}>
-                <div 
-                  className={cn(
-                    "h-full rounded-full transition-all duration-500",
-                    isBackwashNeeded ? "bg-red-500 animate-pulse" : "bg-blue-500"
-                  )}
-                  style={{ width: `${Math.min(progressPercentage, 100)}%` }}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Today's Total */}
-        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-          <CardContent className="pt-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-green-600">Today's Production</p>
-                <p className="text-3xl font-bold text-green-700">{todayTotal}</p>
-              </div>
-              <TrendingUp className="h-8 w-8 text-green-400" />
-            </div>
-            <div className="mt-3 space-y-1">
-              <p className="text-xs text-green-600">
-                Containers produced today
-              </p>
-              <p className="text-xs text-green-500">
-                Volume: {todayTotal * 20}L
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Last Refill */}
-        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-          <CardContent className="pt-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-purple-600">Last Refill</p>
-                <p className="text-3xl font-bold text-purple-700">
-                  {realtimeStats?.lastQuantity || 0}
-                </p>
-              </div>
-              <Package className="h-8 w-8 text-purple-400" />
-            </div>
-            <div className="mt-3 space-y-1">
-              <p className="text-xs text-purple-600">
-                {realtimeStats?.lastContainerSize || '20L'} containers
-              </p>
-              {realtimeStats?.lastRefillTime && (
-                <p className="text-xs text-purple-500 flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {new Date(realtimeStats.lastRefillTime).toLocaleTimeString()}
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Backwash Status */}
-        <Card className={cn(
-          "bg-gradient-to-br transition-all duration-300",
-          isBackwashNeeded 
-            ? 'from-red-50 to-red-100 border-red-200' 
-            : 'from-amber-50 to-amber-100 border-amber-200'
-        )}>
-          <CardContent className="pt-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className={cn(
-                  "text-sm font-medium",
-                  isBackwashNeeded ? 'text-red-600' : 'text-amber-600'
-                )}>
-                  Backwash Status
-                </p>
-                <p className={cn(
-                  "text-3xl font-bold",
-                  isBackwashNeeded ? 'text-red-700' : 'text-amber-700'
-                )}>
-                  {isBackwashNeeded ? 'Required' : 'OK'}
-                </p>
-              </div>
-              <Activity className={cn(
-                "h-8 w-8",
-                isBackwashNeeded ? 'text-red-400' : 'text-amber-400'
-              )} />
-            </div>
-            <div className="mt-3">
-              <p className={cn(
-                "text-xs",
-                isBackwashNeeded ? 'text-red-600 font-medium' : 'text-amber-600'
-              )}>
-                {isBackwashNeeded 
-                  ? '⚠️ Backwash immediately' 
-                  : `${remainingCapacity} containers remaining`}
-              </p>
-              {realtimeStats?.lastBackwashTime && (
-                <p className="text-xs text-amber-500 mt-1 flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  Last: {new Date(realtimeStats.lastBackwashTime).toLocaleDateString()}
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -567,6 +419,155 @@ function WaterProductionDashboard({ user }: WaterProductionDashboardProps) {
           <JagsMonitoringChart data={sampleJagsData} />
         </TabsContent>
       </Tabs>
+            {/* Real-time Stats Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Current Count */}
+        <Card className={cn(
+          "bg-gradient-to-br transition-all duration-300",
+          isBackwashNeeded 
+            ? "from-red-50 to-red-100 border-red-200" 
+            : "from-blue-50 to-blue-100 border-blue-200"
+        )}>
+          <CardContent className="pt-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className={cn(
+                  "text-sm font-medium",
+                  isBackwashNeeded ? "text-red-600" : "text-blue-600"
+                )}>
+                  Current Count
+                </p>
+                <p className={cn(
+                  "text-3xl font-bold transition-all duration-300",
+                  isBackwashNeeded ? "text-red-700" : "text-blue-700"
+                )}>
+                  {currentCount}
+                </p>
+              </div>
+              <Container className={cn(
+                "h-8 w-8",
+                isBackwashNeeded ? "text-red-400" : "text-blue-400"
+              )} />
+            </div>
+            <div className="mt-3 space-y-1">
+              <div className="flex justify-between text-xs">
+                <span className={isBackwashNeeded ? "text-red-500" : "text-blue-500"}>
+                  Limit: {limit}
+                </span>
+                <span className={isBackwashNeeded ? "text-red-500" : "text-blue-500"}>
+                  {Math.round(progressPercentage)}%
+                </span>
+              </div>
+              <div className={cn(
+                "h-1.5 rounded-full overflow-hidden",
+                isBackwashNeeded ? "bg-red-200" : "bg-blue-200"
+              )}>
+                <div 
+                  className={cn(
+                    "h-full rounded-full transition-all duration-500",
+                    isBackwashNeeded ? "bg-red-500 animate-pulse" : "bg-blue-500"
+                  )}
+                  style={{ width: `${Math.min(progressPercentage, 100)}%` }}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Today's Total */}
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+          <CardContent className="pt-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-sm font-medium text-green-600">Today's Production</p>
+                <p className="text-3xl font-bold text-green-700">{todayTotal}</p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-green-400" />
+            </div>
+            <div className="mt-3 space-y-1">
+              <p className="text-xs text-green-600">
+                Containers produced today
+              </p>
+              <p className="text-xs text-green-500">
+                Volume: {todayTotal * 20}L
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Last Refill */}
+        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+          <CardContent className="pt-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-sm font-medium text-purple-600">Last Refill</p>
+                <p className="text-3xl font-bold text-purple-700">
+                  {realtimeStats?.lastQuantity || 0}
+                </p>
+              </div>
+              <Package className="h-8 w-8 text-purple-400" />
+            </div>
+            <div className="mt-3 space-y-1">
+              <p className="text-xs text-purple-600">
+                {realtimeStats?.lastContainerSize || '20L'} containers
+              </p>
+              {realtimeStats?.lastRefillTime && (
+                <p className="text-xs text-purple-500 flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {new Date(realtimeStats.lastRefillTime).toLocaleTimeString()}
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Backwash Status */}
+        <Card className={cn(
+          "bg-gradient-to-br transition-all duration-300",
+          isBackwashNeeded 
+            ? 'from-red-50 to-red-100 border-red-200' 
+            : 'from-amber-50 to-amber-100 border-amber-200'
+        )}>
+          <CardContent className="pt-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className={cn(
+                  "text-sm font-medium",
+                  isBackwashNeeded ? 'text-red-600' : 'text-amber-600'
+                )}>
+                  Backwash Status
+                </p>
+                <p className={cn(
+                  "text-3xl font-bold",
+                  isBackwashNeeded ? 'text-red-700' : 'text-amber-700'
+                )}>
+                  {isBackwashNeeded ? 'Required' : 'OK'}
+                </p>
+              </div>
+              <Activity className={cn(
+                "h-8 w-8",
+                isBackwashNeeded ? 'text-red-400' : 'text-amber-400'
+              )} />
+            </div>
+            <div className="mt-3">
+              <p className={cn(
+                "text-xs",
+                isBackwashNeeded ? 'text-red-600 font-medium' : 'text-amber-600'
+              )}>
+                {isBackwashNeeded 
+                  ? '⚠️ Backwash immediately' 
+                  : `${remainingCapacity} containers remaining`}
+              </p>
+              {realtimeStats?.lastBackwashTime && (
+                <p className="text-xs text-amber-500 mt-1 flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  Last: {new Date(realtimeStats.lastBackwashTime).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
