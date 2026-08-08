@@ -21,14 +21,16 @@ export const metadata: Metadata = {
 
 
 
+// app/layout.tsx
+// app/layout.tsx
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-
-    const { theme_mode, theme_preset, content_layout, navbar_style, sidebar_variant, sidebar_collapsible, font } =
+  const { theme_mode, theme_preset, content_layout, navbar_style, sidebar_variant, sidebar_collapsible, font } =
     PREFERENCE_DEFAULTS;
+    
   return (
     <html  
       lang="en"
@@ -39,34 +41,37 @@ export default function RootLayout({
       data-sidebar-variant={sidebar_variant}
       data-sidebar-collapsible={sidebar_collapsible}
       data-font={font}
-      suppressHydrationWarning>
-        <head>
-                  <ThemeBootScript />
-        </head>
-      <body className={`${fontVars} min-h-screen antialiased`}>
+      suppressHydrationWarning
+    >
+      <head>
+        <ThemeBootScript />
+      </head>
+      {/* CHANGE: h-full overflow-hidden instead of min-h-screen */}
+      <body className={`${fontVars} h-full overflow-hidden antialiased`}>
         <TooltipProvider>
-             <PreferencesStoreProvider
+          <PreferencesStoreProvider
             themeMode={theme_mode}
             themePreset={theme_preset}
             contentLayout={content_layout}
             navbarStyle={navbar_style}
             font={font}
           >
-     <LocationProvider>
-        <MedusaAuthProvider>
-        <Providers>
-        <ThemeProvider>
-            <AuthProvider>
-
-          {children}
-          </AuthProvider>
-          </ThemeProvider>
-        </Providers>
-        </MedusaAuthProvider>
-</LocationProvider> 
-</PreferencesStoreProvider>
+            <LocationProvider>
+              <MedusaAuthProvider>
+                <Providers>
+                  <ThemeProvider>
+                    <AuthProvider>
+                      {/* This wrapper ensures proper height */}
+                      <div className="flex h-full flex-col">
+                        {children}
+                      </div>
+                    </AuthProvider>
+                  </ThemeProvider>
+                </Providers>
+              </MedusaAuthProvider>
+            </LocationProvider>
+          </PreferencesStoreProvider>
         </TooltipProvider>
-
       </body>
     </html>
   );

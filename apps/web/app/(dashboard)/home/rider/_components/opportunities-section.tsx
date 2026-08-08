@@ -123,6 +123,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { CustomerLocationModal } from "@/components/customers-table/customer-location";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 
 // ============================================================
 // 1. TYPES & CONFIG
@@ -995,25 +996,28 @@ export function WaterDeliveryOrdersSection({
           return b - a;
         },
       },
-      {
-        accessorKey: "orderNumber",
-        header: ({ column }) => <SortableHeader column={column} title="Order #" />,
-        cell: ({ row }) => {
-          const order = row.original;
-          return (
-            <div
-              className="flex items-center gap-2 cursor-pointer hover:text-primary"
-              onClick={(e) => { e.stopPropagation(); setSelectedOrder(order); setDetailType("order"); setIsDetailOpen(true); }}
-            >
-              <PackageIcon className="size-3.5 text-muted-foreground" />
-              <span className="font-mono text-sm font-medium">#{order.orderNumber || order.latest_order?.orderNumber || "N/A"}</span>
-            </div>
-          );
-        },
-        size: 140,
-        enableSorting: true,
-        sortingFn: "alphanumeric",
-      },
+    {
+  accessorKey: "orderNumber",
+  header: ({ column }) => <SortableHeader column={column} title="Order #" />,
+  cell: ({ row }) => {
+    const order = row.original;
+    const orderId = order.latest_order?.id;
+    const orderNumber = order.orderNumber || order.latest_order?.orderNumber || "N/A";
+    console.log(order, 'ORDD')
+    return (
+      <Link
+        href={`/rider/customers/${order?.id}`}
+        className="flex items-center gap-2 cursor-pointer hover:text-primary transition-colors"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span className="font-mono text-sm font-medium">#{orderNumber}</span>
+      </Link>
+    );
+  },
+  size: 140,
+  enableSorting: true,
+  sortingFn: "alphanumeric",
+},
     ];
   }, []);
 

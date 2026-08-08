@@ -786,6 +786,26 @@ export async function setIsTakeOut(cart: any, isTakeOut: any) {
   }
 }
 
+// export async function updateCartMetadata(cartId: any, metadata: any) {
+//   try {
+//     const cart = await getOrSetCart(cartId)
+//     if (!cart?.id) {
+//       throw new Error("No existing cart found when setting contact details")
+//     }
+//     const data = {
+//       metadata: {
+//         ...cart?.metadata,
+//         ...metadata
+//       },
+//     }
+
+//     console.log(data)
+//     await updateCart(data, cart?.id)
+//   } catch (e: any) {
+//     return e.message
+//   }
+// }
+
 
 export async function placeOrder(
   cartId?: string, company_id?: string

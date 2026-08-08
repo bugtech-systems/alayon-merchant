@@ -102,6 +102,7 @@ import {
   Building,
   Store,
   CreditCard,
+  AppWindow,
 } from 'lucide-react';
 
 // Utils & Actions
@@ -110,6 +111,7 @@ import { sortOrders } from '@/lib/utils/helpers';
 import { updatePosOrderStatus, deletePosOrder, deleteDraftOrder, convertDraftToOrder } from '@/lib/actions/orders';
 import { captureOrderPayment, markAsPaid } from '@/lib/actions/capture-payments';
 import { listPosOrders } from '@/lib/data/orders';
+import Link from 'next/link';
 
 // ============================================
 // STATUS CONFIGURATIONS
@@ -1705,6 +1707,9 @@ export function OrdersClient({
     setCaptureDialogOpen(true);
   };
 
+
+
+  console.log(user, 'USSSS')
   return (
     <TooltipProvider>
       <div className="space-y-6">
@@ -1892,6 +1897,18 @@ export function OrdersClient({
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
+                        {user?.metadata?.role === 'company' && 
+                       <Link href={`/company/orders/${order?.id}`} >
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="h-8 gap-2"
+                        >
+
+                          <AppWindow className="h-4 w-4"/>
+                          </Button>
+                        </Link>
+                        }
                       </TableCell>
                     </TableRow>
                   ))}

@@ -9,7 +9,7 @@ import { useMedusaOrders } from "@/hooks/useMedusaOrders";
 import { assignDriverToOrder, unassignDriverToOrder } from "@/lib/data";
 import { PrintDialog } from "@/app/pos/_components/print-dialog";
 import { startOfDay, endOfDay, format } from 'date-fns';
-import { completeOrder, fulfillOrder } from "@/lib/actions/orders";
+import { completeOrder, fulfillOrder, updateStatus } from "@/lib/actions/orders";
 import { KpiCards } from "./rider/_components/kpi-cards";
 import { useSocket } from "@/hooks/useSocket";
 import { NotificationBell } from "@/components/notification/NotificationBell";
@@ -20,6 +20,169 @@ import { acceptDelivery } from "@/lib/actions";
 interface DashboardClientProps {
   user: any;
   userRole: string;
+}
+
+// Pull-to-Refresh Component - Only this is added
+function PullToRefresh({ 
+  children, 
+  onRefresh 
+}: { 
+  children: React.ReactNode; 
+  onRefresh: () => Promise<void>;
+}) {
+  const [pullState, setPullState] = useState<'idle' | 'pulling' | 'refreshing'>('idle');
+  const [pullDistance, setPullDistance] = useState(0);
+  const startY = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    // Don't trigger on interactive elements
+    if (target.closest('button, a, input, select, textarea, [role="button"], .no-pull, [data-no-pull="true"]')) {
+      return;
+    }
+    
+    const scrollable = containerRef.current;
+    if (scrollable && scrollable.scrollTop === 0) {
+      startY.current = e.touches[0].clientY;
+      isDragging.current = true;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging.current || startY.current === 0) return;
+    
+    const currentY = e.touches[0].clientY;
+    const diff = currentY - startY.current;
+    
+    if (diff > 0 && containerRef.current?.scrollTop === 0) {
+      setPullState('pulling');
+      const newDistance = Math.min(diff * 0.5, 120);
+      setPullDistance(newDistance);
+    }
+  };
+
+  const handleTouchEnd = async () => {
+    if (pullDistance > 60 && pullState === 'pulling') {
+      setPullState('refreshing');
+      setPullDistance(60);
+      isDragging.current = false;
+      
+      await onRefresh();
+      
+      setTimeout(() => {
+        setPullState('idle');
+        setPullDistance(0);
+        startY.current = 0;
+      }, 800);
+    } else {
+      setPullState('idle');
+      setPullDistance(0);
+      startY.current = 0;
+      isDragging.current = false;
+    }
+  };
+
+  // Mouse support for desktop testing
+  const handleMouseDown = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button, a, input, select, textarea, [role="button"], .no-pull, [data-no-pull="true"]')) {
+      return;
+    }
+    
+    const scrollable = containerRef.current;
+    if (scrollable && scrollable.scrollTop === 0) {
+      startY.current = e.clientY;
+      isDragging.current = true;
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging.current || startY.current === 0) return;
+    
+    const currentY = e.clientY;
+    const diff = currentY - startY.current;
+    
+    if (diff > 0 && containerRef.current?.scrollTop === 0) {
+      setPullState('pulling');
+      const newDistance = Math.min(diff * 0.5, 120);
+      setPullDistance(newDistance);
+    }
+  };
+
+  const handleMouseUp = async () => {
+    if (pullDistance > 60 && pullState === 'pulling') {
+      setPullState('refreshing');
+      setPullDistance(60);
+      isDragging.current = false;
+      
+      await onRefresh();
+      
+      setTimeout(() => {
+        setPullState('idle');
+        setPullDistance(0);
+        startY.current = 0;
+      }, 800);
+    } else {
+      setPullState('idle');
+      setPullDistance(0);
+      startY.current = 0;
+      isDragging.current = false;
+    }
+  };
+
+  return (
+    <div 
+      ref={containerRef}
+      className="h-full overflow-y-auto overscroll-y-auto relative"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+    >
+      {/* Pull indicator */}
+      {(pullState !== 'idle' || pullDistance > 0) && (
+        <div 
+          className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b transition-all duration-200 flex items-center justify-center gap-2 overflow-hidden"
+          style={{ 
+            height: pullState === 'refreshing' ? '56px' : `${Math.max(40, pullDistance)}px`,
+            opacity: pullState === 'refreshing' ? 1 : Math.min(1, pullDistance / 40),
+          }}
+        >
+          {pullState === 'refreshing' ? (
+            <>
+              <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm font-medium">Refreshing...</span>
+            </>
+          ) : (
+            <>
+              <svg 
+                className="h-4 w-4 text-muted-foreground transition-transform duration-200" 
+                style={{ 
+                  transform: `rotate(${Math.min(pullDistance * 1.5, 360)}deg)` 
+                }}
+                fill="none" 
+                viewBox="0 0 24 24" 
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span className="text-sm text-muted-foreground">
+                {pullDistance > 40 ? 'Release to refresh' : 'Pull to refresh'}
+              </span>
+            </>
+          )}
+        </div>
+      )}
+      
+      {children}
+    </div>
+  );
 }
 
 export function DashboardClient({ user, userRole }: DashboardClientProps) {
@@ -51,7 +214,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     date_from: format(from, 'yyyy-MM-dd'),
     date_to: format(to, 'yyyy-MM-dd'),
   };
-
 
   const pricingContext = React.useMemo(() => ({
     priceListId: user?.metadata?.role === 'company' 
@@ -258,7 +420,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
         action: {
           label: 'View',
           onClick: () => {
-            // Navigate to order details or highlight the order
             handleRowClick(data.order);
           }
         }
@@ -485,10 +646,10 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     setLoading(false);
   };
 
-  const handleConfirmOrder = async (order: any, stock_location_id: any) => {
+  const handleOrderOut = async (order: any, stock_location_id: any) => {
     console.log(order, 'ORDEERaaaaaa', stock_location_id)
     setLoading(true);
-    await completeOrder(order, stock_location_id)
+    await updateStatus(order?.id, 'requires_action')
     await refetch();
     setLoading(false);
   };
@@ -528,90 +689,84 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   if (userRole === "company") {
     const { company } = user.employee;
     return (
-      <div className="@container/main flex flex-col gap-4 md:gap-6 relative">
-        <Toaster position="top-right" richColors />
-        <PrintDialog open={cartPrint} onOpenChange={setCartPrint} cart={cartPrint} />
-        
-        {/* Notification Controls */}
+      <PullToRefresh onRefresh={handleManualRefresh}>
+        <div className="@container/main flex flex-col gap-4 md:gap-6 relative">
+          <Toaster position="top-right" richColors />
+          <PrintDialog open={cartPrint} onOpenChange={setCartPrint} cart={cartPrint} />
+          
+          {/* Notification Controls */}
           <div className="flex items-center gap-2 text-sm">
-              <span className={`inline-block w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-              <span className="text-muted-foreground">
-                {isConnected ? 'Connected' : 'Disconnected'}
-              </span>
-            </div>
-        
-        <CompanyOrdersTable
-          data={data?.orders || []}
-          totalCount={data?.total || 0}
-          isLoading={(isLoading || loading)}
-          onAssignDriver={handleAssignRider}
-          onStatusChange={handleUpdateStatus}
-          onRefresh={handleManualRefresh}
-          onRowClick={handleRowClick}
-          companyId={pricingContext?.companyId}
-          defaultStockLocationId={pricingContext?.stockLocationId}
-          searchQuery={search}
-          onSearchChange={handleSearchChange}
-          enableDragDrop={true}
-          enableColumnVisibility={true}
-          enableRowSelection={true}
-          onPrint={handlePrint}
-          onAcceptOrder={(orderId, stock_location_id) => handleAcceptOrder(orderId, stock_location_id) as any}
-          onCompleteOrder={(order, stock_location_id) => handleConfirmOrder(order, stock_location_id) as any}
-        />
-
-     
-      </div>
+            <span className={`inline-block w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+            <span className="text-muted-foreground">
+              {isConnected ? 'Connected' : 'Disconnected'}
+            </span>
+          </div>
+          
+          <CompanyOrdersTable
+            data={data?.orders || []}
+            totalCount={data?.total || 0}
+            isLoading={(isLoading || loading)}
+            onAssignDriver={handleAssignRider}
+            onStatusChange={handleUpdateStatus}
+            onRefresh={handleManualRefresh}
+            onRowClick={handleRowClick}
+            companyId={pricingContext?.companyId}
+            defaultStockLocationId={pricingContext?.stockLocationId}
+            searchQuery={search}
+            onSearchChange={handleSearchChange}
+            enableDragDrop={true}
+            enableColumnVisibility={true}
+            enableRowSelection={true}
+            onPrint={handlePrint}
+            onAcceptOrder={(orderId, stock_location_id) => handleAcceptOrder(orderId, stock_location_id) as any}
+            onCompleteOrder={(order, stock_location_id) => handleOrderOut(order, stock_location_id) as any}
+          />
+        </div>
+      </PullToRefresh>
     );
   }
   
   // Driver role view
   if (userRole === "driver") {
     return (
-      <div className="@container/main flex flex-col gap-4 md:gap-6 relative">
-        <Toaster position="top-right" richColors />
-        
- 
-
-        {/* KPI Cards */}
-        <KpiCards
-          totalCustomers={0}
-          activeCustomers={0}
-          totalRevenue={0}
-          totalOrders={0}
-          isLoading={isLoading}
-        />
-        
-        {/* Task Reminders */}
-        {/* <TaskReminders customerId={pricingContext.customerId} locationId={pricingContext.stockLocationId} priceListId={pricingContext.priceListId}/> */}
-         
-        <DriverDashboard user={user}/>
-
-       
-      </div>
+      <PullToRefresh onRefresh={handleManualRefresh}>
+        <div className="@container/main flex flex-col gap-4 md:gap-6 relative">
+          <Toaster position="top-right" richColors />
+          
+          {/* KPI Cards */}
+          <KpiCards
+            totalCustomers={0}
+            activeCustomers={0}
+            totalRevenue={0}
+            totalOrders={0}
+            isLoading={isLoading}
+          />
+          
+          <DriverDashboard user={user}/>
+        </div>
+      </PullToRefresh>
     );
   }
 
   // Store role view (similar to driver)
   if (userRole === "store") {
     return (
-      <div className="@container/main flex flex-col gap-4 md:gap-6 relative">
-        <Toaster position="top-right" richColors />
-        
-        {/* Notification Controls */}
-
-        <DriverDashboard user={user}/>
-
-
-      </div>
+      <PullToRefresh onRefresh={handleManualRefresh}>
+        <div className="@container/main flex flex-col gap-4 md:gap-6 relative">
+          <Toaster position="top-right" richColors />
+          <DriverDashboard user={user}/>
+        </div>
+      </PullToRefresh>
     );
   }
 
   // Default fallback
   return (
-    <div className="@container/main flex flex-col gap-4 md:gap-6">
-      <Toaster position="top-right" richColors />
-      <p>Welcome {user.first_name || user.email}</p>
-    </div>
+    <PullToRefresh onRefresh={handleManualRefresh}>
+      <div className="@container/main flex flex-col gap-4 md:gap-6">
+        <Toaster position="top-right" richColors />
+        <p>Welcome {user.first_name || user.email}</p>
+      </div>
+    </PullToRefresh>
   );
 }

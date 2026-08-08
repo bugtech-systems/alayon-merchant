@@ -3,7 +3,7 @@
 import sdk from "@/lib/config";
 import { getAuthHeaders } from "@/lib/data/cookies";
 import { capturePayment, setIsTakeOut } from "../data/cart";
-import { createDelivery } from "./checkout";
+import { createDelivery, updateCartMetadata } from "./checkout";
 import { fetchAvailableDrivers, retrieveUser } from "../data";
 import { acceptDelivery } from "./deliveries";
 import { v4 as uuidv4 } from 'uuid';
@@ -378,7 +378,7 @@ export async function processPOSPayment(params: {
   message: string;
 }> {
   
-  const { cart, paymentMethod, amount, cashAmount, change, customerId, isTakeOut } = params;
+  const { cart, paymentMethod,  isTakeOut } = params;
   const user = await retrieveUser();
 
 
@@ -442,9 +442,10 @@ export async function processPOSPayment(params: {
 
 
     if(isTakeOut){
-        await setIsTakeOut(cart, isTakeOut)
+        await updateCartMetadata(cart, { isTakeOut })
     }  
-
+    
+ 
 
 
 

@@ -30,5 +30,7 @@ export default async function Page() {
 
 
   // Pass user data to client component
-  return <DashboardClient user={user} userRole={userRole} />;
+  return (<div className="h-full">
+      <DashboardClient user={user} userRole={userRole} />
+    </div>);
 }

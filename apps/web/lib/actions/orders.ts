@@ -18,6 +18,20 @@ export async function updateOrderStatus(id: string, status: string) {
   }
 }
 
+export async function updateOrder(id: string, data: any) {
+  try {
+
+    
+    const response = await sdk.client.fetch(`/dashboard/orders/${id}`, {method: "PUT", body: data});
+    console.log(response, 'RESPSPP')
+    revalidatePath('/orders');
+    return { success: true, order: response.order };
+  } catch (error: any) {
+    console.error('Error updating order status:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function deleteOrder(id: string) {
   try {
     await sdk.admin.orders.delete(id);
@@ -47,8 +61,7 @@ export async function completeOrder(order: any, stock_location_id: string) {
 
 
 
-    console.log(stock_location_id, 'STOCK LOC', order?.id)
-    await updatePosOrderStatus(order?.id, 'completed')
+    await updatePosOrderStatus(order?.id, 'requires_action')
 
 
     await adminFetch(`/dashboard/orders/${order?.id}/complete`, {
@@ -57,6 +70,30 @@ export async function completeOrder(order: any, stock_location_id: string) {
     const response = await adminFetch(`/admin/orders/${order?.id}/fulfillments`, {
       method: 'POST',
       body: JSON.stringify({ location_id: stock_location_id, items: order?.items }),
+    });
+
+
+    
+    revalidatePath('/dashboard');
+    return { success: true, data: response };
+  } catch (error) {
+    console.error('Error updating order status:', error);
+    return { success: false, error: 'Failed to update order status' };
+  }
+}
+
+
+export async function updateStatus(orderId: any, status: string) {
+  try {
+
+
+
+
+
+
+   let response = await adminFetch(`/dashboard/orders/${orderId}/status`, {
+      method: 'POST',     
+      body: JSON.stringify({ status }),
     });
 
 

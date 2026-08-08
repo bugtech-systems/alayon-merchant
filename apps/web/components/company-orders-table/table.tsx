@@ -235,7 +235,41 @@ function getOrderColumns({
     const isProcessing = order?.delivery_status == "company_preparing";
     const stockLocationId = getStockLocationId(order) || defaultStockLocationId;
     
-    if (isProcessing || isFulfilled) {
+    // if (isProcessing || isFulfilled) {
+    //   // Already accepted: show Print icon
+    //   return (
+    //     < >
+    //      {!isFulfilled &&
+    //             <Button
+    //     variant="outline"
+    //     size="sm"
+    //     className="h-8 gap-1"
+    //       onClick={(e) => {
+    //         onCompleteOrder?.(order, stockLocationId);
+    //       }}
+    //     >
+
+    //       <span>Complete</span>
+    //     </Button>
+    //     }
+    //     <Button
+    //       variant="ghost"
+    //       size="icon"
+    //       className="size-8"
+    //       onClick={(e) => {
+    //         e.stopPropagation();
+    //         onPrint?.(order);
+    //       }}
+    //     >
+    //       <Printer className="size-4" />
+    //       <span className="sr-only">Print</span>
+    //     </Button>
+    //     </>
+        
+    //   );
+    // }
+
+        if (isProcessing || isFulfilled) {
       // Already accepted: show Print icon
       return (
         < >
@@ -247,9 +281,17 @@ function getOrderColumns({
           onClick={(e) => {
             onCompleteOrder?.(order, stockLocationId);
           }}
+          disabled={isLoading}
         >
-
-          <span>Complete</span>
+ {isLoading ? (
+          <>
+            <LoaderCircle className="size-3 animate-spin" />
+          </>
+        ) : (
+          <>
+          <span>Order Out</span>
+          </>
+        )}
         </Button>
         }
         <Button
@@ -264,8 +306,6 @@ function getOrderColumns({
           <Printer className="size-4" />
           <span className="sr-only">Print</span>
         </Button>
-
-       
         </>
         
       );

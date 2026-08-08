@@ -6,10 +6,11 @@ import { promises as fs } from "fs";
 import { revalidateTag } from "next/cache";
 import { sdk } from "../medusa/config";
 import { getAuthHeaders, getCacheTag } from "../medusa/data/cookies";
-import { StoreCompaniesResponse, StoreCompanyResponse, StoreCreateCompany, StoreCreateEmployee, StoreEmployeeResponse, StoreUpdateCompany } from "@/types";
+import { B2BCustomer, StoreCompaniesResponse, StoreCompanyResponse, StoreCreateCompany, StoreCreateEmployee, StoreEmployeeResponse, StoreUpdateCompany } from "@/types";
 import { track } from "@vercel/analytics";
 import { getCacheOptions } from "../data/cookies";
 import { z } from "zod"
+import { CustomerFilters, CustomerListResponse } from "./customer";
 
 
 const FRONTEND_URL =
@@ -271,47 +272,6 @@ export const updateApprovalSettings = async (
   revalidateTag(cacheTag, "max")
 }
 
-// Types
-export interface CustomerFilters {
-  page?: number
-  limit?: number
-  search?: string
-  status?: string
-  group?: string
-  dateFrom?: Date
-  dateTo?: Date
-  minSpent?: number
-  maxSpent?: number
-  minOrders?: number
-  maxOrders?: number
-  city?: string
-  hasCompany?: boolean
-  companyId?: string
-  sortBy?: string
-  sortOrder?: "ASC" | "DESC"
-  customer_group_id?: string
-  includeCompany?: boolean
-  includeOrders?: boolean
-}
-
-export interface CustomerListResponse {
-  customers: B2BCustomer[]
-  total: number
-  page: number
-  limit: number
-  totalPages: number
-  filters?: CustomerFilters
-}
-
-export interface CustomerStats {
-  totalCustomers: number
-  activeCustomers: number
-  newCustomersThisMonth: number
-  averageOrderValue: number
-  totalRevenue: number
-  topCities: Array<{ city: string; count: number }>
-  customerSegments: Array<{ segment: string; count: number }>
-}
 
 // Validation schemas
 const GetCustomersSchema = z.object({
