@@ -284,9 +284,9 @@ export async function fetchInventoryItemsByLocation(
   } 
 ): Promise<any> {
   const {
-    limit = 10000,
+    limit = 1000,
     offset = 0,
-    fields = "*,location_levels.*", // include location levels to get stock qty
+    fields = "*,location_levels", // include location levels to get stock qty
   } = params || {};
 
   const headers = await getAuthHeaders();
@@ -295,7 +295,9 @@ export async function fetchInventoryItemsByLocation(
     {
         location_levels: {
           location_id: [locationId],
-        }
+        },
+        limit,
+        offset
     },
     {
        limit,
@@ -305,6 +307,14 @@ export async function fetchInventoryItemsByLocation(
     }
   );
 
+
+
+  console.log(inventory_items, 'INVV', inventory_items.length, {
+       limit,
+       offset,
+      headers,
+      fields, // tells the API which fields to return
+    })
    return inventory_items.map((item: any) => {
     const locationLevel = item.location_levels?.find(
       (level: any) => level.location_id === locationId

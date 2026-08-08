@@ -47,7 +47,7 @@ export default function RootLayout({
         <ThemeBootScript />
       </head>
       {/* CHANGE: h-full overflow-hidden instead of min-h-screen */}
-      <body className={`${fontVars} h-full overflow-hidden antialiased`}>
+      <body className={`${fontVars} h-full antialiased`}>
         <TooltipProvider>
           <PreferencesStoreProvider
             themeMode={theme_mode}
