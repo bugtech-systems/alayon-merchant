@@ -498,7 +498,7 @@ export const listOrders = async (
       }
     );
     
-
+console.log(response, "RESSSSP")
     // Get all orders from response
     let orders = response.orders || [];
     const totalCount = response.count || 0;
@@ -927,7 +927,6 @@ export async function listPosOrders(limit: number = 1000, offset: number = 0, fi
       'discounts',
       'delivery.*'
     ].join(',');
-    console.log( 'filters',filters)
 
     const queryParams = new URLSearchParams({
       limit: limit.toString(),

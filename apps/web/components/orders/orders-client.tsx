@@ -1709,7 +1709,6 @@ export function OrdersClient({
 
 
 
-  console.log(user, 'USSSS')
   return (
     <TooltipProvider>
       <div className="space-y-6">

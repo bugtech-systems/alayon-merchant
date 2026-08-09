@@ -530,7 +530,6 @@ export async function getTodayOrdersSummary(user?: any): Promise<{
     const limit = 1000;
     const response = await listPosOrders(limit, 0, filters);
       // let initialOrders = await listPosOrders(limit, offset, filters);
-    console.log(response, "RESPPOND")
     const orders = response.orders || [];
     const filtered = filterOrdersByCapturedAt(orders, from, to)
     // Calculate metrics

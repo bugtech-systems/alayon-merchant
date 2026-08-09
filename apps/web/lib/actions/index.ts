@@ -6,3 +6,4 @@ export * from "./customer";
 export * from "./users";
 export * from "./transactions";
 export * from "./inventory";
+export * from "./jagwar";
