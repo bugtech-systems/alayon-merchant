@@ -322,7 +322,7 @@ console.log(company, data?.customers, 'CURRNET')
     <div className="flex h-[90vh] overflow-hidden bg-gray-50">
       {/* Conversation List */}
       <div
-        className={`
+        className={` 
           ${showList ? "flex" : "hidden"} 
           lg:flex 
           w-full 
