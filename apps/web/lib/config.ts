@@ -173,6 +173,16 @@ export async function getStoreProducts(region?: string, limit = 10, offset = 0) 
   return { products, count };
 }
 
+// lib/water-production/config.ts
+const WATER_PRODUCTION_API_URL = process.env.SMS_URL || 'http://localhost:3500';
+
+export const productionApiConfig = {
+  baseUrl: WATER_PRODUCTION_API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+};
+
 // Type exports
 export type { StoreProduct, StoreRegion };
 export default sdk;
