@@ -92,11 +92,11 @@ export function ConversationList({
   const filteredCustomers = useMemo(() => {
     return customers.filter(customer =>
       customer.name.toLowerCase().includes(recipientSearch.toLowerCase()) ||
-      customer.phone.includes(recipientSearch) ||
+      customer?.phone?.includes(recipientSearch) ||
       (customer.email && customer.email.toLowerCase().includes(recipientSearch.toLowerCase()))
     );
   }, [customers, recipientSearch]);
-
+console.log(customers, 'CUSTOMMSS')
   // Get visible customers (paginated)
   const visibleCustomers = useMemo(() => {
     return filteredCustomers.slice(0, visibleCount);

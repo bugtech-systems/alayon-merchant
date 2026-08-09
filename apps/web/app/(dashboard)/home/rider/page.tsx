@@ -72,6 +72,7 @@ function transformToWaterDeliveryOrder(customer: CustomerWithOrders): any {
   const itemQuantity = latestOrder?.items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0;
 
   return {
+    ...customer,
     id: customer.id,
     orderNumber: latestOrder?.display_id?.toString() || customer.id.slice(-6),
     customer: `${customer.first_name || ''} ${customer.last_name || ''}`.trim() || customer.email || "Guest",
@@ -124,7 +125,6 @@ export default function DashboardPage({user}: any) {
         offset: 0,
         sort_field: "created_at",
         sort_order: "DESC",
-
         customer_group_id: pricingContext.customerGroupId
       });
       return result;
@@ -135,7 +135,6 @@ export default function DashboardPage({user}: any) {
   });
 
 
-  console.log(data, 'RIDER DATAA')
   // Transform data when it changes
   const transformedData = React.useMemo(() => {
     if (!data) return { orders: [], kpiData: { totalCustomers: 0, activeCustomers: 0, totalRevenue: 0, totalOrders: 0 } };
@@ -145,13 +144,14 @@ export default function DashboardPage({user}: any) {
     // Transform customers to orders
     const orders = customers
       .filter((c: CustomerWithOrders) => c.latest_order !== null)
-      // .map(transformToWaterDeliveryOrder);
+      .map(transformToWaterDeliveryOrder);
     // Calculate KPI data
+
+    console.log(data, 'adadada')
     const totalCustomers = data.meta?.total_customers || customers.length;
     const activeCustomers = data.meta?.active_customers || customers.filter((c: CustomerWithOrders) => c.total_orders > 0).length;
     const totalRevenue = data.meta?.total_revenue || customers.reduce((sum: number, c: CustomerWithOrders) => sum + c.total_spent, 0);
     const totalOrders = customers.reduce((sum: number, c: CustomerWithOrders) => sum + c.total_orders, 0);
-
     return {
       orders,
       kpiData: {
@@ -236,10 +236,16 @@ export default function DashboardPage({user}: any) {
     );
   }
 
-  const { orders, kpiData } = transformedData;
-
+  const { orders, kpiData } = transformedData as any;
+  console.log(kpiData, 'KPII', kpiData?.totalCustomers)
   return (
     <div className="flex flex-col gap-4 md:gap-6 p-4 md:p-6">
+                {/* KPI Cards */}
+                <KpiCards
+                  kpiData={kpiData}
+                  orders={orders}
+                  user={user}
+                />
       {/* Refresh Indicator */}
       {isFetching && (
         <div className="fixed bottom-4 right-4 z-50">

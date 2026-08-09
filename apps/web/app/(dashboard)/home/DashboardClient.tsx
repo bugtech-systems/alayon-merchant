@@ -517,7 +517,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
           setPreviousOrderCount(newOrderCount);
         }
       }
-    }, 10000);
+    }, 30000);
 
     return () => clearInterval(intervalId);
   }, [refetch, data, isLoading, isSoundEnabled, playNotificationSound]);
@@ -637,10 +637,10 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     console.log(orderId, 'ORDER', stock_location_id);
       setLoading(true);
     let order = data?.orders.find(a => a.id === orderId) as any;
-    console.log(order, 'ORDEER')
 
-    console.log(order, 'ORDER ACCEPT')
+    if(order?.delivery?.id){
     await acceptDelivery(order?.delivery?.id)
+    }
     await fulfillOrder(orderId, stock_location_id)
     await refetch();
     setLoading(false);
@@ -733,14 +733,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
         <div className="@container/main flex flex-col gap-4 md:gap-6 relative">
           <Toaster position="top-right" richColors />
           
-          {/* KPI Cards */}
-          <KpiCards
-            totalCustomers={0}
-            activeCustomers={0}
-            totalRevenue={0}
-            totalOrders={0}
-            isLoading={isLoading}
-          />
+
           
           <DriverDashboard user={user}/>
         </div>

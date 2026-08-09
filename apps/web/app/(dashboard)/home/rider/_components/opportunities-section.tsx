@@ -49,6 +49,10 @@ import {
   ArrowUpDownIcon,
   ArrowUpIcon,
   ArrowDownIcon,
+  NavigationIcon,
+  FilterIcon,
+  SortAscIcon,
+  SortDescIcon,
 } from "lucide-react";
 import { formatDistanceToNow, parseISO, format } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -217,6 +221,12 @@ export interface WaterDeliveryOrder {
     stockHealthPercentage: number;
     stockHealthStatus: "high" | "medium" | "low";
   };
+  // Location coordinates for distance calculation
+  locationCoordinates?: {
+    lat: number;
+    lng: number;
+  };
+  distance?: number; // Distance in kilometers from user's location
 }
 
 // Status configurations
@@ -244,6 +254,22 @@ const statusOptions = [
   "in_transit",
   "delivered",
   "completed",
+] as const;
+
+// Stock health filter options
+const stockHealthOptions = [
+  { value: "all", label: "All Stock Health" },
+  { value: "high", label: "High (Above 70%)" },
+  { value: "medium", label: "Medium (30-70%)" },
+  { value: "low", label: "Low (Below 30%)" },
+] as const;
+
+// Sort options
+const sortOptions = [
+  { value: "stockHealth", label: "Stock Health" },
+  { value: "status", label: "Status" },
+  { value: "orderDate", label: "Last Order Date" },
+  { value: "distance", label: "Nearest Location" },
 ] as const;
 
 function getStatusColor(status: string) {
@@ -689,7 +715,30 @@ function buildQueryString(params: QueryParams): string {
 }
 
 // ============================================================
-// 7. MAIN COMPONENT
+// 7. DISTANCE CALCULATION UTILITY
+// ============================================================
+
+function calculateDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// ============================================================
+// 8. MAIN COMPONENT
 // ============================================================
 
 interface WaterDeliveryOrdersSectionProps {
@@ -698,6 +747,7 @@ interface WaterDeliveryOrdersSectionProps {
   onAssignDriver?: (orderId: string, driverName: string) => void;
   onUpdateStatus?: (orderId: string, status: WaterDeliveryOrder["status"]) => void;
   onBulkAction?: (action: string, selectedIds: string[]) => void;
+  userLocation?: { lat: number; lng: number }; // User's current location
 }
 
 export function WaterDeliveryOrdersSection({
@@ -706,6 +756,7 @@ export function WaterDeliveryOrdersSection({
   onAssignDriver,
   onUpdateStatus,
   onBulkAction,
+  userLocation,
 }: WaterDeliveryOrdersSectionProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -726,6 +777,9 @@ export function WaterDeliveryOrdersSection({
   const [selectedOrder, setSelectedOrder] = React.useState<WaterDeliveryOrder | null>(null);
   const [detailType, setDetailType] = React.useState<"order" | "customer" | "location" | "stock" | "status">("order");
   const [isLoading, setIsLoading] = React.useState(true);
+  const [stockHealthFilter, setStockHealthFilter] = React.useState<string>("all");
+  const [sortBy, setSortBy] = React.useState<string>("");
+  const [sortOrder, setSortOrder] = React.useState<"asc" | "desc">("asc");
 
   const sortableId = React.useId();
 
@@ -734,6 +788,26 @@ export function WaterDeliveryOrdersSection({
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
     useSensor(KeyboardSensor, {})
   );
+
+  // Calculate distances for each order based on user location
+  React.useEffect(() => {
+    if (userLocation && data.length > 0) {
+      setData(prevData =>
+        prevData.map(order => {
+          if (order.locationCoordinates?.lat && order.locationCoordinates?.lng) {
+            const distance = calculateDistance(
+              userLocation.lat,
+              userLocation.lng,
+              order.locationCoordinates.lat,
+              order.locationCoordinates.lng
+            );
+            return { ...order, distance };
+          }
+          return order;
+        })
+      );
+    }
+  }, [userLocation, data.length]);
 
   // -- Table Columns --
   const columns = React.useMemo<ColumnDef<WaterDeliveryOrder>[]>(() => {
@@ -817,13 +891,23 @@ export function WaterDeliveryOrdersSection({
               <div className="flex flex-col justify-start items-start gap-0.5">
                 <span className="font-medium text-sm">{meta.city || "N/A"}</span>
                 <span className="text-xs text-muted-foreground">{meta.barangay || "N/A"}</span>
+                {order.distance !== undefined && (
+                  <span className="text-xs text-blue-600 flex items-center gap-1">
+                    <NavigationIcon className="size-3" />
+                    {order.distance.toFixed(1)} km
+                  </span>
+                )}
               </div>
             </div>
           );
         },
-        size: 160,
+        size: 180,
         enableSorting: true,
-        sortingFn: "alphanumeric",
+        sortingFn: (rowA, rowB) => {
+          const a = rowA.original.distance ?? Infinity;
+          const b = rowB.original.distance ?? Infinity;
+          return a - b;
+        },
       },
       {
         accessorKey: "status",
@@ -844,7 +928,12 @@ export function WaterDeliveryOrdersSection({
         },
         size: 150,
         enableSorting: true,
-        sortingFn: "alphanumeric",
+        sortingFn: (rowA, rowB) => {
+          const a = rowA.original.latest_order?.status || rowA.original.status || "pending";
+          const b = rowB.original.latest_order?.status || rowB.original.status || "pending";
+          return a.localeCompare(b); // Ascending (A-Z)
+          // return b.localeCompare(a); // Descending (Z-A)
+        }, 
         filterFn: (row, id, filterValue) => {
           if (filterValue === "all" || !filterValue) return true;
           const status = row.getValue(id) as string;
@@ -859,8 +948,12 @@ export function WaterDeliveryOrdersSection({
         ),
         size: 80,
         enableSorting: true,
-        sortingFn: "alphanumeric",
-      },
+        sortingFn: (rowA, rowB) => {
+              const a = rowA.original.latest_order?.total_items ?? Infinity;
+              const b = rowB.original.latest_order?.total_items ?? Infinity;
+              return a - b;
+            },     
+         },
       {
         accessorKey: "total",
         header: ({ column }) => <SortableHeader column={column} title="Total" />,
@@ -869,29 +962,88 @@ export function WaterDeliveryOrdersSection({
         ),
         size: 120,
         enableSorting: true,
-        sortingFn: "alphanumeric",
-      },
-      {
-        accessorKey: "orderDate",
-        header: ({ column }) => <SortableHeader column={column} title="Last Order" />,
-        cell: ({ row }) => {
-          const date = row.original.last_order_at || row.original.orderDate || new Date().toISOString();
-          return (
-            <span title={format(parseISO(date), "PPP pp")}>
-              {formatDistanceToNow(parseISO(date), { addSuffix: true })}
-            </span>
-          );
-        },
-        size: 130,
-        enableSorting: true,
-        sortingFn: "datetime",
-      },
+        sortingFn: (rowA, rowB) => {
+              const a = rowA.original.latest_order?.total ?? Infinity;
+              const b = rowB.original.latest_order?.total ?? Infinity;
+              return a - b;
+            },
+          },
+{
+  accessorKey: "orderDate",
+  header: ({ column }) => <SortableHeader column={column} title="Last Order" />,
+  cell: ({ row }) => {
+    const rawDate = row.original.last_order_at || row.original.orderDate;
+    
+    // If no date, show "Never" or empty state
+    if (!rawDate) {
+      return <span>Never</span>;
+    }
+    
+    // Parse the date properly
+    let dateObj;
+    
+    // Check if it's in M/D/YYYY format
+    if (typeof rawDate === 'string' && rawDate.includes('/')) {
+      const parts = rawDate.split('/');
+      if (parts.length === 3) {
+        const month = parseInt(parts[0], 10) - 1;
+        const day = parseInt(parts[1], 10);
+        const year = parseInt(parts[2], 10);
+        dateObj = new Date(year, month, day);
+      }
+    }
+    
+    // If not parsed yet, try standard parsing
+    if (!dateObj || isNaN(dateObj.getTime())) {
+      dateObj = new Date(rawDate);
+    }
+    
+    // If still invalid, show error state
+    if (isNaN(dateObj.getTime())) {
+      return <span>Invalid date</span>;
+    }
+    
+    return (
+      <span title={format(dateObj, "PPP pp")}>
+        {formatDistanceToNow(dateObj, { addSuffix: true })}
+      </span>
+    );
+  },
+  size: 130,
+  sortingFn: (rowA, rowB) => {
+    const parseDate = (value) => {
+      if (!value) return 0;
+      
+      // Handle M/D/YYYY format
+      if (typeof value === 'string' && value.includes('/')) {
+        const parts = value.split('/');
+        if (parts.length === 3) {
+          const month = parseInt(parts[0], 10) - 1;
+          const day = parseInt(parts[1], 10);
+          const year = parseInt(parts[2], 10);
+          const date = new Date(year, month, day);
+          return date.getTime();
+        }
+      }
+      
+      // Try standard parsing
+      const timestamp = new Date(value).getTime();
+      return isNaN(timestamp) ? 0 : timestamp;
+    };
+    
+    const a = parseDate(rowA.original.last_order_at || rowA.original.orderDate);
+    const b = parseDate(rowB.original.last_order_at || rowB.original.orderDate);
+    
+    // Ascending (oldest first)
+    return a - b;
+  },
+},
       {
         accessorKey: "stockHealth",
         header: ({ column }) => <SortableHeader column={column} title="Stock Health" />,
         cell: ({ row }) => {
           const order = row.original;
-          const stock = order.stock_health || {
+          const stock = order || {
             remainingStock: 0,
             previousOrderQty: 0,
             stockHealthScore: 0,
@@ -909,7 +1061,6 @@ export function WaterDeliveryOrdersSection({
           const showBars = prevQty > 0;
 
           const filledSlots = Math.min(10, Math.round(pct / 10));
-
           return (
             <TooltipProvider>
               <Tooltip delayDuration={300}>
@@ -995,29 +1146,45 @@ export function WaterDeliveryOrdersSection({
           const b = rowB.original.stock_health?.stockHealthPercentage ?? 0;
           return b - a;
         },
+        filterFn: (row, id, filterValue) => {
+          if (filterValue === "all" || !filterValue) return true;
+          const stock = row.original.stock_health;
+          if (!stock) return false;
+          const pct = stock.stockHealthPercentage ?? 0;
+          switch (filterValue) {
+            case "high":
+              return pct >= 70;
+            case "medium":
+              return pct >= 30 && pct < 70;
+            case "low":
+              return pct < 30;
+            default:
+              return true;
+          }
+        },
       },
-    {
-  accessorKey: "orderNumber",
-  header: ({ column }) => <SortableHeader column={column} title="Order #" />,
-  cell: ({ row }) => {
-    const order = row.original;
-    const orderId = order.latest_order?.id;
-    const orderNumber = order.orderNumber || order.latest_order?.orderNumber || "N/A";
-    console.log(order, 'ORDD')
-    return (
-      <Link
-        href={`/rider/customers/${order?.id}`}
-        className="flex items-center gap-2 cursor-pointer hover:text-primary transition-colors"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <span className="font-mono text-sm font-medium">#{orderNumber}</span>
-      </Link>
-    );
-  },
-  size: 140,
-  enableSorting: true,
-  sortingFn: "alphanumeric",
-},
+      {
+        accessorKey: "orderNumber",
+        header: ({ column }) => <SortableHeader column={column} title="Order #" />,
+        cell: ({ row }) => {
+          const order = row.original;
+          const customerId = order.customerDetails?.id || order.id;
+          return (
+            <Link
+              href={`/rider/customers/${customerId}`}
+              className="flex items-center gap-2 cursor-pointer hover:text-primary transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Button variant="outline" size="sm" className="h-8">
+                View
+              </Button>
+            </Link>
+          );
+        },
+        size: 100,
+        enableSorting: false,
+        sortingFn: "alphanumeric",
+      },
     ];
   }, []);
 
@@ -1045,6 +1212,14 @@ export function WaterDeliveryOrdersSection({
     getSortedRowModel: getSortedRowModel(),
     globalFilterFn: "includesString",
   });
+
+  // Apply stock health filter
+  React.useEffect(() => {
+    const stockHealthColumn = table.getColumn("stockHealth");
+    if (stockHealthColumn) {
+      stockHealthColumn.setFilterValue(stockHealthFilter === "all" ? undefined : stockHealthFilter);
+    }
+  }, [stockHealthFilter, table]);
 
   // Simulate loading
   React.useEffect(() => {
@@ -1093,6 +1268,26 @@ export function WaterDeliveryOrdersSection({
           break;
         default:
           break;
+      }
+    }
+  };
+
+  // Handle sort change
+  const handleSortChange = (value: string) => {
+    setSortBy(value);
+    if (value === "distance" && userLocation) {
+      // Custom sort by distance
+      const sorted = [...data].sort((a, b) => {
+        const distA = a.distance ?? Infinity;
+        const distB = b.distance ?? Infinity;
+        return sortOrder === "asc" ? distA - distB : distB - distA;
+      });
+      setData(sorted);
+    } else {
+      // Use table sorting for other columns
+      const column = table.getColumn(value);
+      if (column) {
+        column.toggleSorting(sortOrder === "desc");
       }
     }
   };
@@ -1157,7 +1352,7 @@ export function WaterDeliveryOrdersSection({
               <Badge variant="secondary">{filteredOrderCount}</Badge>
             </CardTitle>
             <CardDescription>
-              Track and manage water delivery orders across all statuses. Click column headers to sort.
+              Track and manage water delivery orders. Filter by stock health, status, or sort by location proximity.
             </CardDescription>
           </div>
           <CardAction>
@@ -1185,6 +1380,35 @@ export function WaterDeliveryOrdersSection({
                 )}
               </div>
 
+              {/* Stock Health Filter */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9">
+                    <FilterIcon className="size-4 mr-1" />
+                    Stock Health
+                    <ChevronDownIcon className="size-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuLabel>Filter by Stock Health</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuRadioGroup
+                    value={stockHealthFilter}
+                    onValueChange={(value) => {
+                      setStockHealthFilter(value);
+                      table.setPageIndex(0);
+                    }}
+                  >
+                    {stockHealthOptions.map((opt) => (
+                      <DropdownMenuRadioItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Status Filter */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="h-9">
@@ -1194,6 +1418,8 @@ export function WaterDeliveryOrdersSection({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
                   <DropdownMenuRadioGroup
                     value={statusFilter}
                     onValueChange={(value) => {
@@ -1210,7 +1436,52 @@ export function WaterDeliveryOrdersSection({
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              {/* Sort Dropdown */}
               <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9">
+                    {sortOrder === "asc" ? (
+                      <SortAscIcon className="size-4 mr-1" />
+                    ) : (
+                      <SortDescIcon className="size-4 mr-1" />
+                    )}
+                    Sort
+                    <ChevronDownIcon className="size-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuLabel>Sort By</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {sortOptions.map((opt) => (
+                    <DropdownMenuItem
+                      key={opt.value}
+                      onClick={() => handleSortChange(opt.value)}
+                      className={cn(
+                        "flex items-center justify-between",
+                        sortBy === opt.value && "bg-accent"
+                      )}
+                    >
+                      <span>{opt.label}</span>
+                      {sortBy === opt.value && (
+                        sortOrder === "asc" ? (
+                          <ArrowUpIcon className="size-3" />
+                        ) : (
+                          <ArrowDownIcon className="size-3" />
+                        )
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                    className="justify-center text-muted-foreground"
+                  >
+                    Toggle Order ({sortOrder === "asc" ? "Ascending" : "Descending"})
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="h-9">
                     Columns
@@ -1232,7 +1503,7 @@ export function WaterDeliveryOrdersSection({
                     );
                   })}
                 </DropdownMenuContent>
-              </DropdownMenu>
+              </DropdownMenu> */}
             </div>
           </CardAction>
         </CardHeader>
@@ -1276,7 +1547,7 @@ export function WaterDeliveryOrdersSection({
               sensors={sensors}
               id={sortableId}
             >
-              <Table className="min-w-[800px]">
+              <Table className="min-w-[900px]">
                 <TableHeader className="border-t">
                   {table.getHeaderGroups().map((headerGroup) => (
                     <TableRow key={headerGroup.id}>
@@ -1318,9 +1589,11 @@ export function WaterDeliveryOrdersSection({
                         <div className="flex flex-col items-center gap-2">
                           <PackageIcon className="size-8 text-muted-foreground/50" />
                           <p className="text-muted-foreground">No orders found.</p>
-                          {(statusFilter !== "all" || searchQuery) && (
+                          {(statusFilter !== "all" || stockHealthFilter !== "all" || searchQuery) && (
                             <Button variant="outline" size="sm" onClick={() => {
                               table.getColumn("status")?.setFilterValue(undefined);
+                              table.getColumn("stockHealth")?.setFilterValue(undefined);
+                              setStockHealthFilter("all");
                               table.setGlobalFilter(undefined);
                               table.setPageIndex(0);
                             }}>

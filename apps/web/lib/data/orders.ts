@@ -498,7 +498,6 @@ export const listOrders = async (
       }
     );
     
-console.log(response, "RESSSSP")
     // Get all orders from response
     let orders = response.orders || [];
     const totalCount = response.count || 0;

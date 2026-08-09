@@ -2,6 +2,7 @@
 
 import { ArrowUpRight, Package, TrendingDown, TrendingUp, Truck, CalendarDays, Clock, MapPin, Map } from "lucide-react";
 import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import Link from "next/link";
+import { listCustomersWithOrders } from "@/lib/data/customer";
 
 // Mock data - in real app, this would come from API based on selected date
 interface RiderStats {
@@ -25,17 +27,38 @@ interface RiderStats {
   distanceTraveled?: number;
 }
 
-export function KpiCards() {
+export function KpiCards({user, kpiData, orders}: any) {
   const [selectedDate, setSelectedDate] = React.useState<Date>(new Date());
+
+
+  const completed = orders.filter((a: any) => a.status === 'completed' || a.status === 'delivered')
+
+
+
+  console.log(completed, "COMPL")
+
+  const earnings = completed.reduce((sum, item) => sum + item?.latest_order.total, 0);
 
   // Mock data that would change based on selectedDate
   const stats: RiderStats = {
-    totalDeliveries: 24,
-    completedDeliveries: 18,
-    totalEarnings: 4680,
+    totalDeliveries: kpiData?.totalCustomers,
+    completedDeliveries: completed.length,
+    totalEarnings: earnings,
     onTimeRate: 92.5,
     distanceTraveled: 156,
   };
+
+
+
+
+
+
+
+
+  console.log(stats, orders, "DAAAA")
+
+
+
 
   const pendingDeliveries = stats.totalDeliveries - stats.completedDeliveries;
   const completionRate = (stats.completedDeliveries / stats.totalDeliveries) * 100;
