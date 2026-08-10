@@ -17,15 +17,31 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
- 
+          node-version: '18'  # Changed from 20 to 18 (Medusa 1.20.11 works better with 18)
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
         with:
           version: 8
 
+      - name: Cache pnpm store
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.pnpm-store
+            node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile --prefer-offline
+        run: |
+          # Use registry with retry mechanism
+          pnpm config set registry https://registry.npmjs.org/
+          pnpm install --no-frozen-lockfile --prefer-offline --network-concurrency 1 --no-strict-peer-dependencies
+        env:
+          # Reduce npm registry requests
+          npm_config_registry: https://registry.npmjs.org/
 
       - name: Build project
         run: |
@@ -56,8 +72,8 @@ jobs:
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
             
-            if ! command -v node &> /dev/null || [ "$(node --version | cut -d. -f1 | tr -d 'v')" -lt 20 ]; then
-              curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+            if ! command -v node &> /dev/null || [ "$(node --version | cut -d. -f1 | tr -d 'v')" -lt 18 ]; then
+              curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
               sudo apt-get install -y nodejs -y
             fi
             
@@ -70,8 +86,15 @@ jobs:
             git pull origin development --no-rebase
             sudo chown -R $USER:$USER ~/apps/alayon-merchant
             
-            # Always use --no-frozen-lockfile
-            pnpm install --no-frozen-lockfile --prefer-offline
+            # Use pnpm with retry and concurrency limits
+            pnpm config set registry https://registry.npmjs.org/
+            
+            # Try with reduced concurrency first
+            pnpm install --no-frozen-lockfile --prefer-offline --network-concurrency 1 --no-strict-peer-dependencies || \
+            # If fails, try with no registry (using cache only)
+            pnpm install --no-frozen-lockfile --offline --no-strict-peer-dependencies || \
+            # If all fails, try with timeout and retry
+            pnpm install --no-frozen-lockfile --network-concurrency 1 --no-strict-peer-dependencies --fetch-retries 5 --fetch-retry-factor 2
             
             cd apps/web
             
