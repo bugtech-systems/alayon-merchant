@@ -560,7 +560,7 @@ export function InventoryTable({ user }: any) {
 
       if (!user?.stockLocationId) {
         throw new Error('No stock location ID found. Please ensure you have a valid location.');
-      }
+      } 
 
       const result = await fetchInventoryItemsByLocation(user.stockLocationId);
       console.log(result, user?.stockLocationId, 'STO LOC')
