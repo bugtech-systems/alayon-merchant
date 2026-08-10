@@ -9,10 +9,8 @@ import { useMedusaOrders } from "@/hooks/useMedusaOrders";
 import { assignDriverToOrder, unassignDriverToOrder } from "@/lib/data";
 import { PrintDialog } from "@/app/pos/_components/print-dialog";
 import { startOfDay, endOfDay, format } from 'date-fns';
-import { completeOrder, fulfillOrder, updateStatus } from "@/lib/actions/orders";
-import { KpiCards } from "./rider/_components/kpi-cards";
+import { fulfillOrder, updateStatus } from "@/lib/actions/orders";
 import { useSocket } from "@/hooks/useSocket";
-import { NotificationBell } from "@/components/notification/NotificationBell";
 import { Toaster } from "sonner";
 import { toast } from "sonner";
 import { acceptDelivery } from "@/lib/actions";
@@ -244,11 +242,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
   const { 
     socket, 
     isConnected, 
-    notifications, 
-    messages,
-    sendMessage,
-    markNotificationRead,
-    clearNotifications,
   } = useSocket({
     userId: user?.id,
     role: userRole,
@@ -680,10 +673,7 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
     });
   }, [isSoundEnabled]);
 
-  // Toggle chat
-  const toggleChat = useCallback(() => {
-    setShowChat(prev => !prev);
-  }, []);
+
 
   // Company role view
   if (userRole === "company") {
@@ -732,9 +722,6 @@ export function DashboardClient({ user, userRole }: DashboardClientProps) {
       <PullToRefresh onRefresh={handleManualRefresh}>
         <div className="@container/main flex flex-col gap-4 md:gap-6 relative">
           <Toaster position="top-right" richColors />
-          
-
-          
           <DriverDashboard user={user}/>
         </div>
       </PullToRefresh>

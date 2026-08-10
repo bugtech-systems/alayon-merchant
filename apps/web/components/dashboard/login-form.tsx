@@ -64,9 +64,9 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 // User type configuration
 const userTypes = [
   // { value: "customer", label: "Customer", icon: User, color: "blue", description: "Shop as a customer" },
-  { value: "store", label: "Cashier", icon: Store, color: "green", description: "Manage your store", email: "cashier_sam@gmail.com", password: "" },
-  { value: "cashier", label: "Cashier", icon: Truck, color: "orange", description: "Fullfilment operations", email: "cashier_shiela@gmail.com", password: "" },
-  { value: "company", label: "Admin", icon: Building2, color: "purple", description: "Platform management", email: "bellyme@gmail.com", password: "" },
+  { value: "store", label: "Restaurant", icon: Store, color: "green", description: "Manage your store", email: "cashier_sam@gmail.com", password: "" },
+  { value: "cashier", label: "Water Delivery", icon: Truck, color: "orange", description: "Fullfilment operations", email: "cashier_shiela@gmail.com", password: "" },
+  { value: "company", label: "Laundry Station", icon: Building2, color: "purple", description: "Platform management", email: "bellyme@gmail.com", password: "" },
 ];
 
 interface LoginFormProps {
@@ -346,7 +346,7 @@ export function LoginForm({onSuccess }: LoginFormProps) {
         </form>
 
         {/* Demo Credentials Section - Only in development */}
-        {/* {process.env.NODE_ENV === "development" && ( */}
+      {process.env.NODE_ENV === "development" && ( 
           <div className="mt-6 pt-4 border-t">
             <p className="text-xs font-medium text-center text-muted-foreground mb-3">
               Demo Credentials (Click to auto-fill)
@@ -375,7 +375,7 @@ export function LoginForm({onSuccess }: LoginFormProps) {
               ))}
             </div>
           </div>
-        {/* )} */}
+       )} 
       </CardContent>
       
       <CardFooter className="flex justify-center border-t pt-6">

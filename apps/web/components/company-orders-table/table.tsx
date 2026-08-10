@@ -335,7 +335,7 @@ function getOrderColumns({
         onClick={handleAccept}
         disabled={isProcessing || !stockLocationId}
       >
-        {isProcessing ? (
+        {isProcessing || isLoading ? (
           <>
             <LoaderCircle className="size-3 animate-spin" />
             <span className="sr-only">Processing</span>
@@ -384,12 +384,12 @@ function getOrderColumns({
                             <Badge variant="outline" className="px-1.5 text-muted-foreground">
                   {isFulfilled ? (
                     <CheckCircle className="fill-green-500 stroke-primary-foreground dark:fill-green-600" />
-                  ) : isProcessing ? (
+                  ) : (isProcessing || isLoading) ? (
                     <LoaderCircle className="size-3 animate-spin" />
                   ) : (
                     <span>Pending</span>
                   )}
-                  {isFulfilled ? " Completed" : isProcessing ? " Processing" : ""}
+                  {isFulfilled ? " Completed" : isProcessing  ? " Processing" : ""}
                 </Badge>
               </div>
 
