@@ -442,7 +442,7 @@ export async function processPOSPayment(params: {
 
 
     if(isTakeOut){
-        await updateCartMetadata(cart, { isTakeOut })
+        await updateCartMetadata(cart?.id, { isTakeOut })
     }  
     
  
