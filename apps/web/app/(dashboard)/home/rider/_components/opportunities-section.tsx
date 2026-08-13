@@ -1667,6 +1667,7 @@ export function WaterDeliveryOrdersSection({
         isOpen={(isDetailOpen && detailType === "location")}
         onClose={() => { if (isDetailOpen) { setIsDetailOpen(false); setDetailType('order'); } }}
         customer={selectedOrder}
+        viewOnly={true}
       />
       <StockDetailModal
         open={isDetailOpen && detailType === "stock"}

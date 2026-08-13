@@ -27,11 +27,12 @@ type FormState = {
 
 // Validation schema for signup
 const signupSchema = z.object({
-  user_type: z.enum(["driver", "company"], {
+  user_type: z.enum(["restaurant", "water_delivery", "laundry"], {
     required_error: "User type is required",
     invalid_type_error: "Invalid user type",
   }),
   company_id: z.string().optional().nullable(),
+  role: z.string().optional().nullable(),
   first_name: z.string().min(1, "First name is required").max(50, "First name is too long"),
   last_name: z.string().min(1, "Last name is required").max(50, "Last name is too long"),
   phone: z.string().min(10, "Phone number must be at least 10 characters").max(13, "Phone number is too long"),
@@ -66,6 +67,7 @@ export async function signup(prevState: FormState, data: FormData): Promise<Form
   // Extract form data
   const rawData = {
     user_type: data.get("user_type") as string,
+    role: data.get("role") as string,
     company_id: data.get("company_id") as string,
     first_name: data.get("first_name") as string,
     last_name: data.get("last_name") as string,
@@ -94,8 +96,8 @@ export async function signup(prevState: FormState, data: FormData): Promise<Form
     };
   }
 
-  const { user_type, company_id, first_name, last_name, phone, email, password } = validationResult.data;
-  const actor_type = user_type as "company" | "driver" | "customer";
+  const { user_type, company_id, first_name, last_name, phone, email, password, role } = validationResult.data;
+  const actor_type = user_type as any;
 
   // Additional validation for company users
   if (!company_id) {
@@ -155,7 +157,7 @@ export async function signup(prevState: FormState, data: FormData): Promise<Form
       first_name,
       last_name,
       phone,
-      metadata: { role: actor_type },
+      metadata: { role, company_type: user_type, company_id  },
     };
 
     const customHeaders = { authorization: `Bearer ${token}` };
@@ -226,6 +228,7 @@ export async function signup(prevState: FormState, data: FormData): Promise<Form
       last_name,
       customer_id: createdCustomer.id,
       company_id,
+      role,
       phone,
       actor_type,
       token,

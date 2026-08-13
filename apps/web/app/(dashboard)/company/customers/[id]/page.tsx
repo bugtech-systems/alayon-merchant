@@ -1,6 +1,5 @@
 import { retrieveUser } from "@/lib/data";
 import CustomerDetailPage from "@/components/customers/customer-page";
-import { redirect } from "next/navigation";
 
 
 
@@ -9,10 +8,6 @@ export default async function CustomersPage() {
   const user = await retrieveUser();
 
 
-  // Redirect to dashboard if authenticated, otherwise to login
-  if (!user) {
-    redirect("/login"); 
-  }
 
   return (
     <div className="container mx-auto py-6 space-y-6">

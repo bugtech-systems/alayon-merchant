@@ -107,6 +107,7 @@ import { Switch } from "../ui/switch";
 import { Checkbox } from "../ui/checkbox";
 import { CustomerLocationModal } from "./customer-location";
 import { EditCustomerModal } from "./edit-customer-modal";
+import Link from "next/link";
 
 const SMS_URL = process.env.SMS_URL || 'https://sms.sharewin.pro';
 
@@ -992,11 +993,14 @@ export function ActionsCell({ customer, onAction }: { customer: CustomerRow; onA
             Edit Customer
           </DropdownMenuItem>
           
-          <DropdownMenuItem onClick={() => handleAction('viewOrders')}>
+          <Link href={`/company/customers/${customer?.id}`}>
+          <DropdownMenuItem 
+          // onClick={() => handleAction('viewOrders')}
+          >
             <ShoppingBag className="size-4 mr-2" />
             View Orders
           </DropdownMenuItem>
-          
+          </Link>
           <DropdownMenuItem onClick={() => handleAction('sendEmail')}>
             <Send className="size-4 mr-2" />
             Send Email

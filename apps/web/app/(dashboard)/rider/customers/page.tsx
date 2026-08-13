@@ -1,9 +1,5 @@
 import { CustomerRow } from "@/components/customers-table/schema";
 import { retrieveUser } from "@/lib/data";
-import { retrieveCustomer } from "@/lib/actions";
-import { toast } from "sonner";
-import { CustomerCreateForm } from "@/components/forms/customer-create-form";
-import { OrderDeliveryTable } from "@/components/orders-table/table";
 import { CustomerTable } from "@/components/customers-table/table";
 
 

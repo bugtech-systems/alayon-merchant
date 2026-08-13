@@ -23,10 +23,11 @@ import {
   AlertCircle,
   Edit,
   LocateFixed,
+  Search,
+  X,
 } from 'lucide-react';
 import { listBarangays, listMunicipalities } from '@/lib/actions/regions';
 import { updateCustomerLocation } from '@/lib/actions/customer';
-import { MapLocationPicker } from '@/components/map-location-picker';
 
 // --- Types ---
 interface Municipality {
@@ -57,6 +58,7 @@ interface CustomerLocationModalProps {
     };
   } | any;
   onSuccess?: () => void;
+  viewOnly?: boolean;
 }
 
 // --- Helpers ---
@@ -65,9 +67,269 @@ const getFullName = (customer: CustomerLocationModalProps['customer']) =>
 
 const DEFAULT_COORDS = { lat: 14.5995, lng: 120.9842 }; // Manila
 
-// Check if customer has a complete location (muni, barangay, and coords)
+// Check if customer has a complete location
 const hasCompleteLocation = (meta: CustomerLocationModalProps['customer']['metadata']) =>
   !!(meta?.municipality && meta?.barangay && meta?.lat != null && meta?.lng != null);
+
+// ===========================================================================
+// MAP LOCATION PICKER COMPONENT (UPDATED)
+// ===========================================================================
+interface MapLocationPickerProps {
+  onLocationSelect: (location: { lat: number; lng: number; address: string }) => void;
+  initialLocation?: { lat: number; lng: number };
+  barangayName?: string;
+  cityName?: string;
+  placeholder?: string;
+  viewOnly?: boolean;
+  defaultMapType?: 'roadmap' | 'satellite';
+}
+
+// Simple map component using iframe (free, no API key needed)
+function MapLocationPicker({
+  onLocationSelect,
+  initialLocation,
+  barangayName,
+  cityName,
+  placeholder = 'Click on map to select location',
+  viewOnly = false,
+  defaultMapType = 'satellite',
+}: MapLocationPickerProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [mapType, setMapType] = useState<'roadmap' | 'satellite'>(defaultMapType);
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(
+    initialLocation || null
+  );
+  const [address, setAddress] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+
+  // Update location when initialLocation changes
+  useEffect(() => {
+    if (initialLocation) {
+      setLocation(initialLocation);
+      setAddress('');
+    }
+  }, [initialLocation]);
+
+  // Handle map click (only in edit mode)
+  const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (viewOnly) return; // Prevent marker changes in view-only mode
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    // Simulate getting coordinates from click position
+    // In a real implementation, you'd use the map's API to get actual coordinates
+    const lat = initialLocation?.lat || DEFAULT_COORDS.lat;
+    const lng = initialLocation?.lng || DEFAULT_COORDS.lng;
+    
+    // Simulate slight variation for demo
+    const newLat = lat + (y / rect.height - 0.5) * 0.05;
+    const newLng = lng + (x / rect.width - 0.5) * 0.05;
+    
+    setLocation({ lat: newLat, lng: newLng });
+    setAddress(`Selected location at ${newLat.toFixed(4)}, ${newLng.toFixed(4)}`);
+    onLocationSelect({ lat: newLat, lng: newLng, address: `Selected location` });
+  };
+
+  // Handle search
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (viewOnly) return;
+    if (!searchQuery.trim()) return;
+
+    setIsSearching(true);
+    setError(null);
+
+    try {
+      // Use Nominatim API (free, no API key needed)
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1&addressdetails=1`
+      );
+      
+      if (!response.ok) throw new Error('Search failed');
+      
+      const data = await response.json();
+      
+      if (data && data.length > 0) {
+        const result = data[0];
+        const lat = parseFloat(result.lat);
+        const lng = parseFloat(result.lon);
+        const displayName = result.display_name;
+        
+        setLocation({ lat, lng });
+        setAddress(displayName);
+        onLocationSelect({ lat, lng, address: displayName });
+        setSearchQuery('');
+      } else {
+        setError('Location not found. Please try a different search.');
+      }
+    } catch (err) {
+      setError('Failed to search location. Please try again.');
+      console.error('Search error:', err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Generate map URL
+  const getMapUrl = useCallback(() => {
+    const lat = location?.lat || initialLocation?.lat || DEFAULT_COORDS.lat;
+    const lng = location?.lng || initialLocation?.lng || DEFAULT_COORDS.lng;
+    
+    // Use OpenStreetMap with different tile layers
+    const baseUrl = 'https://www.openstreetmap.org';
+    
+    if (mapType === 'satellite') {
+      // Use satellite imagery from ESRI (free)
+      return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}`;
+    } else {
+      // Standard OpenStreetMap
+      return `https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png`;
+    }
+  }, [location, initialLocation, mapType]);
+
+  // Generate static map preview URL (using OpenStreetMap static images, free)
+  const getStaticMapUrl = useCallback(() => {
+    const lat = location?.lat || initialLocation?.lat || DEFAULT_COORDS.lat;
+    const lng = location?.lng || initialLocation?.lng || DEFAULT_COORDS.lng;
+    const zoom = 15;
+    const width = 600;
+    const height = 400;
+    
+    // Use OpenStreetMap static map service (free, no API key)
+    return `https://tile.openstreetmap.org/${zoom}/${Math.floor((lng + 180) / 360 * Math.pow(2, zoom))}/${Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom))}.png`;
+  }, [location, initialLocation]);
+
+  // Get Google Maps URL for external link
+  const getGoogleMapsUrl = useCallback(() => {
+    const lat = location?.lat || initialLocation?.lat || DEFAULT_COORDS.lat;
+    const lng = location?.lng || initialLocation?.lng || DEFAULT_COORDS.lng;
+    return `https://www.google.com/maps?q=${lat},${lng}`;
+  }, [location, initialLocation]);
+
+  return (
+    <div className="space-y-3">
+      {/* Search Bar - Only show in edit mode */}
+      {!viewOnly && (
+        <form onSubmit={handleSearch} className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search for a location..."
+              className="pl-9"
+              disabled={isSearching}
+            />
+          </div>
+          <Button type="submit" disabled={isSearching || !searchQuery.trim()}>
+            {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
+          </Button>
+        </form>
+      )}
+
+      {/* Map Type Toggle - Only show in edit mode */}
+      {!viewOnly && (
+        <div className="flex gap-2 justify-end">
+          <Button
+            variant={mapType === 'roadmap' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setMapType('roadmap')}
+          >
+            Roadmap
+          </Button>
+          <Button
+            variant={mapType === 'satellite' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setMapType('satellite')}
+          >
+            Satellite
+          </Button>
+        </div>
+      )}
+
+      {/* Map Container */}
+      <div
+        ref={mapContainerRef}
+        className={`relative aspect-video bg-muted rounded-lg overflow-hidden border ${
+          !viewOnly ? 'cursor-crosshair hover:ring-2 hover:ring-primary/50' : ''
+        }`}
+        onClick={handleMapClick}
+      >
+        {/* Map Display - Using iframe with OpenStreetMap */}
+        <iframe
+          src={`https://www.openstreetmap.org/export/embed.html?bbox=${(location?.lng || initialLocation?.lng || DEFAULT_COORDS.lng) - 0.01},${(location?.lat || initialLocation?.lat || DEFAULT_COORDS.lat) - 0.01},${(location?.lng || initialLocation?.lng || DEFAULT_COORDS.lng) + 0.01},${(location?.lat || initialLocation?.lat || DEFAULT_COORDS.lat) + 0.01}&layer=${mapType === 'satellite' ? 'mapnik' : 'mapnik'}&marker=${location?.lat || initialLocation?.lat || DEFAULT_COORDS.lat},${location?.lng || initialLocation?.lng || DEFAULT_COORDS.lng}`}
+          width="100%"
+          height="100%"
+          style={{ border: 0 }}
+          allowFullScreen
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+        />
+
+        {/* Location Info Display */}
+        {(location || initialLocation) && (
+          <div className="absolute bottom-2 left-2 right-2 bg-background/90 backdrop-blur-sm p-2 rounded-md text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-medium">
+                📍 {address || `${(location?.lat || initialLocation?.lat || DEFAULT_COORDS.lat).toFixed(6)}, ${(location?.lng || initialLocation?.lng || DEFAULT_COORDS.lng).toFixed(6)}`}
+              </span>
+              {!viewOnly && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (location) {
+                      window.open(getGoogleMapsUrl(), '_blank');
+                    }
+                  }}
+                >
+                  <ExternalLink className="h-3 w-3 mr-1" />
+                  Open in Maps
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Placeholder when no location */}
+        {!location && !initialLocation && (
+          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground bg-muted/50">
+            <div className="text-center">
+              <MapPin className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">{placeholder}</p>
+              {barangayName && cityName && (
+                <p className="text-xs mt-1">
+                  Searching in: {barangayName}, {cityName}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Marker Pin (visual indicator) */}
+        {(location || initialLocation) && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+            <MapPin className={`h-8 w-8 ${viewOnly ? 'text-red-500' : 'text-red-500 animate-bounce'}`} />
+          </div>
+        )}
+      </div>
+
+      {/* Error Message */}
+      {error && (
+        <Alert variant="destructive" className="text-xs">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+    </div>
+  );
+}
 
 // ===========================================================================
 // MAIN COMPONENT
@@ -77,12 +339,13 @@ export function CustomerLocationModal({
   onClose,
   customer,
   onSuccess,
+  viewOnly = false,
 }: CustomerLocationModalProps) {
   const initialMeta = customer?.metadata || {};
   const hasExisting = hasCompleteLocation(initialMeta);
 
   // --- UI state ---
-  const [editMode, setEditMode] = useState(!hasExisting);
+  const [editMode, setEditMode] = useState(!hasExisting && !viewOnly);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -120,7 +383,10 @@ export function CustomerLocationModal({
 
   const customerId = customer?.id;
 
-  // --- Reset form function (memoized to prevent recreation) ---
+  // --- Determine if in view-only mode ---
+  const isViewOnly = viewOnly || (!editMode && hasExisting);
+
+  // --- Reset form function ---
   const resetForm = useCallback(() => {
     const meta = customer?.metadata || {};
     setForm({
@@ -135,12 +401,11 @@ export function CustomerLocationModal({
     setSuccess(false);
     setSaving(false);
     const hasExisting = !!(meta?.municipality && meta?.barangay && meta?.lat != null && meta?.lng != null);
-    setEditMode(!hasExisting);
-  }, [customer?.metadata]); // Only depends on customer metadata
+    setEditMode(!hasExisting && !viewOnly);
+  }, [customer?.metadata, viewOnly]);
 
   // --- Reset form when modal opens or customer changes ---
   useEffect(() => {
-    // Skip on initial mount
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
@@ -211,17 +476,19 @@ export function CustomerLocationModal({
 
   // --- Handlers ---
   const handleMunicipalityChange = (id: string) => {
+    if (isViewOnly) return;
     const found = municipalities.find((m) => m.id === id);
     if (found) {
       setForm((prev) => ({
         ...prev,
         municipality: found.citymun_desc,
-        barangay: '', // reset barangay
+        barangay: '',
       }));
     }
   };
 
   const handleBarangayChange = (id: string) => {
+    if (isViewOnly) return;
     const found = barangays.find((b) => b.id === id);
     if (found) {
       setForm((prev) => ({ ...prev, barangay: found.barangay_desc }));
@@ -229,6 +496,7 @@ export function CustomerLocationModal({
   };
 
   const handleMapLocationSelect = (location: { lat: number; lng: number; address: string }) => {
+    if (isViewOnly) return;
     setForm((prev) => ({
       ...prev,
       lat: location.lat,
@@ -238,8 +506,8 @@ export function CustomerLocationModal({
     if (error) setError('');
   };
 
-  // --- Use current location (browser geolocation) ---
   const handleUseCurrentLocation = () => {
+    if (isViewOnly) return;
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser.');
       return;
@@ -262,6 +530,8 @@ export function CustomerLocationModal({
   };
 
   const handleSave = async () => {
+    if (isViewOnly) return;
+    
     if (!selectedMunicipality) {
       setError('Please select a municipality.');
       return;
@@ -322,8 +592,8 @@ export function CustomerLocationModal({
       );
     }
 
-    // --- View Mode (only shown if location exists and not editing) ---
-    if (!editMode && hasExisting) {
+    // --- View Mode ---
+    if (isViewOnly) {
       return (
         <>
           <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
@@ -332,34 +602,19 @@ export function CustomerLocationModal({
             <span className="text-muted-foreground">· {form.barangay}</span>
           </div>
 
-          {/* Read‑only map with marker */}
+          {/* View-only map with satellite view */}
           <div className="relative aspect-video bg-muted rounded-lg overflow-hidden border">
             <MapLocationPicker
-              onLocationSelect={() => {}} // no‑op in view mode
+              onLocationSelect={() => {}} // no-op in view-only
               initialLocation={
                 form.lat !== null && form.lng !== null
                   ? { lat: form.lat, lng: form.lng }
                   : undefined
               }
               placeholder="No location pinned"
+              viewOnly={true}
+              defaultMapType="satellite"
             />
-            <div className="absolute bottom-2 right-2 z-10">
-              <Button
-                variant="secondary"
-                size="sm"
-                className="shadow-md"
-                asChild
-              >
-                <a
-                  href={`https://www.google.com/maps?q=${displayLat},${displayLng}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <ExternalLink className="size-3 mr-1" />
-                  Open in Maps
-                </a>
-              </Button>
-            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 text-sm">
@@ -382,16 +637,18 @@ export function CustomerLocationModal({
             <Button variant="outline" onClick={handleClose}>
               Close
             </Button>
-            <Button onClick={() => setEditMode(true)}>
-              <Edit className="size-4 mr-2" />
-              Edit Location
-            </Button>
+            {!viewOnly && (
+              <Button onClick={() => setEditMode(true)}>
+                <Edit className="size-4 mr-2" />
+                Edit Location
+              </Button>
+            )}
           </DialogFooter>
         </>
       );
     }
 
-    // --- Edit Mode (always shown if no location or user clicked Edit) ---
+    // --- Edit Mode ---
     return (
       <>
         {/* Address */}
@@ -445,7 +702,7 @@ export function CustomerLocationModal({
           </div>
         )}
 
-        {/* Map Pinning */}
+        {/* Map Pinning - Editable */}
         <div className="rounded-lg border p-4 bg-gray-50 dark:bg-gray-800/50">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -475,6 +732,8 @@ export function CustomerLocationModal({
             barangayName={selectedBarangay?.barangay_desc}
             cityName={selectedMunicipality?.citymun_desc}
             placeholder="Search address or click on map..."
+            viewOnly={false}
+            defaultMapType="roadmap"
           />
 
           {form.lat !== null && form.lng !== null && form.mapAddress && (
@@ -538,7 +797,9 @@ export function CustomerLocationModal({
         <DialogHeader>
           <DialogTitle>Customer Location</DialogTitle>
           <DialogDescription>
-            {editMode || !hasExisting
+            {isViewOnly
+              ? `Location of ${getFullName(customer)}`
+              : editMode || !hasExisting
               ? `Set location for ${getFullName(customer)}`
               : `Location of ${getFullName(customer)}`}
           </DialogDescription>

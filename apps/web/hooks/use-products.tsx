@@ -305,7 +305,7 @@ export const useProduct = (id: string, enabled?: boolean) => {
         throw apiError;
       }
     },
-    enabled: !!id && enabled !== false && !!getMedusaServerClient(),
+    enabled: !!id && enabled !== false,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });

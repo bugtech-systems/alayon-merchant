@@ -1692,15 +1692,6 @@ export function OrdersClient({
     setViewDialogOpen(true);
   };
 
-  const handleDeleteDialog = (order: any) => {
-    setSelectedOrder(order);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleConvertDialog = (order: any) => {
-    setSelectedOrder(order);
-    setConvertDialogOpen(true);
-  };
 
   const handleCaptureDialog = (order: any) => {
     setSelectedOrder(order);

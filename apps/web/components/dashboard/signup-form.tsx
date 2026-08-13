@@ -1,7 +1,7 @@
 // components/dashboard/signup-form.tsx
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -31,6 +31,8 @@ import { Label } from "@/components/ui/label";
 import {
   User,
   Building2,
+  Store,
+  Truck,
   Mail,
   Phone,
   Lock,
@@ -43,12 +45,69 @@ import {
 // Import your signup action
 import { signup } from "@/lib/actions/users";
 
-// Simplified validation schema
+// ========== User type configuration ==========
+const userTypes = [
+  {
+    value: "restaurant",
+    label: "Restaurant",
+    icon: Store,
+    color: "green",
+    description: "Manage your store",
+  },
+  {
+    value: "water_delivery",
+    label: "Water Delivery",
+    icon: Truck,
+    color: "orange",
+    description: "Fullfilment operations",
+  },
+  {
+    value: "laundry",
+    label: "Laundry Station",
+    icon: Building2,
+    color: "purple",
+    description: "Platform management",
+  },
+] as const;
+
+// ========== Role options per user type ==========
+const roleOptions: Record<(typeof userTypes)[number]["value"], string[]> = {
+  restaurant: ["Cashier", "Kitchen", "Staff", "Admin"],
+  water_delivery: ["Staff", "Peddler", "Admin"],
+  laundry: ["Staff", "Admin"],
+};
+
+// Color mapping for Tailwind
+const colorMap = {
+  green: {
+    border: "border-green-500",
+    bg: "bg-green-50",
+    text: "text-green-600",
+    textLabel: "text-green-700",
+  },
+  orange: {
+    border: "border-orange-500",
+    bg: "bg-orange-50",
+    text: "text-orange-600",
+    textLabel: "text-orange-700",
+  },
+  purple: {
+    border: "border-purple-500",
+    bg: "bg-purple-50",
+    text: "text-purple-600",
+    textLabel: "text-purple-700",
+  },
+} as const;
+
+type UserType = (typeof userTypes)[number]["value"];
+
+// ========== Validation schema ==========
 const signupSchema = z.object({
-  user_type: z.enum(["driver", "company"], {
-    required_error: "Please select user type",
+  user_type: z.enum(["restaurant", "water_delivery", "laundry"], {
+    required_error: "Please select a user type",
   }),
-  company_id: z.string().optional(),
+  company_id: z.string().min(1, "Please select a company"),
+  role: z.string().min(1, "Please select a role"),
   first_name: z.string().min(1, "First name is required"),
   last_name: z.string().min(1, "Last name is required"),
   email: z.string().optional(),
@@ -58,14 +117,6 @@ const signupSchema = z.object({
 }).refine((data) => data.password === data.confirm_password, {
   message: "Passwords do not match",
   path: ["confirm_password"],
-}).refine((data) => {
-  if (data.user_type === "company" && !data.company_id) {
-    return false;
-  }
-  return true;
-}, {
-  message: "Please select a company",
-  path: ["company_id"],
 });
 
 type SignupFormValues = z.infer<typeof signupSchema>;
@@ -77,7 +128,7 @@ interface SignupFormProps {
   }>;
 }
 
-export function   SignupForm({ companies = [] }: SignupFormProps) {
+export function SignupForm({ companies = [] }: SignupFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string>("");
@@ -94,28 +145,36 @@ export function   SignupForm({ companies = [] }: SignupFormProps) {
     trigger,
     setError,
     clearErrors,
+    resetField,
   } = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
-      user_type: "driver",
+      user_type: "restaurant",
+      company_id: "",
+      role: "",
       first_name: "",
       last_name: "",
       email: "",
       phone: "",
       password: "",
       confirm_password: "",
-      company_id: undefined,
     },
     mode: "onBlur",
   });
 
   const watchedUserType = watch("user_type");
 
+  // Reset role when user type changes
+  useEffect(() => {
+    resetField("role");
+    trigger("role");
+  }, [watchedUserType, resetField, trigger]);
+
   const onSubmit = async (data: SignupFormValues) => {
     setServerError("");
     setSuccessMessage("");
     clearErrors();
-    
+
     startTransition(async () => {
       try {
         const formData = new FormData();
@@ -124,12 +183,12 @@ export function   SignupForm({ companies = [] }: SignupFormProps) {
             formData.append(key, value.toString());
           }
         });
-        
+
         const result = await signup(data, formData);
-        
+
         if (result?.error) {
           setServerError(result.error);
-          
+
           if (result.fieldErrors) {
             Object.entries(result.fieldErrors).forEach(([field, messages]) => {
               setError(field as any, {
@@ -138,11 +197,11 @@ export function   SignupForm({ companies = [] }: SignupFormProps) {
               });
             });
           }
-          
+
           window.scrollTo({ top: 0, behavior: "smooth" });
         } else if (result?.success) {
           setSuccessMessage("Account created successfully! Redirecting...");
-          
+
           setTimeout(() => {
             router.push("/dashboard");
             router.refresh();
@@ -165,6 +224,9 @@ export function   SignupForm({ companies = [] }: SignupFormProps) {
     return !!errors[field] && touchedFields[field];
   };
 
+  // Get roles for the current user type
+  const currentRoles = roleOptions[watchedUserType] || [];
+
   return (
     <Card className="w-full max-w-md mx-auto shadow-lg">
       <CardHeader className="space-y-1">
@@ -175,7 +237,7 @@ export function   SignupForm({ companies = [] }: SignupFormProps) {
           Join our platform and start your journey
         </CardDescription>
       </CardHeader>
-      
+
       <CardContent>
         {successMessage && (
           <Alert className="mb-6 bg-green-50 border-green-200">
@@ -185,7 +247,7 @@ export function   SignupForm({ companies = [] }: SignupFormProps) {
             </AlertDescription>
           </Alert>
         )}
-        
+
         {serverError && (
           <Alert className="mb-6 bg-red-50 border-red-200">
             <AlertCircle className="h-4 w-4 text-red-600" />
@@ -194,45 +256,48 @@ export function   SignupForm({ companies = [] }: SignupFormProps) {
             </AlertDescription>
           </Alert>
         )}
-        
+
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {/* User Type Selection */}
+          {/* ===== User Type Toggle (Login as) ===== */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">
-              Account Type <span className="text-red-500">*</span>
+              Login as <span className="text-red-500">*</span>
             </Label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setValue("user_type", "driver");
-                  setValue("company_id", undefined);
-                  trigger("user_type");
-                }}
-                className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all ${
-                  watchedUserType === "driver"
-                    ? "border-primary bg-primary/5"
-                    : "border-gray-200 hover:border-gray-300"
-                }`}
-              >
-                <User className="h-4 w-4" />
-                <span>Driver</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setValue("user_type", "company");
-                  trigger("user_type");
-                }}
-                className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all ${
-                  watchedUserType === "company"
-                    ? "border-primary bg-primary/5"
-                    : "border-gray-200 hover:border-gray-300"
-                }`}
-              >
-                <Building2 className="h-4 w-4" />
-                <span>Company</span>
-              </button>
+            <div className="grid grid-cols-3 gap-2">
+              {userTypes.map((type) => {
+                const Icon = type.icon;
+                const isSelected = watchedUserType === type.value;
+                const colors = colorMap[type.color as keyof typeof colorMap];
+
+                return (
+                  <button
+                    key={type.value}
+                    type="button"
+                    onClick={() => {
+                      setValue("user_type", type.value);
+                      trigger("user_type");
+                    }}
+                    className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg border-2 transition-all ${
+                      isSelected
+                        ? `${colors.border} ${colors.bg}`
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <Icon
+                      className={`h-5 w-5 ${
+                        isSelected ? colors.text : "text-gray-500"
+                      }`}
+                    />
+                    <span
+                      className={`text-xs font-medium ${
+                        isSelected ? colors.textLabel : "text-gray-600"
+                      }`}
+                    >
+                      {type.label}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
             <input type="hidden" {...register("user_type")} />
             {hasError("user_type") && (
@@ -240,66 +305,107 @@ export function   SignupForm({ companies = [] }: SignupFormProps) {
             )}
           </div>
 
-          {/* Company Selection */}
-            <div className="space-y-2">
-              <Label>Company <span className="text-red-500">*</span></Label>
-              <Select 
-                onValueChange={(value) => {
-                  setValue("company_id", value);
-                  trigger("company_id");
-                }}
+          {/* ===== Company Dropdown ===== */}
+          <div className="space-y-2 w-full">
+            <Label>
+              Company <span className="text-red-500">*</span>
+            </Label>
+            <Select
+              onValueChange={(value) => {
+                setValue("company_id", value);
+                trigger("company_id");
+              }}
+            >
+              <SelectTrigger
+                className={hasError("company_id") ? "border-red-500 w-full" : "w-full"}
               >
-                <SelectTrigger className={hasError("company_id") ? "border-red-500 w-full" : "w-full"}>
-                  <SelectValue placeholder="Select company" />
-                </SelectTrigger>
-                <SelectContent>
-                  {companies.map((company) => (
-                    <SelectItem key={company.id} value={company.id}>
-                      {company.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {hasError("company_id") && (
-                <p className="text-sm text-red-600">{getErrorMessage("company_id")}</p>
-              )}
-            </div>
+                <SelectValue placeholder="Select company" />
+              </SelectTrigger>
+              <SelectContent>
+                {companies.map((company) => (
+                  <SelectItem key={company.id} value={company.id}>
+                    {company.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {hasError("company_id") && (
+              <p className="text-sm text-red-600">
+                {getErrorMessage("company_id")}
+              </p>
+            )}
+          </div>
 
-          {/* Name Fields */}
+          {/* ===== Role Dropdown (dynamic based on user type) ===== */}
+          <div className="space-y-2">
+            <Label>
+              Role <span className="text-red-500">*</span>
+            </Label>
+            <Select
+              onValueChange={(value) => {
+                setValue("role", value);
+                trigger("role");
+              }}
+            >
+              <SelectTrigger
+                className={hasError("role") ? "border-red-500 w-full" : "w-full"}
+              >
+                <SelectValue placeholder="Select role" />
+              </SelectTrigger>
+              <SelectContent>
+                {currentRoles.map((role) => (
+                  <SelectItem key={role} value={role}>
+                    {role}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {hasError("role") && (
+              <p className="text-sm text-red-600">{getErrorMessage("role")}</p>
+            )}
+          </div>
+
+          {/* ===== Name Fields ===== */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>First Name <span className="text-red-500">*</span></Label>
-              <Input 
-                placeholder="John" 
+              <Input
+                placeholder="John"
                 className={hasError("first_name") ? "border-red-500" : ""}
                 {...register("first_name")}
               />
               {hasError("first_name") && (
-                <p className="text-sm text-red-600">{getErrorMessage("first_name")}</p>
+                <p className="text-sm text-red-600">
+                  {getErrorMessage("first_name")}
+                </p>
               )}
             </div>
 
             <div className="space-y-2">
               <Label>Last Name <span className="text-red-500">*</span></Label>
-              <Input 
-                placeholder="Doe" 
+              <Input
+                placeholder="Doe"
                 className={hasError("last_name") ? "border-red-500" : ""}
                 {...register("last_name")}
               />
               {hasError("last_name") && (
-                <p className="text-sm text-red-600">{getErrorMessage("last_name")}</p>
+                <p className="text-sm text-red-600">
+                  {getErrorMessage("last_name")}
+                </p>
               )}
             </div>
           </div>
 
-          {/* Email */}
+          {/* ===== Email ===== */}
           <div className="space-y-2">
-            <Label>Email <span className="text-gray-400 text-xs">(Optional)</span></Label>
+            <Label>
+              Email <span className="text-gray-400 text-xs">(Optional)</span>
+            </Label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input 
+              <Input
                 className="pl-10"
-                placeholder="you@example.com" 
+                placeholder="you@example.com"
                 type="email"
                 {...register("email")}
               />
@@ -309,14 +415,14 @@ export function   SignupForm({ companies = [] }: SignupFormProps) {
             )}
           </div>
 
-          {/* Phone */}
+          {/* ===== Phone ===== */}
           <div className="space-y-2">
             <Label>Phone Number <span className="text-red-500">*</span></Label>
             <div className="relative">
               <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input 
+              <Input
                 className="pl-10"
-                placeholder="+63 912 345 6789" 
+                placeholder="+63 912 345 6789"
                 type="tel"
                 {...register("phone")}
               />
@@ -326,14 +432,14 @@ export function   SignupForm({ companies = [] }: SignupFormProps) {
             )}
           </div>
 
-          {/* Password */}
+          {/* ===== Password ===== */}
           <div className="space-y-2">
             <Label>Password <span className="text-red-500">*</span></Label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input 
+              <Input
                 className={`pl-10 pr-10 ${hasError("password") ? "border-red-500" : ""}`}
-                placeholder="Minimum 6 characters" 
+                placeholder="Minimum 6 characters"
                 type={showPassword ? "text" : "password"}
                 {...register("password")}
               />
@@ -350,14 +456,14 @@ export function   SignupForm({ companies = [] }: SignupFormProps) {
             )}
           </div>
 
-          {/* Confirm Password */}
+          {/* ===== Confirm Password ===== */}
           <div className="space-y-2">
             <Label>Confirm Password <span className="text-red-500">*</span></Label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input 
+              <Input
                 className={`pl-10 pr-10 ${hasError("confirm_password") ? "border-red-500" : ""}`}
-                placeholder="Confirm your password" 
+                placeholder="Confirm your password"
                 type={showConfirmPassword ? "text" : "password"}
                 {...register("confirm_password")}
               />
@@ -370,17 +476,19 @@ export function   SignupForm({ companies = [] }: SignupFormProps) {
               </button>
             </div>
             {hasError("confirm_password") && (
-              <p className="text-sm text-red-600">{getErrorMessage("confirm_password")}</p>
+              <p className="text-sm text-red-600">
+                {getErrorMessage("confirm_password")}
+              </p>
             )}
           </div>
 
-          {/* Submit Button */}
+          {/* ===== Submit ===== */}
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
             <Button variant="outline" asChild className="w-full sm:w-auto" type="button">
               <Link href="/login">Already have an account? Log in</Link>
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={isSubmitting || isPending}
               className="w-full sm:w-auto"
             >
@@ -396,7 +504,7 @@ export function   SignupForm({ companies = [] }: SignupFormProps) {
           </div>
         </form>
       </CardContent>
-      
+
       <CardFooter className="flex justify-center border-t pt-6">
         <p className="text-xs text-muted-foreground text-center">
           By creating an account, you agree to our{" "}

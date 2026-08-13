@@ -111,7 +111,6 @@ export async function fulfillOrder(orderId: string, stock_location_id: string) {
 
     
 
-    console.log(stock_location_id, 'STOCK LOC')
     const response = await adminFetch(`/dashboard/company/orders/fulfill`, {
       method: 'POST',
       body: JSON.stringify({ orderId, stock_location_id }),
