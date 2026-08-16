@@ -65,6 +65,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // Icons
 import {
@@ -103,6 +104,10 @@ import {
   Store,
   CreditCard,
   AppWindow,
+  BarChart3,
+  PieChart,
+  ListOrdered,
+  Boxes,
 } from 'lucide-react';
 
 // Utils & Actions
@@ -554,6 +559,86 @@ const StatsCards = ({ orders, orderType, isLoading }: { orders: any[]; orderType
       }
     );
   }
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+      {statCards.map((card, index) => (
+        <div
+          key={index}
+          className="bg-card rounded-lg border p-4 hover:shadow-md transition-all hover:scale-[1.02] cursor-default"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">{card.label}</p>
+              <p className="text-2xl font-bold mt-1">{card.value}</p>
+            </div>
+            <div className={cn("h-10 w-10 rounded-full flex items-center justify-center", card.bg)}>
+              <card.icon className={cn("h-5 w-5", card.color)} />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ============================================
+// PRODUCT STATS CARDS (for Product View)
+// ============================================
+
+const ProductStatsCards = ({ productAggregates, isLoading }: { productAggregates: any[]; isLoading?: boolean }) => {
+  const stats = useMemo(() => {
+    const totalProducts = productAggregates.length;
+    const totalQuantitySold = productAggregates.reduce((sum, p) => sum + p.totalQuantity, 0);
+    const totalRevenue = productAggregates.reduce((sum, p) => sum + p.totalRevenue, 0);
+    const avgPrice = totalQuantitySold > 0 ? totalRevenue / totalQuantitySold : 0;
+
+    return { totalProducts, totalQuantitySold, totalRevenue, avgPrice };
+  }, [productAggregates]);
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} className="bg-card rounded-lg border p-4 animate-pulse">
+            <div className="h-4 bg-muted rounded w-1/2 mb-2"></div>
+            <div className="h-8 bg-muted rounded w-3/4"></div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const statCards = [
+    {
+      label: 'Total Products',
+      value: stats.totalProducts,
+      icon: Boxes,
+      color: 'text-primary',
+      bg: 'bg-primary/10'
+    },
+    {
+      label: 'Total Quantity Sold',
+      value: stats.totalQuantitySold,
+      icon: ShoppingBag,
+      color: 'text-blue-500',
+      bg: 'bg-blue-500/10'
+    },
+    {
+      label: 'Total Revenue',
+      value: `₱${stats.totalRevenue.toFixed(2)}`,
+      icon: DollarSign,
+      color: 'text-emerald-500',
+      bg: 'bg-emerald-500/10'
+    },
+    {
+      label: 'Avg. Price',
+      value: `₱${stats.avgPrice.toFixed(2)}`,
+      icon: BarChart3,
+      color: 'text-orange-500',
+      bg: 'bg-orange-500/10'
+    },
+  ];
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
@@ -1345,6 +1430,126 @@ const MobileOrderCard = ({
 };
 
 // ============================================
+// MOBILE PRODUCT CARD
+// ============================================
+
+const MobileProductCard = ({ product }: { product: any }) => {
+  return (
+    <div className="bg-card rounded-lg border p-4 space-y-3 hover:shadow-md transition-shadow">
+      <div className="flex items-start gap-3">
+        {product.thumbnail ? (
+          <img 
+            src={product.thumbnail} 
+            alt={product.name}
+            className="h-12 w-12 rounded-md object-cover border"
+          />
+        ) : (
+          <div className="h-12 w-12 rounded-md bg-muted flex items-center justify-center">
+            <Package className="h-5 w-5 text-muted-foreground" />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <h3 className="font-medium text-sm truncate">{product.name}</h3>
+          {product.variant && (
+            <p className="text-xs text-muted-foreground truncate">{product.variant}</p>
+          )}
+          <div className="flex items-center gap-2 mt-1">
+            <Badge variant="secondary" className="text-xs">
+              {product.totalQuantity} sold
+            </Badge>
+            <Badge variant="secondary" className="text-xs">
+              {product.orderCount} orders
+            </Badge>
+          </div>
+        </div>
+      </div>
+      <div className="flex justify-between items-center pt-2 border-t">
+        <span className="text-sm text-muted-foreground">Total Revenue</span>
+        <span className="font-bold text-lg">₱{product.totalRevenue.toFixed(2)}</span>
+      </div>
+    </div>
+  );
+};
+
+// ============================================
+// PRODUCT VIEW (Desktop Table)
+// ============================================
+
+const ProductTable = ({ products, isLoading }: { products: any[]; isLoading?: boolean }) => {
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[1,2,3].map(i => (
+          <div key={i} className="bg-card rounded-lg border p-4 animate-pulse">
+            <div className="h-4 bg-muted rounded w-1/3 mb-2"></div>
+            <div className="h-8 bg-muted rounded w-full"></div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (products.length === 0) {
+    return (
+      <div className="text-center py-16 bg-card rounded-lg border">
+        <div className="h-16 w-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+          <PieChart className="h-8 w-8 text-muted-foreground/50" />
+        </div>
+        <p className="text-lg font-medium text-muted-foreground">No products found</p>
+        <p className="text-sm text-muted-foreground mt-1">No sales data for the current filters</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-card rounded-lg border overflow-hidden">
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader className="bg-muted/50">
+            <TableRow>
+              <TableHead className="font-medium min-w-[200px]">Product</TableHead>
+              <TableHead className="font-medium text-right min-w-[80px]">Quantity Sold</TableHead>
+              <TableHead className="font-medium text-right min-w-[120px]">Total Revenue</TableHead>
+              <TableHead className="font-medium text-right min-w-[80px]">Orders Count</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {products.map((product) => (
+              <TableRow key={product.id} className="hover:bg-muted/30 transition-colors">
+                <TableCell>
+                  <div className="flex items-center gap-3">
+                    {product.thumbnail ? (
+                      <img 
+                        src={product.thumbnail} 
+                        alt={product.name}
+                        className="h-10 w-10 rounded-md object-cover border"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center">
+                        <Package className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div>
+                      <div className="font-medium">{product.name}</div>
+                      {product.variant && (
+                        <div className="text-xs text-muted-foreground">{product.variant}</div>
+                      )}
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right font-medium">{product.totalQuantity}</TableCell>
+                <TableCell className="text-right font-bold">₱{product.totalRevenue.toFixed(2)}</TableCell>
+                <TableCell className="text-right">{product.orderCount}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+};
+
+// ============================================
 // MAIN ORDERS CLIENT COMPONENT
 // ============================================
 
@@ -1380,6 +1585,9 @@ export function OrdersClient({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [captureDialogOpen, setCaptureDialogOpen] = useState(false);
+  
+  // New: view mode state
+  const [viewMode, setViewMode] = useState<'orders' | 'products'>('orders');
   
   // Debounce timer ref
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -1454,7 +1662,6 @@ export function OrdersClient({
   // Build filters
   const buildFilters = useCallback(() => {
     const filters: Record<string, any> = {
-      // seller_id: user?.id,
       company_id: user?.employee?.company_id || user?.driver?.company_id,
       status_not_in: ['canceled', 'refunded']
     };
@@ -1499,19 +1706,29 @@ export function OrdersClient({
     setIsLoading(true);
     try {
       const filters = buildFilters();
-      const offset = (page - 1) * limit;
+      
+      // For product view, fetch all orders (ignore pagination)
+      let fetchLimit = limit;
+      let fetchOffset = (page - 1) * limit;
+      
+      if (viewMode === 'products') {
+        // Fetch a large number to get all orders for aggregation
+        // Ideally we would use a dedicated aggregation endpoint, but this is a simple approach
+        fetchLimit = 1000;
+        fetchOffset = 0;
+      }
 
-      const response = await listPosOrders(limit, offset, filters);
+      const response = await listPosOrders(fetchLimit, fetchOffset, filters);
 
       const sortedOrders = sortOrders(response.orders || [], initialSortField, initialSortOrder);
 
       setOrders(sortedOrders);
       setPagination({
         count: response.count || 0,
-        page: response.page || 1,
-        total_pages: response.total_pages || 1,
-        has_next: response.has_next || false,
-        has_previous: response.has_previous || false
+        page: viewMode === 'products' ? 1 : (response.page || 1),
+        total_pages: viewMode === 'products' ? 1 : (response.total_pages || 1),
+        has_next: viewMode === 'products' ? false : (response.has_next || false),
+        has_previous: viewMode === 'products' ? false : (response.has_previous || false)
       });
     } catch (error) {
       console.error('Error fetching orders:', error);
@@ -1519,12 +1736,60 @@ export function OrdersClient({
     } finally {
       setIsLoading(false);
     }
-  }, [buildFilters, limit, page, initialSortField, initialSortOrder]);
+  }, [buildFilters, limit, page, initialSortField, initialSortOrder, viewMode]);
 
   // Fetch immediately when dependencies change
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
+
+  // Compute product aggregates from orders (for product view)
+  const productAggregates = useMemo(() => {
+    if (viewMode !== 'products' || orders.length === 0) return [];
+
+    const productMap = new Map<string, {
+      id: string;
+      name: string;
+      variant?: string;
+      thumbnail?: string;
+      totalQuantity: number;
+      totalRevenue: number;
+      orderCount: number;
+    }>();
+
+    orders.forEach(order => {
+      (order.items || []).forEach((item: any) => {
+        const productId = item.product_id || item.variant_id || item.title || 'unknown';
+        const variantTitle = item.variant_title || item.variant?.title || '';
+        const key = `${productId}-${variantTitle}`;
+        
+        const unitPrice = item.unit_price || item.price || 0;
+        const quantity = item.quantity || 1;
+        const discount = item.discount_amount || 0;
+        const itemTotal = (unitPrice * quantity) - discount;
+
+        if (!productMap.has(key)) {
+          productMap.set(key, {
+            id: productId,
+            name: item.title || item.name || item.product_name || 'Unknown Product',
+            variant: variantTitle || undefined,
+            thumbnail: item.thumbnail || undefined,
+            totalQuantity: 0,
+            totalRevenue: 0,
+            orderCount: 0
+          });
+        }
+
+        const product = productMap.get(key)!;
+        product.totalQuantity += quantity;
+        product.totalRevenue += itemTotal;
+        product.orderCount += 1; // Count each order instance
+      });
+    });
+
+    // Sort by revenue descending
+    return Array.from(productMap.values()).sort((a, b) => b.totalRevenue - a.totalRevenue);
+  }, [orders, viewMode]);
 
   // Update URL params - immediate update
   const updateUrlParams = useCallback((updates: Record<string, string | number | null | undefined>) => {
@@ -1692,23 +1957,45 @@ export function OrdersClient({
     setViewDialogOpen(true);
   };
 
-
   const handleCaptureDialog = (order: any) => {
     setSelectedOrder(order);
     setCaptureDialogOpen(true);
   };
 
-
-
   return (
     <TooltipProvider>
       <div className="space-y-6">
+        {/* View Mode Toggle */}
+        <div className="flex items-center justify-between">
+          <Tabs 
+            value={viewMode} 
+            onValueChange={(value) => setViewMode(value as 'orders' | 'products')}
+            className="w-full sm:w-auto"
+          >
+            <TabsList className="grid w-full grid-cols-2 sm:w-[300px]">
+              <TabsTrigger value="orders" className="flex items-center gap-2">
+                <ListOrdered className="h-4 w-4" />
+                Orders
+              </TabsTrigger>
+              <TabsTrigger value="products" className="flex items-center gap-2">
+                <Boxes className="h-4 w-4" />
+                Products
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          {viewMode === 'products' && (
+            <span className="text-sm text-muted-foreground hidden sm:block">
+              All orders within date range are aggregated
+            </span>
+          )}
+        </div>
+
         {/* Search Section */}
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder={`Search ${orderType === 'drafts' ? 'draft orders' : 'orders'} by ID, customer, email...`}
+              placeholder={`Search ${viewMode === 'products' ? 'products' : orderType === 'drafts' ? 'draft orders' : 'orders'} by ID, customer, email...`}
               value={searchTerm}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-9 h-10"
@@ -1734,7 +2021,7 @@ export function OrdersClient({
               size="sm"
               onClick={() => {
                 fetchOrders();
-                toast.success('Orders refreshed');
+                toast.success('Data refreshed');
               }}
               disabled={isLoading}
               className="h-10 gap-2"
@@ -1749,193 +2036,226 @@ export function OrdersClient({
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <StatsCards orders={orders} orderType={orderType} isLoading={isLoading} />
-
-        {/* Orders List */}
-        {isLoading && orders.length === 0 ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : orders.length === 0 ? (
-          <div className="text-center py-16 bg-card rounded-lg border">
-            <div className="h-16 w-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
-              <Package className="h-8 w-8 text-muted-foreground/50" />
-            </div>
-            <p className="text-lg font-medium text-muted-foreground">No {orderType} found</p>
-            <p className="text-sm text-muted-foreground mt-1">Try adjusting your search or filters</p>
-          </div>
-        ) : !isMobile ? (
-          /* Desktop Table View */
-          <div className="bg-card rounded-lg border overflow-hidden">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead className="font-medium min-w-[100px]">Order</TableHead>
-                    <TableHead className="font-medium min-w-[150px]">Customer</TableHead>
-                    <TableHead className="font-medium text-right min-w-[100px]">Total</TableHead>
-                    <TableHead className="font-medium min-w-[140px]">Status</TableHead>
-                    <TableHead className="font-medium text-left min-w-[60px]">Items</TableHead>
-                    <TableHead className="font-medium min-w-[120px]">Date</TableHead>
-                    <TableHead className="font-medium text-right min-w-[60px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {orders.map((order) => (
-                    <TableRow key={order.id} className="hover:bg-muted/30 transition-colors">
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                            {orderType === 'drafts' ? (
-                              <FileText className="h-3.5 w-3.5 text-primary" />
-                            ) : (
-                              <ShoppingBag className="h-3.5 w-3.5 text-primary" />
-                            )}
-                          </div>
-                          <div>
-                            <div className="font-mono text-sm font-semibold">
-                              {orderType === 'drafts' ? order.id.slice(0, 8) : `#${order.display_id}`}
-                              {order?.metadata?.beeper_ids?.length && ` | ${order?.metadata?.beeper_ids.join(',')}`}
-                            </div>
-                            {orderType === 'orders' && order.payment_status && (
-                              <div className="mt-0.5">
-                                <PaymentStatusBadge status={order.payment_status} />
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-0.5">
-                          <div className="font-medium flex items-center gap-1.5">
-                            <User className="h-3.5 w-3.5 text-muted-foreground" />
-                            {order.customer?.first_name || order.customer_name || 'Guest'}
-                            {order.customer?.last_name && ` ${order.customer.last_name}`}
-                          </div>
-                          {order.email && (
-                            <div className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Mail className="h-3 w-3" />
-                              {order.email}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="font-bold text-lg">₱{(order.total || 0).toFixed(2)}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {order.items?.length || order.items_count || 0} items
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1.5">
-                          {orderType === 'orders' ? (
-                            <StatusDropdown
-                              currentStatus={order.status != 'completed' ? order?.delivery?.delivery_status != 'delivered' ? order?.delivery?.delivery_status : order.status : order.status}
-                              paymentStatus={order.payment_status}
-                              onStatusChange={(status) => handleStatusUpdate(order.id, status)}
-                              onCapturePayment={() => handleCaptureDialog(order)}
-                              onMarkAsPaid={() => handleMarkAsPaid(order)}
-                              canCapturePayment={order.payment_status === 'authorized' || order.payment_status === 'not_paid'}
-                              disabled={isLoading || captureLoading}
-                            />
-                          ) : (
-                            <OrderStatusBadge status={order.status} />
-                          )}
-                          {orderType === 'orders' && order.requires_action && (
-                            <div className="flex items-center gap-1 text-xs text-red-500">
-                              <AlertTriangle className="h-3 w-3" />
-                              Action Required
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col items-center justify-center">
-                          <div className="font-medium">
-                            {order.items?.length || order.items_count || 0}
-                          </div>
-                          <div className={`text-xs text-muted-foreground flex items-center gap-1 ${order?.metadata?.isTakeOut ? 'text-primary' : ''}`}>
-                            {order?.metadata?.isTakeOut ? 'TAKE-OUT' : 'DINE-IN'}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div>
-                              <div className="text-sm font-medium">
-                                {order.created_at ? format(new Date(order.created_at), 'MMM d, yyyy') : '—'}
-                              </div>
-                              <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {order?.delivery?.eta ? formatDistanceToNow(new Date(order?.delivery?.eta), { addSuffix: true }) : format(new Date(order.created_at), 'h:mm a')}
-                              </div>
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {order.created_at && formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleView(order)}
-                          className="h-8 gap-2"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        {user?.metadata?.role === 'company' && 
-                       <Link href={`/company/orders/${order?.id}`} >
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          className="h-8 gap-2"
-                        >
-
-                          <AppWindow className="h-4 w-4"/>
-                          </Button>
-                        </Link>
-                        }
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
+        {/* Stats Cards - context-aware */}
+        {viewMode === 'orders' ? (
+          <StatsCards orders={orders} orderType={orderType} isLoading={isLoading} />
         ) : (
-          /* Mobile Card View */
-          <div className="space-y-3">
-            {orders.map((order) => (
-              <MobileOrderCard
-                key={order.id}
-                order={order}
-                orderType={orderType}
-                onView={handleView}
-                onStatusUpdate={handleStatusUpdate}
-                onCapturePayment={handleCaptureDialog}
-                onMarkAsPaid={handleMarkAsPaid}
-                isLoading={isLoading}
-                captureLoading={captureLoading}
-              />
-            ))}
-          </div>
+          <ProductStatsCards productAggregates={productAggregates} isLoading={isLoading} />
         )}
 
-        {/* Pagination */}
-        <Pagination
-          page={page}
-          totalPages={pagination.total_pages}
-          hasNext={pagination.has_next}
-          hasPrevious={pagination.has_previous}
-          total={pagination.count}
-          orderType={orderType}
-          onPageChange={handlePageChange}
-          isLoading={isLoading}
-        />
+        {/* Content Area */}
+        {viewMode === 'orders' ? (
+          <>
+            {/* Orders List */}
+            {isLoading && orders.length === 0 ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : orders.length === 0 ? (
+              <div className="text-center py-16 bg-card rounded-lg border">
+                <div className="h-16 w-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                  <Package className="h-8 w-8 text-muted-foreground/50" />
+                </div>
+                <p className="text-lg font-medium text-muted-foreground">No {orderType} found</p>
+                <p className="text-sm text-muted-foreground mt-1">Try adjusting your search or filters</p>
+              </div>
+            ) : !isMobile ? (
+              /* Desktop Table View */
+              <div className="bg-card rounded-lg border overflow-hidden">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead className="font-medium min-w-[100px]">Order</TableHead>
+                        <TableHead className="font-medium min-w-[150px]">Customer</TableHead>
+                        <TableHead className="font-medium text-right min-w-[100px]">Total</TableHead>
+                        <TableHead className="font-medium min-w-[140px]">Status</TableHead>
+                        <TableHead className="font-medium text-left min-w-[60px]">Items</TableHead>
+                        <TableHead className="font-medium min-w-[120px]">Date</TableHead>
+                        <TableHead className="font-medium text-right min-w-[60px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {orders.map((order) => (
+                        <TableRow key={order.id} className="hover:bg-muted/30 transition-colors">
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                {orderType === 'drafts' ? (
+                                  <FileText className="h-3.5 w-3.5 text-primary" />
+                                ) : (
+                                  <ShoppingBag className="h-3.5 w-3.5 text-primary" />
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-mono text-sm font-semibold">
+                                  {orderType === 'drafts' ? order.id.slice(0, 8) : `#${order.display_id}`}
+                                  {order?.metadata?.beeper_ids?.length && ` | ${order?.metadata?.beeper_ids.join(',')}`}
+                                </div>
+                                {orderType === 'orders' && order.payment_status && (
+                                  <div className="mt-0.5">
+                                    <PaymentStatusBadge status={order.payment_status} />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-0.5">
+                              <div className="font-medium flex items-center gap-1.5">
+                                <User className="h-3.5 w-3.5 text-muted-foreground" />
+                                {order.customer?.first_name || order.customer_name || 'Guest'}
+                                {order.customer?.last_name && ` ${order.customer.last_name}`}
+                              </div>
+                              {order.email && (
+                                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Mail className="h-3 w-3" />
+                                  {order.email}
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="font-bold text-lg">₱{(order.total || 0).toFixed(2)}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {order.items?.length || order.items_count || 0} items
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1.5">
+                              {orderType === 'orders' ? (
+                                <StatusDropdown
+                                  currentStatus={order.status != 'completed' ? order?.delivery?.delivery_status != 'delivered' ? order?.delivery?.delivery_status : order.status : order.status}
+                                  paymentStatus={order.payment_status}
+                                  onStatusChange={(status) => handleStatusUpdate(order.id, status)}
+                                  onCapturePayment={() => handleCaptureDialog(order)}
+                                  onMarkAsPaid={() => handleMarkAsPaid(order)}
+                                  canCapturePayment={order.payment_status === 'authorized' || order.payment_status === 'not_paid'}
+                                  disabled={isLoading || captureLoading}
+                                />
+                              ) : (
+                                <OrderStatusBadge status={order.status} />
+                              )}
+                              {orderType === 'orders' && order.requires_action && (
+                                <div className="flex items-center gap-1 text-xs text-red-500">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Action Required
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col items-center justify-center">
+                              <div className="font-medium">
+                                {order.items?.length || order.items_count || 0}
+                              </div>
+                              <div className={`text-xs text-muted-foreground flex items-center gap-1 ${order?.metadata?.isTakeOut ? 'text-primary' : ''}`}>
+                                {order?.metadata?.isTakeOut ? 'TAKE-OUT' : 'DINE-IN'}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div>
+                                  <div className="text-sm font-medium">
+                                    {order.created_at ? format(new Date(order.created_at), 'MMM d, yyyy') : '—'}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    {order?.delivery?.eta ? formatDistanceToNow(new Date(order?.delivery?.eta), { addSuffix: true }) : format(new Date(order.created_at), 'h:mm a')}
+                                  </div>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {order.created_at && formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleView(order)}
+                              className="h-8 gap-2"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            {user?.metadata?.role === 'company' && 
+                          <Link href={`/company/orders/${order?.id}`} >
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              className="h-8 gap-2"
+                            >
+                              <AppWindow className="h-4 w-4"/>
+                              </Button>
+                            </Link>
+                            }
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            ) : (
+              /* Mobile Card View */
+              <div className="space-y-3">
+                {orders.map((order) => (
+                  <MobileOrderCard
+                    key={order.id}
+                    order={order}
+                    orderType={orderType}
+                    onView={handleView}
+                    onStatusUpdate={handleStatusUpdate}
+                    onCapturePayment={handleCaptureDialog}
+                    onMarkAsPaid={handleMarkAsPaid}
+                    isLoading={isLoading}
+                    captureLoading={captureLoading}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Pagination - only for orders view */}
+            <Pagination
+              page={page}
+              totalPages={pagination.total_pages}
+              hasNext={pagination.has_next}
+              hasPrevious={pagination.has_previous}
+              total={pagination.count}
+              orderType={orderType}
+              onPageChange={handlePageChange}
+              isLoading={isLoading}
+            />
+          </>
+        ) : (
+          /* PRODUCT VIEW */
+          <>
+            {isLoading && productAggregates.length === 0 ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : productAggregates.length === 0 ? (
+              <div className="text-center py-16 bg-card rounded-lg border">
+                <div className="h-16 w-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                  <PieChart className="h-8 w-8 text-muted-foreground/50" />
+                </div>
+                <p className="text-lg font-medium text-muted-foreground">No product sales found</p>
+                <p className="text-sm text-muted-foreground mt-1">Try adjusting your search or date range</p>
+              </div>
+            ) : isMobile ? (
+              <div className="space-y-3">
+                {productAggregates.map((product) => (
+                  <MobileProductCard key={product.id + (product.variant || '')} product={product} />
+                ))}
+              </div>
+            ) : (
+              <ProductTable products={productAggregates} />
+            )}
+          </>
+        )}
 
         {/* View Order Dialog */}
         <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
