@@ -1,7 +1,6 @@
 import { n8nFetcher } from "@/hooks/useN8nQuery";
 import { getAuthHeaders, getCacheOptions } from "../data/cookies";
 import sdk from "../config";
-import { setCustomerGroupId } from "../medusa/data/cookies";
 
 export async function retrieveUser() {
   try {
