@@ -108,6 +108,9 @@ import {
   PieChart,
   ListOrdered,
   Boxes,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 
 // Utils & Actions
@@ -1472,10 +1475,54 @@ const MobileProductCard = ({ product }: { product: any }) => {
 };
 
 // ============================================
-// PRODUCT VIEW (Desktop Table)
+// PRODUCT VIEW (Desktop Table with Sortable Headers)
 // ============================================
 
-const ProductTable = ({ products, isLoading }: { products: any[]; isLoading?: boolean }) => {
+const ProductTable = ({ 
+  products, 
+  sortField, 
+  sortOrder, 
+  onSort,
+  isLoading 
+}: { 
+  products: any[]; 
+  sortField: string; 
+  sortOrder: 'asc' | 'desc'; 
+  onSort: (field: string) => void;
+  isLoading?: boolean;
+}) => {
+  const SortableHeader = ({ 
+    label, 
+    sortKey, 
+    align = 'left' 
+  }: { 
+    label: string; 
+    sortKey: string; 
+    align?: 'left' | 'center' | 'right' 
+  }) => {
+    const isActive = sortField === sortKey;
+    return (
+      <Button
+        variant="ghost"
+        className={cn(
+          "p-0 h-auto hover:bg-transparent font-medium",
+          align === 'right' && 'justify-end w-full',
+          align === 'center' && 'justify-center w-full'
+        )}
+        onClick={() => onSort(sortKey)}
+      >
+        <span className="flex items-center gap-1">
+          {label}
+          {isActive ? (
+            sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+          ) : (
+            <ArrowUpDown className="h-3 w-3 opacity-50" />
+          )}
+        </span>
+      </Button>
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -1507,15 +1554,23 @@ const ProductTable = ({ products, isLoading }: { products: any[]; isLoading?: bo
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow>
-              <TableHead className="font-medium min-w-[200px]">Product</TableHead>
-              <TableHead className="font-medium text-right min-w-[80px]">Quantity Sold</TableHead>
-              <TableHead className="font-medium text-right min-w-[120px]">Total Revenue</TableHead>
-              <TableHead className="font-medium text-right min-w-[80px]">Orders Count</TableHead>
+              <TableHead className="font-medium min-w-[200px]">
+                <SortableHeader label="Product" sortKey="name" />
+              </TableHead>
+              <TableHead className="font-medium text-right min-w-[80px]">
+                <SortableHeader label="Quantity Sold" sortKey="totalQuantity" align="right" />
+              </TableHead>
+              <TableHead className="font-medium text-right min-w-[120px]">
+                <SortableHeader label="Total Revenue" sortKey="totalRevenue" align="right" />
+              </TableHead>
+              <TableHead className="font-medium text-right min-w-[80px]">
+                <SortableHeader label="Orders Count" sortKey="orderCount" align="right" />
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {products.map((product) => (
-              <TableRow key={product.id} className="hover:bg-muted/30 transition-colors">
+              <TableRow key={product.id + (product.variant || '')} className="hover:bg-muted/30 transition-colors">
                 <TableCell>
                   <div className="flex items-center gap-3">
                     {product.thumbnail ? (
@@ -1586,8 +1641,12 @@ export function OrdersClient({
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [captureDialogOpen, setCaptureDialogOpen] = useState(false);
   
-  // New: view mode state
+  // View mode: orders or products
   const [viewMode, setViewMode] = useState<'orders' | 'products'>('orders');
+  
+  // Product sort state
+  const [productSortField, setProductSortField] = useState<'name' | 'totalQuantity' | 'totalRevenue' | 'orderCount'>('totalRevenue');
+  const [productSortOrder, setProductSortOrder] = useState<'asc' | 'desc'>('desc');
   
   // Debounce timer ref
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -1787,9 +1846,41 @@ export function OrdersClient({
       });
     });
 
-    // Sort by revenue descending
-    return Array.from(productMap.values()).sort((a, b) => b.totalRevenue - a.totalRevenue);
-  }, [orders, viewMode]);
+    // Sort based on selected sort field and order
+    const sorted = Array.from(productMap.values()).sort((a, b) => {
+      let compare = 0;
+      switch (productSortField) {
+        case 'name':
+          compare = a.name.localeCompare(b.name);
+          break;
+        case 'totalQuantity':
+          compare = a.totalQuantity - b.totalQuantity;
+          break;
+        case 'totalRevenue':
+          compare = a.totalRevenue - b.totalRevenue;
+          break;
+        case 'orderCount':
+          compare = a.orderCount - b.orderCount;
+          break;
+        default:
+          compare = b.totalRevenue - a.totalRevenue; // fallback
+      }
+      return productSortOrder === 'asc' ? compare : -compare;
+    });
+
+    return sorted;
+  }, [orders, viewMode, productSortField, productSortOrder]);
+
+  // Handle product sort (toggle direction if same field, otherwise set new field with default direction)
+  const handleProductSort = useCallback((field: string) => {
+    if (field === productSortField) {
+      setProductSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setProductSortField(field as any);
+      // Default order: name ascending, others descending
+      setProductSortOrder(field === 'name' ? 'asc' : 'desc');
+    }
+  }, [productSortField]);
 
   // Update URL params - immediate update
   const updateUrlParams = useCallback((updates: Record<string, string | number | null | undefined>) => {
@@ -1983,8 +2074,8 @@ export function OrdersClient({
               </TabsTrigger>
             </TabsList>
           </Tabs>
-          {viewMode === 'products' && (
-            <span className="text-sm text-muted-foreground hidden sm:block">
+          {viewMode === 'products' && !isMobile && (
+            <span className="text-sm text-muted-foreground">
               All orders within date range are aggregated
             </span>
           )}
@@ -2233,6 +2324,32 @@ export function OrdersClient({
         ) : (
           /* PRODUCT VIEW */
           <>
+            {/* Mobile sort controls */}
+            {isMobile && (
+              <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                <Select value={productSortField} onValueChange={(value) => handleProductSort(value)}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="name">Product Name</SelectItem>
+                    <SelectItem value="totalQuantity">Quantity Sold</SelectItem>
+                    <SelectItem value="totalRevenue">Total Revenue</SelectItem>
+                    <SelectItem value="orderCount">Orders Count</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={productSortOrder} onValueChange={(value) => setProductSortOrder(value as 'asc' | 'desc')}>
+                  <SelectTrigger className="w-full sm:w-[130px]">
+                    <SelectValue placeholder="Order" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="asc">Ascending</SelectItem>
+                    <SelectItem value="desc">Descending</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             {isLoading && productAggregates.length === 0 ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -2252,7 +2369,12 @@ export function OrdersClient({
                 ))}
               </div>
             ) : (
-              <ProductTable products={productAggregates} />
+              <ProductTable 
+                products={productAggregates}
+                sortField={productSortField}
+                sortOrder={productSortOrder}
+                onSort={handleProductSort}
+              />
             )}
           </>
         )}
