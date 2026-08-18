@@ -1,5 +1,4 @@
 // components/cart/cart-sidebar.tsx
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -24,11 +23,11 @@ import { cn, getFinalPrice } from "@/lib/utils";
 import { PrintDialog } from "./print-dialog";
 import { CartItem } from "./cart-item";
 import { CustomerSelector } from "./customer-selector";
-import type { 
-  MedusaCart, 
-  Region, 
+import type {
+  MedusaCart,
+  Region,
   Customer,
-  DraftOrder 
+  DraftOrder
 } from "@/types";
 import { createQuickCustomer } from "@/lib/actions";
 import { BeeperSelector } from "./beeper-selector";
@@ -41,6 +40,7 @@ interface CartSidebarProps {
   selectedCustomer: Customer | null;
   orderNotes: string;
   isLoading: boolean;
+  pendingLineUpdates?: Record<string, boolean>; // <-- new prop
   drafts?: DraftOrder[];
   onUpdateQuantity: (lineId: string, quantity: number) => Promise<void>;
   onRemoveFromCart: (lineId: string) => Promise<void>;
@@ -66,6 +66,7 @@ export function CartSidebar({
   selectedCustomer,
   orderNotes,
   isLoading,
+  pendingLineUpdates = {}, // default empty
   drafts = [],
   onUpdateQuantity,
   onRemoveFromCart,
@@ -92,14 +93,14 @@ export function CartSidebar({
     localStorage.setItem("current_order_beeper_ids", JSON.stringify(ids));
     setCurrentOrderBeepers(ids);
     onBeepersChange(ids);
-    
+
     // Update beeper status in localStorage
     const stored = localStorage.getItem("simple-beepers");
     if (stored) {
       const beepers = JSON.parse(stored);
       const updated = beepers.map((beeper: any) => ({
         ...beeper,
-        status: ids.includes(beeper.id) ? 'assigned' : 
+        status: ids.includes(beeper.id) ? 'assigned' :
                 beeper.status === 'assigned' ? 'available' : beeper.status
       }));
       localStorage.setItem("simple-beepers", JSON.stringify(updated));
@@ -126,8 +127,6 @@ export function CartSidebar({
   useEffect(() => {
     const loadAvailableOrders = async () => {
       try {
-        // Fetch orders that can be attached to beepers
-        // This is a placeholder - implement your actual order fetching logic
         const response = await fetch('/api/orders/available');
         if (response.ok) {
           const orders = await response.json();
@@ -147,10 +146,10 @@ export function CartSidebar({
   }, []);
 
   const subtotal = cart?.items?.reduce(
-    (sum, item) => sum + (getFinalPrice(item.unit_price) * item.quantity), 
+    (sum, item) => sum + (getFinalPrice(item.unit_price) * item.quantity),
     0
   ) || 0;
-  
+
   const taxRate = region?.tax_rate || 0;
   const taxTotal = subtotal * (taxRate / 100);
   const serviceCharge = cart?.metadata?.service_charge || 0;
@@ -170,15 +169,15 @@ export function CartSidebar({
     default: regularItems.filter(i => !i.metadata?.pricing_strategy || i.metadata?.pricing_strategy === 'default'),
   };
 
-  const hasItemsWithSpecialPricing = customPricedItems.length > 0 || 
-    groupedItems.priceList.length > 0 || 
+  const hasItemsWithSpecialPricing = customPricedItems.length > 0 ||
+    groupedItems.priceList.length > 0 ||
     groupedItems.customerGroup.length > 0;
 
   // Get current order for attachment
   const currentOrder = cart ? {
     id: cart.id,
     orderNumber: cart.metadata?.order_number || cart.id.slice(0, 8),
-    customerName: selectedCustomer?.first_name 
+    customerName: selectedCustomer?.first_name
       ? `${selectedCustomer.first_name} ${selectedCustomer.last_name || ''}`.trim()
       : 'Guest',
     status: 'active' as const,
@@ -204,17 +203,17 @@ export function CartSidebar({
               )}
             </div>
             <div className="flex gap-1">
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 className="h-7 md:h-8"
                 onClick={() => setPrintOpen(true)}
               >
                 <Printer className="h-3 w-3 md:h-4 md:w-4" />
               </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 className="h-7 md:h-8 text-destructive hover:text-destructive"
                 onClick={onClearCart}
               >
@@ -236,7 +235,6 @@ export function CartSidebar({
               onClear={() => {
                 onBeepersChange([]);
                 localStorage.removeItem("current_order_beeper_ids");
-                // Update all selected beepers back to available
                 const stored = localStorage.getItem("simple-beepers");
                 if (stored) {
                   const beepers = JSON.parse(stored);
@@ -248,7 +246,6 @@ export function CartSidebar({
                 }
               }}
               onAssignBeeper={async (beeperId, customerName) => {
-                // Mark beeper as assigned
                 const stored = localStorage.getItem("simple-beepers");
                 if (stored) {
                   const beepers = JSON.parse(stored);
@@ -258,13 +255,11 @@ export function CartSidebar({
                   }));
                   localStorage.setItem("simple-beepers", JSON.stringify(updated));
                 }
-                // If there's an order, automatically attach it
                 if (cart && onAttachOrderToBeeper) {
                   await onAttachOrderToBeeper(beeperId, cart.id);
                 }
               }}
               onReleaseBeeper={async (beeperId) => {
-                // Release beeper back to available
                 const stored = localStorage.getItem("simple-beepers");
                 if (stored) {
                   const beepers = JSON.parse(stored);
@@ -276,7 +271,6 @@ export function CartSidebar({
                 }
               }}
               onReserveBeeper={async (beeperId) => {
-                // Reserve beeper
                 const stored = localStorage.getItem("simple-beepers");
                 if (stored) {
                   const beepers = JSON.parse(stored);
@@ -370,6 +364,7 @@ export function CartSidebar({
                         onCustomPrice={onApplyCustomPrice}
                         onRemoveCustomPrice={onRemoveCustomPrice}
                         currencyCode={currencyCode}
+                        isUpdating={pendingLineUpdates?.[item.id]} // <-- pass pending flag
                       />
                     ))}
                   </div>
@@ -393,6 +388,7 @@ export function CartSidebar({
                         onCustomPrice={onApplyCustomPrice}
                         onRemoveCustomPrice={onRemoveCustomPrice}
                         currencyCode={currencyCode}
+                        isUpdating={pendingLineUpdates?.[item.id]}
                       />
                     ))}
                   </div>
@@ -417,6 +413,7 @@ export function CartSidebar({
                         onCustomPrice={onApplyCustomPrice}
                         onRemoveCustomPrice={onRemoveCustomPrice}
                         currencyCode={currencyCode}
+                        isUpdating={pendingLineUpdates?.[item.id]}
                       />
                     ))}
                   </div>
@@ -432,6 +429,7 @@ export function CartSidebar({
                     onCustomPrice={onApplyCustomPrice}
                     onRemoveCustomPrice={onRemoveCustomPrice}
                     currencyCode={currencyCode}
+                    isUpdating={pendingLineUpdates?.[item.id]}
                   />
                 ))}
               </>

@@ -76,7 +76,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
           {children}
         </div>
       </SidebarInset>
-      
+{/*       
       {user?.id && (
         <ChatButton
           userId={user?.id}
@@ -86,7 +86,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
           serverUrl={process.env.SMS_URL}
           defaultOpen={false}
         />
-      )}
+      )} */}
     </SidebarProvider>
   );
 }

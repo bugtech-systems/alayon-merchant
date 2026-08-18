@@ -5,7 +5,10 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Search, RefreshCw, History, ShoppingCart, Save, Tag, Users, Star, Radio, MessageCircle, Bell, X } from "lucide-react";
+import {
+  Search, RefreshCw, History, ShoppingCart, Save, Tag, Users, Star,
+  Radio, MessageCircle, Bell, X, LayoutGrid, List
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { CartSidebar } from "./cart-sidebar";
@@ -18,7 +21,6 @@ import { usePosProducts } from "@/hooks/use-pos-products";
 import { usePosDrafts } from "@/hooks/use-pos-drafts";
 import { usePosBeepers } from "@/hooks/use-pos-beepers";
 import { useSocket } from "@/hooks/useSocket";
-import { NotificationBell } from "@/components/notification/NotificationBell";
 import { Region, Customer } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -46,18 +48,16 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [unreadOrderCount, setUnreadOrderCount] = useState(0);
+  // Mobile view mode: 'grid' or 'list'
+  const [mobileViewMode, setMobileViewMode] = useState<'grid' | 'list'>('grid');
   const { toast: toastShadcn } = useToast();
 
   // Socket connection for real-time features
-  const { 
-    socket, 
-    isConnected, 
-    notifications, 
-    messages,
-    sendMessage,
-    markNotificationRead,
-    clearNotifications,
-    getUnreadCount,
+  const {
+    socket,
+    isConnected,
+    notifications,
+    messages
   } = useSocket({
     userId: user?.id,
     role: 'cashier',
@@ -66,27 +66,28 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
 
   // Pricing strategy from user context
   const pricingContext = useMemo(() => ({
-    priceListId: user?.metadata?.role === 'company' 
-      ? user.employee?.company?.price_list_id 
+    priceListId: user?.metadata?.role === 'company'
+      ? user.employee?.company?.price_list_id
       : user?.driver?.price_list_id,
-    customerGroupId: user?.metadata?.role === 'company' 
-      ? user.employee?.company?.customer_group_id 
+    customerGroupId: user?.metadata?.role === 'company'
+      ? user.employee?.company?.customer_group_id
       : user?.driver?.customer_group_id,
     customerId: user?.id,
-    companyId: user?.metadata?.role === 'company' 
-      ? user.employee?.company_id 
+    companyId: user?.metadata?.role === 'company'
+      ? user.employee?.company_id
       : user?.driver?.company_id,
-    location_id: user?.metadata?.role == 'company' ? user.employee?.company?.stock_location_id :  user?.driver?.stock_location_id,
+    location_id: user?.metadata?.role == 'company' ? user.employee?.company?.stock_location_id : user?.driver?.stock_location_id,
     pricingStrategy: user?.metadata?.role === 'company' ? 'price_list' : 'customer_group'
   }), [user]);
-  
+
   // Hooks
-  const { 
+  const {
     cart, cartItems, cartTotal, isLoading: isLoadingCart,
-    refreshCart, createCart, addToCart, updateQuantity, removeFromCart, clearCart, 
+    pendingLineUpdates, // <-- new per-line pending flags
+    refreshCart, createCart, addToCart, updateQuantity, removeFromCart, clearCart,
     attachCustomer, updateMetadata, applyCustomPrice, removeCustomPrice, prepareCartForCheckout
-  } = usePosCart({ 
-    region, 
+  } = usePosCart({
+    region,
     priceListId: pricingContext.priceListId,
     companyId: pricingContext.companyId,
     customerGroupId: pricingContext.customerGroupId,
@@ -94,23 +95,23 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     locationId: pricingContext.location_id,
     customerId: selectedCustomer?.id
   }) as any;
-   
-  const { categories, products, isLoading: isLoadingProducts, productVariants, handleVariantChange, refreshProducts } = 
-    usePosProducts({ 
-      countryCode, 
+
+  const { categories, products, isLoading: isLoadingProducts, productVariants, handleVariantChange, refreshProducts } =
+    usePosProducts({
+      countryCode,
       priceListId: pricingContext.priceListId,
       customerGroupId: pricingContext.customerGroupId,
       regionId: region?.id,
       customerId: selectedCustomer?.id,
       companyId: pricingContext.companyId,
     });
-  
+
   const { drafts, saveAsDraft, deleteDraft } = usePosDrafts();
-  
+
   // New beeper hook
-  const { 
-    assignedBeeperIds, 
-    attachOrderToBeeper, 
+  const {
+    assignedBeeperIds,
+    attachOrderToBeeper,
     detachOrderFromBeeper,
     releaseBeeper,
   } = usePosBeepers();
@@ -127,7 +128,10 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     };
     init();
   }, [createCart, refreshCart]);
-  
+
+
+
+  console.log(products, productVariants, 'PRODUCTSSS')
   // Update cart metadata when pricing context changes
   useEffect(() => {
     if (cart?.id && pricingContext) {
@@ -142,36 +146,26 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     }
   }, [pricingContext, cart?.id, updateMetadata]);
 
-  // Handle socket notifications for new orders
+  // Socket notification handlers (unchanged)
   useEffect(() => {
     if (!socket) return;
 
-    // Listen for new orders from kitchen
     socket.on('order_received', (data) => {
       console.log('New order notification received:', data);
-      
-      // Show toast notification
       toast.info(`📦 New Order #${data.order?.display_id || 'Unknown'}`, {
         description: `Items: ${data.order?.items?.length || 0} | Total: ₱${data.order?.total || 0}`,
         duration: 8000,
         action: {
           label: 'View Order',
           onClick: () => {
-            // Open order details or highlight the order
             console.log('View order:', data.order);
           }
         }
       });
-
-      // Play notification sound
       if (isSoundEnabled) {
         playNotificationSound();
       }
-
-      // Update unread count
       setUnreadOrderCount(prev => prev + 1);
-
-      // Send acknowledgment back to kitchen
       socket.emit('order_acknowledged', {
         orderId: data.order?.id,
         acknowledgedBy: user?.id,
@@ -179,10 +173,8 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
       });
     });
 
-    // Listen for order status updates
     socket.on('order_updated', (data) => {
       console.log('Order status update:', data);
-      
       toast.info(`📋 Order #${data.order?.display_id} Updated`, {
         description: `Status: ${data.status}`,
         duration: 5000,
@@ -191,16 +183,13 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
           onClick: () => console.log('View order:', data.order)
         }
       });
-
       if (isSoundEnabled) {
         playNotificationSound();
       }
     });
 
-    // Listen for messages from kitchen
     socket.on('message_received', (data) => {
       console.log('Message from kitchen:', data);
-      
       toast.info(`💬 ${data.senderName || 'Kitchen'}`, {
         description: data.text,
         duration: 6000,
@@ -209,16 +198,13 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
           onClick: () => setShowChat(true)
         }
       });
-
       if (isSoundEnabled) {
         playNotificationSound();
       }
     });
 
-    // Listen for customer messages
     socket.on('customer_message', (data) => {
       console.log('Customer message:', data);
-      
       toast.info(`👤 Customer: ${data.customerName || 'Customer'}`, {
         description: data.text,
         duration: 6000,
@@ -227,16 +213,13 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
           onClick: () => setShowChat(true)
         }
       });
-
       if (isSoundEnabled) {
         playNotificationSound();
       }
     });
 
-    // Listen for kitchen status updates
     socket.on('kitchen_status', (data) => {
       console.log('Kitchen status update:', data);
-      
       toast.info(`🍳 Kitchen ${data.status}`, {
         description: data.message || 'Kitchen status updated',
         duration: 3000
@@ -255,7 +238,6 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
   // Play notification sound
   const playNotificationSound = useCallback(() => {
     if (!isSoundEnabled) return;
-
     try {
       const audio = new Audio('/notification.mp3');
       audio.volume = 1.0;
@@ -265,7 +247,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     }
   }, [isSoundEnabled]);
 
-  // Handle beeper attachment/detachment for current order
+  // Beeper handlers (unchanged)
   const handleAttachOrderToBeeper = useCallback(async (beeperId: string, orderId: string) => {
     try {
       await attachOrderToBeeper(beeperId, orderId);
@@ -280,7 +262,6 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
           }
         }
       });
-      
       toastShadcn({
         title: "Success",
         description: "Order attached to beeper successfully"
@@ -306,7 +287,6 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
           [beeperId]: undefined
         }
       });
-      
       toastShadcn({
         title: "Success",
         description: "Order detached from beeper successfully"
@@ -321,7 +301,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     }
   }, [detachOrderFromBeeper, updateMetadata, selectedBeeperIds, cart, toastShadcn]);
 
-  // Handle customer change
+  // Customer change
   const handleCustomerChange = useCallback(async (customer: Customer | null) => {
     if (customer) {
       setSelectedCustomer(customer?.id);
@@ -329,7 +309,6 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
       setSelectedCustomer(null);
     }
     await attachCustomer(customer);
-    
     if (customer?.customer_group_id) {
       await updateMetadata({
         customer_group_id: customer.customer_group_id,
@@ -338,8 +317,8 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     }
     refreshCart(cart?.id);
   }, [attachCustomer, updateMetadata, refreshCart, cart?.id]);
-  
-  // Handle notes change with debounce
+
+  // Notes change debounce
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (orderNotes) {
@@ -348,8 +327,8 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     }, 500);
     return () => clearTimeout(timeoutId);
   }, [orderNotes, updateMetadata]);
-  
-  // Handle beeper change with debounce
+
+  // Beeper change debounce
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (selectedBeeperIds.length > 0) {
@@ -358,18 +337,16 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     }, 500);
     return () => clearTimeout(timeoutId);
   }, [selectedBeeperIds, updateMetadata]);
-  
-  // Handle beeper selection change
+
+  // Beeper selection change
   const handleBeepersChange = useCallback((beeperIds: string[]) => {
     setSelectedBeeperIds(beeperIds);
-    
     const newBeepers = beeperIds.filter(id => !selectedBeeperIds.includes(id));
     newBeepers.forEach(async (beeperId) => {
       if (cart?.id) {
         await handleAttachOrderToBeeper(beeperId, cart.id);
       }
     });
-    
     const removedBeepers = selectedBeeperIds.filter(id => !beeperIds.includes(id));
     removedBeepers.forEach(async (beeperId) => {
       if (cart?.id) {
@@ -380,22 +357,21 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
 
   const handleCheckout = useCallback(async () => {
     if (!cart?.id) return;
-    
     try {
       await prepareCartForCheckout();
       setPaymentDialogOpen(true);
       setSearchQuery('');
     } catch (error) {
       console.error("Error preparing cart:", error);
-      toastShadcn({ 
-        title: "Error", 
-        description: "Failed to prepare order. Please try again.", 
-        variant: "destructive" 
+      toastShadcn({
+        title: "Error",
+        description: "Failed to prepare order. Please try again.",
+        variant: "destructive"
       });
     }
   }, [cart, prepareCartForCheckout, toastShadcn]);
 
-  // Handle add to cart with pricing strategy tracking
+  // Add to cart handler (unchanged)
   const handleAddToCart = useCallback(async (params: {
     variantId: string;
     quantity: number;
@@ -422,12 +398,12 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
       }
     });
   }, [addToCart, pricingContext.priceListId, user?.id]);
-  
-  // Handle custom price application
+
+  // Custom price handlers (unchanged)
   const handleApplyCustomPrice = useCallback(async (
-    lineId: string, 
-    variantId: string, 
-    price: number, 
+    lineId: string,
+    variantId: string,
+    price: number,
     reason?: string
   ) => {
     await applyCustomPrice(lineId, variantId, price, {
@@ -437,39 +413,37 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
       applied_at: new Date().toISOString()
     });
   }, [applyCustomPrice, user?.id]);
-  
-  // Handle remove custom price
+
   const handleRemoveCustomPrice = useCallback(async (lineId: string, variantId: string) => {
     await removeCustomPrice(lineId, variantId);
   }, [removeCustomPrice]);
-  
-  // Handle save draft with pricing context
+
+  // Save draft (unchanged)
   const handleSaveDraft = useCallback(async () => {
     if (cart?.id) {
-      await updateMetadata({ 
-        is_draft: true, 
+      await updateMetadata({
+        is_draft: true,
         draft_name: `Draft - ${new Date().toLocaleString()}`,
         saved_pricing_strategy: pricingContext.pricingStrategy,
         saved_price_list_id: pricingContext.priceListId,
         beeper_ids: selectedBeeperIds
       });
       await saveAsDraft(
-        cart.id, 
-        cartItems, 
-        cartTotal, 
-        selectedCustomer, 
-        selectedBeeperIds, 
-        orderNotes, 
+        cart.id,
+        cartItems,
+        cartTotal,
+        selectedCustomer,
+        selectedBeeperIds,
+        orderNotes,
         cart?.metadata
       );
     }
   }, [cart, cartItems, cartTotal, selectedCustomer, selectedBeeperIds, orderNotes, pricingContext, updateMetadata, saveAsDraft]);
-  
-  // Handle load draft with pricing restoration
+
+  // Load draft (unchanged)
   const handleLoadDraft = useCallback(async (draft: any) => {
     localStorage.setItem("pos_cart_id", draft.cart_id);
     await refreshCart(draft.cart_id);
-    
     if (draft.beeper_ids) {
       setSelectedBeeperIds(draft.beeper_ids);
       draft.beeper_ids.forEach(async (beeperId: string) => {
@@ -482,17 +456,15 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
       setSelectedCustomer({ id: draft.customer_id, first_name: draft.customer_name, email: "" });
     }
     if (draft.notes) setOrderNotes(draft.notes);
-    
     if (draft.saved_price_list_id) {
       await updateMetadata({
         price_list_id: draft.saved_price_list_id,
         pricing_strategy: draft.saved_pricing_strategy || 'price_list'
       });
     }
-    
     setDraftsDialogOpen(false);
   }, [refreshCart, setSelectedBeeperIds, attachOrderToBeeper, updateMetadata]);
-  
+
   // Filter products
   const filteredProducts = useMemo(() => {
     return products.filter(product => {
@@ -501,7 +473,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
       return matchesCategory && matchesSearch;
     });
   }, [products, selectedCategoryId, searchQuery]);
-  
+
   // Check mobile
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -510,7 +482,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Pricing info component for header
+  // Pricing info badge
   const PricingInfoBadge = () => (
     <div className="flex items-center gap-2 flex-wrap">
       {pricingContext.pricingStrategy === 'price_list' && pricingContext.priceListId && (
@@ -545,7 +517,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
       )}
     </div>
   );
-  
+
   const cartSidebarProps = {
     ...pricingContext,
     cart,
@@ -554,6 +526,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     selectedCustomer,
     orderNotes,
     isLoading: isLoadingCart,
+    pendingLineUpdates, // <-- pass pending updates
     onUpdateQuantity: updateQuantity,
     onRemoveFromCart: removeFromCart,
     onClearCart: clearCart,
@@ -569,8 +542,8 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
     onDetachOrderFromBeeper: handleDetachOrderFromBeeper,
     user,
     assignedBeeperIds,
-    availableOrders: cart ? [{ 
-      id: cart.id, 
+    availableOrders: cart ? [{
+      id: cart.id,
       orderNumber: cart.metadata?.order_number || cart.id.slice(0, 8),
       customerName: selectedCustomer?.first_name || 'Guest',
       status: 'active',
@@ -590,9 +563,9 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
             <div className="flex justify-between items-center mb-2">
               <PricingInfoBadge />
               <div className="flex gap-1">
-                <Button 
-                  size="sm" 
-                  variant="outline" 
+                <Button
+                  size="sm"
+                  variant="outline"
                   className="h-7 px-2 relative"
                   onClick={() => setShowChat(!showChat)}
                 >
@@ -608,44 +581,57 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
                 </Button>
               </div>
             </div>
-            
+
             <div className="relative mb-2">
               <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2" />
-              <Input 
-                placeholder="Search products..." 
-                value={searchQuery} 
-                onChange={(e) => setSearchQuery(e.target.value)} 
-                className="pl-7 h-8 text-sm" 
+              <Input
+                placeholder="Search products..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-7 h-8 text-sm"
               />
               <Button className="absolute right-4 top-1/2 h-3 w-5 -translate-y-1/2" onClick={() => setSearchQuery('')}>Clear</Button>
             </div>
-            
-            <div className="flex gap-1 overflow-x-auto">
-              <button 
-                onClick={() => setSelectedCategoryId("all")} 
-                className={cn("px-2 py-1 rounded text-xs whitespace-nowrap", 
-                  selectedCategoryId === "all" ? "bg-primary text-primary-foreground" : "bg-muted"
-                )}
-              >
-                All
-              </button>
-              {categories.map(cat => (
-                <button 
-                  key={cat.id} 
-                  onClick={() => setSelectedCategoryId(cat.id)} 
-                  className={cn("px-2 py-1 rounded text-xs whitespace-nowrap", 
-                    selectedCategoryId === cat.id ? "bg-primary text-primary-foreground" : "bg-muted"
+
+            {/* Categories and view toggle */}
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex gap-1 overflow-x-auto flex-1">
+                <button
+                  onClick={() => setSelectedCategoryId("all")}
+                  className={cn("px-2 py-1 rounded text-xs whitespace-nowrap",
+                    selectedCategoryId === "all" ? "bg-primary text-primary-foreground" : "bg-muted"
                   )}
                 >
-                  {cat.name}
+                  All
                 </button>
-              ))}
+                {categories.map(cat => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedCategoryId(cat.id)}
+                    className={cn("px-2 py-1 rounded text-xs whitespace-nowrap",
+                      selectedCategoryId === cat.id ? "bg-primary text-primary-foreground" : "bg-muted"
+                    )}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+              {/* View mode toggle */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 shrink-0"
+                onClick={() => setMobileViewMode(prev => prev === 'grid' ? 'list' : 'grid')}
+              >
+                {mobileViewMode === 'grid' ? <List className="h-3 w-3" /> : <LayoutGrid className="h-3 w-3" />}
+                <span className="ml-1 text-xs">{mobileViewMode === 'grid' ? 'List' : 'Grid'}</span>
+              </Button>
             </div>
           </div>
-          
-          {/* Products Grid */}
+
+          {/* Products Grid/List */}
           <div className="flex-1 overflow-y-auto p-2">
-            <div className="grid grid-cols-2 gap-2">
+            <div className={cn("grid gap-2", mobileViewMode === 'grid' ? "grid-cols-2" : "grid-cols-1")}>
               {filteredProducts.map(product => (
                 <ProductCard
                   key={product.id}
@@ -658,11 +644,12 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
                   priceListId={pricingContext.priceListId}
                   customerGroupId={pricingContext.customerGroupId}
                   companyId={pricingContext?.companyId}
+                  viewMode={mobileViewMode} // <-- pass viewMode
                 />
               ))}
             </div>
           </div>
-          
+
           {/* Bottom Bar */}
           <div className="fixed bottom-0 left-0 right-0 border-t bg-card p-2">
             <div className="flex gap-2">
@@ -675,8 +662,8 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
                   </Badge>
                 )}
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="icon"
                 className="relative"
                 onClick={() => setShowNotificationPanel(!showNotificationPanel)}
@@ -690,7 +677,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
               </Button>
             </div>
           </div>
-          
+
           {/* Mobile Cart Sheet */}
           <Sheet open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
             <SheetContent side="bottom" className="rounded-t-xl p-0 h-[95vh]">
@@ -701,8 +688,6 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
             </SheetContent>
           </Sheet>
         </div>
-        
-
 
         {/* Notification Panel for Mobile */}
         {showNotificationPanel && (
@@ -732,23 +717,23 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
             </div>
           </div>
         )}
-        
-        <DraftsDialog 
-          open={draftsDialogOpen} 
-          onOpenChange={setDraftsDialogOpen} 
-          drafts={drafts} 
-          onLoadDraft={handleLoadDraft} 
-          onDeleteDraft={deleteDraft} 
-          region={region} 
+
+        <DraftsDialog
+          open={draftsDialogOpen}
+          onOpenChange={setDraftsDialogOpen}
+          drafts={drafts}
+          onLoadDraft={handleLoadDraft}
+          onDeleteDraft={deleteDraft}
+          region={region}
         />
-        <PaymentDialog 
+        <PaymentDialog
           {...pricingContext}
           cart={cart}
           cartItems={cart?.items ?? []}
-          open={paymentDialogOpen} 
-          onOpenChange={setPaymentDialogOpen} 
-          cartTotal={cartTotal} 
-          region={region} 
+          open={paymentDialogOpen}
+          onOpenChange={setPaymentDialogOpen}
+          cartTotal={cartTotal}
+          region={region}
           onComplete={async (order) => {
             console.log("Order completed:", order);
             if (selectedBeeperIds.length > 0) {
@@ -764,8 +749,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
             setPaymentDialogOpen(false);
             setMobileCartOpen(false);
             setUnreadOrderCount(0);
-            
-            // Notify kitchen about completed order
+
             if (socket) {
               socket.emit('order_completed', {
                 orderId: order.id,
@@ -773,18 +757,18 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
                 timestamp: new Date()
               });
             }
-            
-            toastShadcn({ 
-              title: "Success", 
-              description: `Order #${order.display_id} completed successfully` 
+
+            toastShadcn({
+              title: "Success",
+              description: `Order #${order.display_id} completed successfully`
             });
-          }} 
+          }}
         />
-        <PrintDialog 
-          open={printOpen} 
-          onOpenChange={setPrintOpen} 
-          cart={cart} 
-          region={region} 
+        <PrintDialog
+          open={printOpen}
+          onOpenChange={setPrintOpen}
+          cart={cart}
+          region={region}
         />
       </>
     );
@@ -805,39 +789,37 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
                 <span className={`inline-block w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
                 {isConnected ? 'Online' : 'Offline'}
               </div>
-
-
               <Button variant="outline" size="sm" onClick={refreshProducts}>
                 <RefreshCw className="h-3 w-3 mr-1" /> Refresh
               </Button>
             </div>
           </div>
-          
+
           <div className="relative mb-3">
             <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2" />
-            <Input 
-              placeholder="Search products..." 
-              value={searchQuery} 
-              onChange={(e) => setSearchQuery(e.target.value)} 
-              className="pl-7 h-9" 
+            <Input
+              placeholder="Search products..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-7 h-9"
             />
             <Button className="absolute right-4 top-1/2 h-3 w-5 -translate-y-1/2" onClick={() => setSearchQuery('')}>Clear</Button>
           </div>
-          
+
           <div className="flex gap-1 overflow-x-auto">
-            <button 
-              onClick={() => setSelectedCategoryId("all")} 
-              className={cn("px-3 py-1 rounded text-sm whitespace-nowrap", 
+            <button
+              onClick={() => setSelectedCategoryId("all")}
+              className={cn("px-3 py-1 rounded text-sm whitespace-nowrap",
                 selectedCategoryId === "all" ? "bg-primary text-primary-foreground" : "bg-muted"
               )}
             >
               All Products
             </button>
             {categories.map(cat => (
-              <button 
-                key={cat.id} 
-                onClick={() => setSelectedCategoryId(cat.id)} 
-                className={cn("px-3 py-1 rounded text-sm whitespace-nowrap", 
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategoryId(cat.id)}
+                className={cn("px-3 py-1 rounded text-sm whitespace-nowrap",
                   selectedCategoryId === cat.id ? "bg-primary text-primary-foreground" : "bg-muted"
                 )}
               >
@@ -846,8 +828,8 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
             ))}
           </div>
         </div>
-        
-        {/* Products Grid */}
+
+        {/* Products Grid (Desktop uses grid always) */}
         <div className="flex-1 overflow-y-auto p-3">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {filteredProducts.map(product => (
@@ -861,35 +843,35 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
                 onVariantChange={handleVariantChange}
                 priceListId={pricingContext.priceListId}
                 customerGroupId={pricingContext.customerGroupId}
+                companyId={pricingContext?.companyId}
+                // No viewMode passed; defaults to 'grid'
               />
             ))}
           </div>
         </div>
       </div>
-      
+
       {/* Cart Sidebar */}
       <aside className="hidden w-86 flex-col border-l bg-card lg:flex h-[90vh]">
         <CartSidebar {...cartSidebarProps} />
       </aside>
-      
 
-      
       {/* Dialogs */}
-      <DraftsDialog 
-        open={draftsDialogOpen} 
-        onOpenChange={setDraftsDialogOpen} 
-        drafts={drafts} 
-        onLoadDraft={handleLoadDraft} 
-        onDeleteDraft={deleteDraft} 
-        region={region} 
+      <DraftsDialog
+        open={draftsDialogOpen}
+        onOpenChange={setDraftsDialogOpen}
+        drafts={drafts}
+        onLoadDraft={handleLoadDraft}
+        onDeleteDraft={deleteDraft}
+        region={region}
       />
       <PaymentDialog
         cart={cart}
         cartItems={cart?.items ?? []}
-        open={paymentDialogOpen} 
-        onOpenChange={setPaymentDialogOpen} 
-        cartTotal={cartTotal} 
-        region={region} 
+        open={paymentDialogOpen}
+        onOpenChange={setPaymentDialogOpen}
+        cartTotal={cartTotal}
+        region={region}
         onComplete={async (order) => {
           console.log("Order completed:", order);
           if (selectedBeeperIds.length > 0) {
@@ -905,7 +887,7 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
           setPaymentDialogOpen(false);
           setMobileCartOpen(false);
           setUnreadOrderCount(0);
-          
+
           if (socket) {
             socket.emit('order_completed', {
               orderId: order.id,
@@ -913,18 +895,18 @@ export default function PosApp({ region, user, countryCode = "ph" }: PosAppProps
               timestamp: new Date()
             });
           }
-          
-          toastShadcn({ 
-            title: "Success", 
-            description: `Order #${order.display_id} completed successfully` 
+
+          toastShadcn({
+            title: "Success",
+            description: `Order #${order.display_id} completed successfully`
           });
         }}
       />
-      <PrintDialog 
-        open={printOpen} 
-        onOpenChange={setPrintOpen} 
-        cart={cart} 
-        region={region} 
+      <PrintDialog
+        open={printOpen}
+        onOpenChange={setPrintOpen}
+        cart={cart}
+        region={region}
       />
     </div>
   );

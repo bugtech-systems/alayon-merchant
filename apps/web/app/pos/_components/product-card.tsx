@@ -14,7 +14,9 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ShoppingCart, Package, Loader2, ChevronDown, Minus, Plus, Tag, Users, Star } from "lucide-react";
+import {
+  ShoppingCart, Package, Loader2, ChevronDown, Minus, Plus, Tag, Users, Star
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
@@ -39,6 +41,7 @@ interface ProductCardProps {
   priceListId?: string;
   customerGroupId?: string;
   companyId?: string;
+  viewMode?: 'grid' | 'list'; // <-- new prop
 }
 
 // Helper function to extract the best price from variant prices
@@ -56,7 +59,6 @@ const getVariantPriceInfo = (variant: any, priceListId?: string, customerGroupId
   let bestPriceType = priceListId ? 'price_list' : customerGroupId ? 'customer_group' : 'default';
   let bestOriginalPrice = null;
 
-  // Priority order: customer specific > customer group > price list > default
   const prices = variant.prices;
   // 1. Check for price list prices
   if (priceListId) {
@@ -66,8 +68,8 @@ const getVariantPriceInfo = (variant: any, priceListId?: string, customerGroupId
       bestPriceType = 'price_list';
     }
   }
-  
-  // 2. Check for customer group prices (if we have customerGroupId and no price list price yet)
+
+  // 2. Check for customer group prices
   if (customerGroupId && (!bestPrice || bestPriceType !== 'price_list')) {
     const groupPrice = prices.find((p: any) => p.customer_group_id === customerGroupId);
     if (groupPrice) {
@@ -75,21 +77,21 @@ const getVariantPriceInfo = (variant: any, priceListId?: string, customerGroupId
       bestPriceType = 'customer_group';
     }
   }
-  
+
   // 3. Fallback to any available price
   if (!bestPrice && prices.length > 0) {
     bestPrice = prices[0];
     bestPriceType = 'default';
   }
-  
+
   // Find original price (non-discounted price from default price list or regular price)
-  const originalPriceRecord = prices.find((p: any) => 
+  const originalPriceRecord = prices.find((p: any) =>
     !p.price_list_id && !p.customer_group_id && !p.customer_id
   );
-  
+
   const calculatedPrice = bestPrice?.amount || 0;
   const calculatedOriginalPrice = originalPriceRecord?.amount || calculatedPrice;
-  
+
   return {
     price: calculatedPrice,
     originalPrice: calculatedOriginalPrice,
@@ -107,45 +109,53 @@ export function ProductCard({
   onVariantChange,
   priceListId,
   customerGroupId,
-  companyId
+  companyId,
+  viewMode = 'grid', // default grid
 }: ProductCardProps) {
   const { toast } = useToast();
   const [isAdding, setIsAdding] = useState(false);
   const [showVariantDialog, setShowVariantDialog] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [localSelectedVariantId, setLocalSelectedVariantId] = useState(selectedVariantId);
-  let pricingStrategy = priceListId ? 'price_list' : customerGroupId ? 'customer_group' : 'default';
+  const pricingStrategy = priceListId ? 'price_list' : customerGroupId ? 'customer_group' : 'default';
+
   // Update local state when prop changes
   useEffect(() => {
     setLocalSelectedVariantId(selectedVariantId);
   }, [selectedVariantId]);
-  
+
   const hasVariants = product.variants && product.variants.length > 0;
   const hasMultipleVariants = product.variants && product.variants.length > 1;
   const selectedVariant = product.variants?.find((v: any) => v.id === localSelectedVariantId) || product.variants?.[0];
-  
+
   // Get price information using the helper
   const { price, originalPrice } = getVariantPriceInfo(
-    selectedVariant, 
-    priceListId, 
+    selectedVariant,
+    priceListId,
     customerGroupId
   );
-  
+
+  // Use variant-specific thumbnail if available
+  const displayImage =
+    (selectedVariant as any)?.thumbnail ||
+    (selectedVariant as any)?.metadata?.thumbnail ||
+    product.thumbnail;
+
   const getInventoryQuantity = () => {
     if (!selectedVariant) return 0;
-    return selectedVariant.inventory_quantity || 
-           selectedVariant.manage_inventory?.quantity || 
-           selectedVariant.inventory?.quantity || 
+    return selectedVariant.inventory_quantity ||
+           selectedVariant.manage_inventory?.quantity ||
+           selectedVariant.inventory?.quantity ||
            999;
   };
-  
+
   const inventoryQuantity = getInventoryQuantity();
   const isOutOfStock = inventoryQuantity <= 0;
   const isLowStock = inventoryQuantity > 0 && inventoryQuantity <= 5;
   const hasDiscount = originalPrice > price && price > 0;
   const discountPercent = hasDiscount ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0;
   const currencySymbol = region?.currency_code?.toUpperCase() || "PHP";
-  
+
   const getPricingBadge = () => {
     switch (pricingStrategy) {
       case 'price_list':
@@ -158,39 +168,38 @@ export function ProductCard({
         return null;
     }
   };
-  
+
   const pricingBadge = getPricingBadge();
-  
+
   const handleVariantChange = (variantId: string) => {
     setLocalSelectedVariantId(variantId);
     onVariantChange(product.id, variantId);
     setQuantity(1);
   };
-  
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    
+
     if (!selectedVariant) {
       toast({ title: "Error", description: "Please select a variant", variant: "destructive" });
       return;
     }
-    
+
     if (isOutOfStock) {
       toast({ title: "Out of Stock", description: `${selectedVariant.title || product.title} is out of stock`, variant: "destructive" });
       return;
     }
-    
+
     if (quantity > inventoryQuantity) {
       toast({ title: "Insufficient Stock", description: `Only ${inventoryQuantity} available`, variant: "destructive" });
       return;
     }
-    
+
     if (price <= 0) {
       toast({ title: "Error", description: "Invalid price for this product", variant: "destructive" });
       return;
     }
-    
+
     setIsAdding(true);
     try {
       await onAddToCart({
@@ -203,9 +212,9 @@ export function ProductCard({
         pricingStrategy: pricingStrategy,
         companyId: companyId
       });
-      
-      toast({ 
-        title: "Added to Cart", 
+
+      toast({
+        title: "Added to Cart",
         description: `${quantity}x ${product.title}${hasVariants ? ` (${selectedVariant.title})` : ''} added`,
       });
       setQuantity(1);
@@ -216,12 +225,12 @@ export function ProductCard({
       setIsAdding(false);
     }
   };
-  
+
   const handleOpenVariantDialog = (e: React.MouseEvent) => {
     e.stopPropagation();
     setShowVariantDialog(true);
   };
-  
+
   const VariantSelectionDialog = () => (
     <Dialog open={showVariantDialog} onOpenChange={setShowVariantDialog}>
       <DialogContent className="sm:max-w-md max-h-[80vh] overflow-hidden">
@@ -234,10 +243,10 @@ export function ProductCard({
             {product.variants.map((variant: any) => {
               const variantInventory = variant.inventory_quantity || 999;
               const isVariantOutOfStock = variantInventory <= 0;
-              const { price: variantPrice, originalPrice: variantOriginalPrice, type: variantPricingType } = 
+              const { price: variantPrice, originalPrice: variantOriginalPrice, type: variantPricingType } =
                 getVariantPriceInfo(variant, priceListId, customerGroupId);
               const hasVariantDiscount = variantOriginalPrice > variantPrice && variantPrice > 0;
-              
+
               return (
                 <button
                   key={variant.id}
@@ -317,17 +326,17 @@ export function ProductCard({
       </DialogContent>
     </Dialog>
   );
-  
+
   const QuantitySelector = () => (
     <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 w-full justify-between">
-      <Button 
-        variant="outline" 
-        size="icon" 
-        className="h-8 w-8" 
-        onClick={(e) => { 
-          e.stopPropagation(); 
-          setQuantity(prev => Math.max(1, prev - 1)); 
-        }} 
+      <Button
+        variant="outline"
+        size="icon"
+        className="h-8 w-8"
+        onClick={(e) => {
+          e.stopPropagation();
+          setQuantity(prev => Math.max(1, prev - 1));
+        }}
         disabled={quantity <= 1}
       >
         <Minus className="h-4 w-4" />
@@ -336,60 +345,55 @@ export function ProductCard({
         <span className="text-base font-semibold">{quantity}</span>
         <span className="text-[10px] text-muted-foreground">Qty</span>
       </div>
-      <Button 
-        variant="outline" 
-        size="icon" 
-        className="h-8 w-8" 
-        onClick={(e) => { 
-          e.stopPropagation(); 
-          setQuantity(prev => Math.min(inventoryQuantity, prev + 1)); 
-        }} 
+      <Button
+        variant="outline"
+        size="icon"
+        className="h-8 w-8"
+        onClick={(e) => {
+          e.stopPropagation();
+          setQuantity(prev => Math.min(inventoryQuantity, prev + 1));
+        }}
         disabled={quantity >= inventoryQuantity}
       >
         <Plus className="h-4 w-4" />
       </Button>
     </div>
   );
-  
-  const getStockStatus = () => {
-    if (isOutOfStock) {
-      return { text: "Out of Stock", className: "text-red-600 bg-red-50" };
-    }
-    if (isLowStock) {
-      return { text: `Only ${inventoryQuantity} left`, className: "text-yellow-600 bg-yellow-50" };
-    }
-    return { text: "In Stock", className: "text-green-600 bg-green-50" };
-  };
-  
-  const stockStatus = getStockStatus();
-  
+
   // Don't render if no price is available
   if (price <= 0 && !isLoading) {
     return null;
   }
-  
+
   return (
     <>
       <Card className={cn(
         "overflow-hidden transition-all hover:shadow-lg group",
-        isOutOfStock && "opacity-60"
+        isOutOfStock && "opacity-60",
+        viewMode === 'list' && "flex flex-row" // list view uses horizontal layout
       )}>
-        <CardContent className="p-0">
+        <CardContent className={cn(
+          "p-0",
+          viewMode === 'list' && "flex flex-row w-full"
+        )}>
           {/* Image Section */}
-          <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
-            {product.thumbnail ? (
-              <Image 
-                src={product.thumbnail} 
-                alt={product.title} 
-                fill 
-                className="object-cover transition-transform duration-300 group-hover:scale-105" 
+          <div className={cn(
+            "relative overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100",
+            viewMode === 'grid' ? "aspect-square" : "w-24 h-24 flex-shrink-0"
+          )}>
+            {displayImage ? (
+              <Image
+                src={displayImage}
+                alt={product.title}
+                fill
+                className="object-cover transition-transform duration-300 group-hover:scale-105"
               />
             ) : (
               <div className="flex h-full items-center justify-center">
                 <Package className="h-12 w-12 text-muted-foreground/50" />
               </div>
             )}
-            
+
             {/* Badges */}
             <div className="absolute top-2 left-2 flex flex-col gap-1">
               {hasDiscount && discountPercent > 0 && (
@@ -404,7 +408,7 @@ export function ProductCard({
                 </Badge>
               )}
             </div>
-            
+
             {/* Stock Status Overlay */}
             {isOutOfStock && (
               <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
@@ -414,72 +418,68 @@ export function ProductCard({
               </div>
             )}
           </div>
-          
+
           {/* Content Section */}
-          <div className="p-3 space-y-3">
+          <div className={cn(
+            viewMode === 'grid' ? "p-3 space-y-3" : "p-2 flex-1 flex flex-col justify-between"
+          )}>
             {/* Product Title */}
             <div>
-              <h3 className="font-semibold text-sm line-clamp-2 min-h-[10px]">
+              <h3 className={cn(
+                "font-semibold line-clamp-2 min-h-[10px]",
+                viewMode === 'grid' ? "text-sm" : "text-sm"
+              )}>
                 {product.title}
               </h3>
-              {/* {product.categories && product.categories.length > 0 && (
-                <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-                  {product.categories.map(c => c.name).join(", ")}
-                </p>
-              )} */}
             </div>
-            
-            {/* Variant Selector */}
-            {hasVariants && (
-              <div>
-                {hasMultipleVariants ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-between text-xs h-8"
-                    onClick={handleOpenVariantDialog}
-                  >
-                    <span className="truncate">
-                      {selectedVariant?.title || "Select Variant"}
-                    </span>
-                    <ChevronDown className="h-3 w-3 ml-2 opacity-50" />
-                  </Button>
-                ) : ''}
-              </div>
+
+            {/* Variant Selector (only if multiple variants) */}
+            {hasVariants && hasMultipleVariants && (
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  "w-full justify-between text-xs",
+                  viewMode === 'grid' ? "h-8" : "h-7"
+                )}
+                onClick={handleOpenVariantDialog}
+              >
+                <span className="truncate">
+                  {selectedVariant?.title || "Select Variant"}
+                </span>
+                <ChevronDown className="h-3 w-3 ml-2 opacity-50" />
+              </Button>
             )}
-            
+
             {/* Price Section */}
-            <div className="space-y-2">
+            <div className="space-y-1">
               <div className="flex items-baseline gap-2 flex-wrap">
-                <span className="text-xl font-bold text-primary">
-                  {currencySymbol} {(price).toFixed(2)}
+                <span className={cn(
+                  "font-bold text-primary",
+                  viewMode === 'grid' ? "text-xl" : "text-base"
+                )}>
+                  {currencySymbol} {price.toFixed(2)}
                 </span>
                 {hasDiscount && (
                   <span className="text-xs text-muted-foreground line-through">
-                    {currencySymbol} {(originalPrice).toFixed(2)}
+                    {currencySymbol} {originalPrice.toFixed(2)}
                   </span>
                 )}
               </div>
-              
-              {/* Stock Status */}
-              {/* <div className={cn(
-                "text-xs px-2 py-0.5 rounded-full inline-block",
-                stockStatus.className
-              )}>
-                {stockStatus.text}
-              </div> */}
-              
-              {/* Quantity x Price Preview */}
-   
             </div>
-            
+
             {/* Action Section */}
             {!isOutOfStock && (
-              <div className="space-y-2 pt-1">
+              <div className={cn(
+                viewMode === 'grid' ? "space-y-2 pt-1" : "flex items-center gap-2 pt-1"
+              )}>
                 <QuantitySelector />
-                <Button 
-                  size="default"
-                  className="w-full gap-2 h-9"
+                <Button
+                  size={viewMode === 'grid' ? 'default' : 'sm'}
+                  className={cn(
+                    "gap-2",
+                    viewMode === 'grid' ? "w-full h-9" : "flex-1 h-8"
+                  )}
                   onClick={handleAddToCart}
                   disabled={isAdding || isLoading || !selectedVariant || price <= 0}
                 >
@@ -491,7 +491,7 @@ export function ProductCard({
                   ) : (
                     <>
                       <ShoppingCart className="h-3.5 w-3.5" />
-                      Add to Cart
+                      {viewMode === 'grid' && "Add to Cart"}
                       {quantity > 1 && (
                         <Badge variant="secondary" className="ml-1 bg-white/20 text-[10px] px-1">
                           {quantity}x
@@ -505,7 +505,7 @@ export function ProductCard({
           </div>
         </CardContent>
       </Card>
-      
+
       <VariantSelectionDialog />
     </>
   );
